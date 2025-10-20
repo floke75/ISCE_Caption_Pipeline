@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, fields
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
+
+__all__ = ["BreakType", "Token", "TokenRow"]
 
 BreakType = Literal["O", "LB", "SB"]
 
@@ -81,5 +83,11 @@ class Token:
         """
         return {f.name for f in fields(cls)}
 
-# The TokenRow and Engineered classes are no longer defined here.
-# They have been retired or are defined locally in the scripts that need them.
+@dataclass(frozen=True)
+class TokenRow:
+    """A lightweight container describing a token boundary."""
+
+    token: dict[str, Any]
+    nxt: Optional[dict[str, Any]]
+    feats: Any = None
+

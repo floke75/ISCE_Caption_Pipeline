@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 from typing import Dict, List
-# The scorer now needs to know about the TokenRow structure defined in the trainer
-from scripts.train_model import TokenRow
+
 from .model_builder import bin_pause_z, punct_class, bin_rel_pos
 from .config import Config
-from .types import BreakType
+from .types import BreakType, TokenRow
 
 class Scorer:
     """

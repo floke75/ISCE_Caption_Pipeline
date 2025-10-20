@@ -17,6 +17,7 @@ if str(project_root) not in sys.path:
 from isce.model_builder import build_weights, derive_constraints, create_feature_row
 from isce.config import Config, load_config
 from isce.scorer import Scorer
+from isce.types import TokenRow
 
 # =========================================
 # LOCAL DATA STRUCTURES
@@ -31,26 +32,6 @@ class Engineered:
     compatibility with the `TokenRow` object.
     """
     pass # In the new design, features are read directly from the token dict.
-
-@dataclass
-class TokenRow:
-    """
-    Represents a single decision point between two tokens.
-
-    This container holds the dictionary representation of the current token and
-    the next token. This pair represents the boundary or "decision point" where
-    a break (`O`, `LB`, or `SB`) could be placed. It is the primary data
-    structure passed to the feature engineering and scoring functions during
-    training.
-
-    Attributes:
-        token: The dictionary for the current token.
-        nxt: The dictionary for the subsequent token.
-        feats: A placeholder `Engineered` object.
-    """
-    token: dict
-    nxt: Optional[dict]
-    feats: Engineered
 
 # =========================================
 # REFACTORED DATA LOADING
