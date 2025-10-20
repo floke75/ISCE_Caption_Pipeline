@@ -7,8 +7,18 @@ from .config import Config
 
 def iter_blocks(tokens: List[Token]) -> Iterator[Tuple[int, int]]:
     """
-    Yields (start_idx, end_idx_inclusive) for each block in a token list.
-    Blocks are defined by the 'SB' break_type or the end of the list.
+    Yields the start and end indices for each subtitle block in a token list.
+
+    This generator iterates through a list of tokens that has already been
+    segmented (i.e., has `break_type` assigned). A block is defined as a
+    sequence of tokens ending with a token marked `SB` (block break).
+
+    Args:
+        tokens: A list of segmented `Token` objects.
+
+    Yields:
+        A tuple containing the start index and the inclusive end index
+        `(start_idx, end_idx)` for each block.
     """
     if not tokens:
         return
@@ -24,8 +34,24 @@ def iter_blocks(tokens: List[Token]) -> Iterator[Tuple[int, int]]:
 
 def validate(tokens: List[Token], cfg: Config) -> Dict[str, Any]:
     """
-    Performs sanity and logic checks on a list of labeled tokens.
-    This version is updated for the new Token data structure.
+    Performs a series of sanity and logic checks on a list of segmented tokens.
+
+    This function validates the integrity of the segmentation output by checking
+    for common issues, such as:
+    -   Per-token temporal consistency (e.g., end time is not before start time).
+    -   Negative pause durations.
+    -   Subtitle blocks that are shorter than the configured minimum duration.
+    -   Subtitle blocks containing more than one line break.
+
+    Args:
+        tokens: The list of segmented `Token` objects to validate.
+        cfg: The main `Config` object, used to access validation parameters
+             like `min_block_duration_s`.
+
+    Returns:
+        A dictionary summarizing the validation results, containing the total
+        `issue_count` and a list of `issues`, where each issue is a
+        dictionary detailing the problem.
     """
     issues = []
 

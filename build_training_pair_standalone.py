@@ -59,6 +59,16 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 # Configuration Helper Functions (Self-Contained)
 # =========================
 def _recursive_update(base: Dict, update: Dict) -> Dict:
+    """
+    Recursively updates a dictionary.
+
+    Args:
+        base: The dictionary to be updated.
+        update: The dictionary containing new values.
+
+    Returns:
+        The updated 'base' dictionary.
+    """
     for k, v in update.items():
         if isinstance(v, dict) and k in base and isinstance(base[k], dict):
             base[k] = _recursive_update(base[k], v)
@@ -67,6 +77,16 @@ def _recursive_update(base: Dict, update: Dict) -> Dict:
     return base
 
 def _resolve_paths(config: Dict, context: Dict) -> Dict:
+    """
+    Resolves placeholder variables in configuration paths.
+
+    Args:
+        config: The configuration dictionary with unresolved path strings.
+        context: A dictionary mapping placeholder keys to their values.
+
+    Returns:
+        The configuration dictionary with path placeholders resolved.
+    """
     for k, v in config.items():
         if isinstance(v, str) and "{" in v and "}" in v:
             try:
@@ -81,16 +101,28 @@ def _resolve_paths(config: Dict, context: Dict) -> Dict:
 # Utilities
 # =========================
 def ensure_dirs(p: Path):
+    """Ensures that the directory for a given path exists."""
     p.mkdir(parents=True, exist_ok=True)
 
 def base_of(path: Path) -> str:
+    """Gets the base name of a file path, excluding the extension."""
     return path.stem
 
 def _save_json(obj: dict, p: Path):
+    """Saves a dictionary to a JSON file."""
     ensure_dirs(p.parent)
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def morph_to_str(m) -> Optional[str]:
+    """
+    Safely converts a spaCy MorphAnalysis object to a string.
+
+    Args:
+        m: The MorphAnalysis object.
+
+    Returns:
+        A string representation of the morphology, or None.
+    """
     if not m: return None
     try: return m.to_string()
     except Exception: return str(m)
@@ -101,11 +133,13 @@ def morph_to_str(m) -> Optional[str]:
 _PUNCT_EDGES_RE = re.compile(r"^\W+|\W+$", flags=re.UNICODE)
 
 def _norm_token(s: str) -> str:
+    """Normalizes a token for robust comparison."""
     s2 = unicodedata.normalize("NFKC", s).casefold()
     s2 = _PUNCT_EDGES_RE.sub("", s2)
     return re.sub(r"\s+", "", s2)
 
 def _match_score(a: str, b: str, settings: Dict) -> int:
+    """Calculates a similarity score between two tokens."""
     na, nb = _norm_token(a), _norm_token(b)
     if not na and not nb: return 1
     if na == nb: return 4
@@ -115,6 +149,7 @@ def _match_score(a: str, b: str, settings: Dict) -> int:
     return -3
 
 def _global_align(a_tokens: List[str], b_tokens: List[str], settings: Dict, gap_penalty: int = -3) -> List[Tuple[Optional[int], Optional[int]]]:
+    """Performs a global sequence alignment (Needleman-Wunsch)."""
     n, m = len(a_tokens), len(b_tokens)
     S = [[0]*(m+1) for _ in range(n+1)]
     B = [[(0,0)]*(m+1) for _ in range(n+1)]
@@ -159,6 +194,25 @@ def _safe_interval_split(t0: float, t1: float, k: int) -> List[Tuple[float,float
     return [(t0 + i*step, t0 + (i+1)*step) for i in range(k)]
 
 def align_text_to_asr(edited_tokens: List[str], asr_words: List[Dict[str, Any]], settings: Dict) -> List[Dict[str, Any]]:
+    """
+    Aligns a list of edited text tokens to a reference ASR transcript.
+
+    This function uses a global sequence alignment algorithm to find the
+    optimal mapping between the edited tokens and the ASR words. It then
+    transfers the timestamps from the ASR words to the edited tokens.
+    For tokens that are inserted (i.e., have no corresponding ASR word),
+    it interpolates timestamps based on the surrounding aligned words.
+
+    Args:
+        edited_tokens: A list of strings from the primary input (TXT or SRT).
+        asr_words: A list of word dictionaries from the ASR reference,
+                   each containing 'start', 'end', and 'speaker' keys.
+        settings: Configuration dictionary for alignment parameters.
+
+    Returns:
+        A new list of word dictionaries, where each dictionary corresponds
+        to an edited token and has been assigned timestamps and a speaker.
+    """
     asr_token_texts = [str(w.get("w") or "") for w in asr_words]
     if not edited_tokens: return []
     if not asr_token_texts:
@@ -208,10 +262,12 @@ def align_text_to_asr(edited_tokens: List[str], asr_words: List[Dict[str, Any]],
     return out
 
 def read_srt_cues(path: Path) -> List[Dict[str, Any]]:
+    """Reads an SRT file and converts its cues into a list of dictionaries."""
     srt = pysrt.open(str(path), encoding="utf-8")
     return [{"id": i, "start": c.start.ordinal/1000.0, "end": c.end.ordinal/1000.0, "text": (c.text or "").replace("\r", "")} for i, c in enumerate(srt)]
 
 def tokenize_srt_cues(cues: List[Dict[str, Any]]) -> Tuple[List[str], List[int]]:
+    """Tokenizes the text from SRT cues into a flat list of words."""
     tokens, cue_ids = [], []
     for c in cues:
         text = c["text"]
@@ -225,6 +281,19 @@ def tokenize_srt_cues(cues: List[Dict[str, Any]]) -> Tuple[List[str], List[int]]
 # Data Loading
 # =========================
 def load_asr_words(path: Path) -> List[Dict[str, Any]]:
+    """
+    Loads and standardizes word data from an ASR JSON file.
+
+    It extracts the list of words, ensures required keys ('start', 'end')
+    are present, converts values to the correct types, and sorts the words
+    chronologically.
+
+    Args:
+        path: The path to the ASR JSON file.
+
+    Returns:
+        A sorted list of standardized word dictionaries.
+    """
     obj = json.loads(path.read_text(encoding="utf-8"))
     raw = obj.get("words") or []
     words: List[Dict[str, Any]] = []
@@ -243,6 +312,18 @@ def load_asr_words(path: Path) -> List[Dict[str, Any]]:
 # Speaker Correction Logic
 # =========================
 def correct_speaker_labels(tokens: List[Dict[str, Any]]):
+    """
+    Corrects speaker labels using a "sole winner" algorithm at the sentence level.
+
+    This function groups tokens into sentences. Within each sentence, it
+    counts the occurrences of each speaker label. The speaker with the most
+    occurrences is declared the "winner," and all tokens in that sentence
+    are reassigned to that winning speaker. This helps correct minor
+-    diarization errors.
+
+    Args:
+        tokens: A list of word dictionaries, each potentially having a 'speaker' key.
+    """
     if not tokens: return
     print("[INFO] Running 'Sole Winner' speaker correction...")
     sentences = []
@@ -271,6 +352,21 @@ def correct_speaker_labels(tokens: List[Dict[str, Any]]):
 # Consolidated Feature Engineering
 # =========================
 def engineer_features(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
+    """
+    Adds a comprehensive set of linguistic and heuristic features to the tokens.
+
+    This function operates in multiple passes:
+    1.  **Prosody Features**: Calculates the pause duration after each token.
+    2.  **SpaCy Linguistic Features**: (If enabled) Adds part-of-speech tags,
+        lemmas, morphological information, and dependency parsing tags.
+    3.  **Heuristic & Guardrail Features**: Adds features like speaker changes,
+        sentence boundaries, and flags for specific patterns (e.g., a number
+        followed by a unit).
+
+    Args:
+        tokens: The list of word dictionaries to be enriched.
+        settings: A configuration dictionary for feature engineering.
+    """
     if not tokens: return
     # Pass 1: Prosody Features
     for i in range(len(tokens)):
@@ -340,6 +436,20 @@ def engineer_features(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
 # Labeling Logic (For Training Mode)
 # =========================
 def generate_labels_from_cues(tokens: List[Dict[str, Any]], cues: List[Dict[str, Any]], settings: Dict):
+    """
+    Generates ground-truth break labels for tokens based on SRT cues.
+
+    This function assigns each token to an SRT cue based on time proximity.
+    It then iterates through the tokens within each cue to assign `break_type`
+    labels ('O', 'LB', 'SB'). The last token of a cue is always 'SB'. If a
+    cue contains a newline, a token is marked as 'LB' at the approximate
+    position of the newline.
+
+    Args:
+        tokens: The list of timed word dictionaries.
+        cues: The list of cue dictionaries read from the ground-truth SRT file.
+        settings: A configuration dictionary.
+    """
     tol = settings.get("time_tolerance_s", 0.15)
     for token in tokens:
         mid_time = (token["start"] + token["end"]) / 2
@@ -387,6 +497,23 @@ def generate_labels_from_cues(tokens: List[Dict[str, Any]], cues: List[Dict[str,
 # Main Pipeline
 # =========================
 def process_file(primary_path: Path, asr_reference_path: Path, paths: Dict[str, Path], settings: Dict[str, Any]):
+    """
+    Main processing pipeline for a single file.
+
+    This function orchestrates the entire workflow:
+    1.  Loads the ASR reference and the primary input (TXT or SRT).
+    2.  Aligns the primary text to the ASR timestamps.
+    3.  Corrects speaker labels.
+    4.  (Training mode only) Generates ground-truth break labels from SRT cues.
+    5.  Engineers all linguistic and heuristic features.
+    6.  Saves the final enriched data to a JSON file.
+
+    Args:
+        primary_path: Path to the primary input file (.txt or .srt).
+        asr_reference_path: Path to the ASR JSON file.
+        paths: Dictionary of output paths.
+        settings: Configuration dictionary.
+    """
     base = base_of(primary_path)
     print(f"\n===== Processing: {base} =====")
 
@@ -464,6 +591,13 @@ def process_file(primary_path: Path, asr_reference_path: Path, paths: Dict[str, 
         print(f"[OK] Wrote INFERENCE data to: {out_path.name}")
 
 def main():
+    """
+    Main entry point for the command-line interface.
+
+    Parses command-line arguments, loads configuration from YAML files,
+    and calls the main `process_file` function to execute the data
+    enrichment pipeline.
+    """
     parser = argparse.ArgumentParser(
         description="Align, enrich, and label word-level data.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter

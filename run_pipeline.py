@@ -41,7 +41,16 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 # Helper Functions
 # =========================
 def setup_directories(cfg: Dict):
-    """Create all necessary directories if they don't exist."""
+    """Creates all necessary pipeline directories if they do not already exist.
+
+    This function reads a configuration dictionary to determine which folders
+    are required for the pipeline to operate, ensuring the directory
+    structure is in place before any processing begins.
+
+    Args:
+        cfg: The main configuration dictionary, which must contain the keys
+             specified in the `dir_keys` list inside this function.
+    """
     print("--- Setting up pipeline directories ---")
     dir_keys = [
         "drop_folder_inference", "drop_folder_training", "srt_placement_folder",
@@ -58,11 +67,33 @@ def setup_directories(cfg: Dict):
     (Path(cfg["processed_dir"]) / "txt").mkdir(exist_ok=True)
 
 def get_project_path(cfg: Dict, script_name: str) -> Path:
-    """Returns the full, absolute path to a script in the project."""
+    """Constructs the absolute path to a script within the project directory.
+
+    Args:
+        cfg: The main configuration dictionary, containing the 'project_root' key.
+        script_name: The name of the script file (e.g., "main.py").
+
+    Returns:
+        A Path object representing the absolute path to the specified script.
+    """
     return Path(cfg["project_root"]) / script_name
 
 def run_command(command: list, cwd: Path):
-    """Executes a command and streams its output to the console in real-time."""
+    """Executes a command in a subprocess and streams its output in real-time.
+
+    This function is a wrapper around `subprocess.Popen` that simplifies running
+    external commands. It ensures that the output of the command (both stdout
+    and stderr) is captured and printed to the console as it is generated,
+    which is useful for monitoring long-running processes.
+
+    Args:
+        command: A list of strings representing the command and its arguments.
+        cwd: The working directory from which to execute the command.
+
+    Raises:
+        subprocess.CalledProcessError: If the command returns a non-zero exit code,
+                                       indicating an error.
+    """
     str_command = [str(c) for c in command]
     print(f"\n>>> RUNNING COMMAND: {' '.join(str_command)}")
     process = subprocess.Popen(
@@ -83,7 +114,25 @@ def run_command(command: list, cwd: Path):
 # Refactored Workflow Implementations
 # =========================
 def process_inference_file(media_file: Path, cfg: Dict):
-    """Runs the full inference pipeline using the refactored scripts."""
+    """Orchestrates the end-to-end inference pipeline for a single media file.
+
+    This function coordinates the three main stages of the inference process:
+    1.  **Audio Processing**: Runs `align_make.py` to generate a time-stamped
+        ASR (Automatic Speech Recognition) JSON file from the input media.
+    2.  **Enrichment**: Runs `build_training_pair_standalone.py` to align the
+        ASR data with a corresponding text file (if available) and engineer
+        a rich set of features for segmentation.
+    3.  **Segmentation**: Runs `main.py` to perform the final segmentation
+        using the statistical model and generate the output SRT file.
+
+    Args:
+        media_file: The path to the input audio or video file.
+        cfg: The main configuration dictionary.
+
+    Raises:
+        FileNotFoundError: If a critical intermediate file is not found after
+                           a processing step, indicating a failure in that step.
+    """
     print(f"\n--- STARTING INFERENCE WORKFLOW FOR: {media_file.name} ---")
     base_name = media_file.stem
     project_root = Path(cfg["project_root"])
@@ -148,7 +197,25 @@ def process_inference_file(media_file: Path, cfg: Dict):
         print(f"Moved {txt_file_path.name} to processed folder.")
 
 def process_training_file(media_file: Path, srt_file: Path, cfg: Dict):
-    """Runs the full training data preparation pipeline using refactored scripts."""
+    """Orchestrates the pipeline for preparing a single training data sample.
+
+    This function coordinates the two main stages of the training data
+    preparation process:
+    1.  **Audio Processing**: Runs `align_make.py` to generate a time-stamped
+        ASR JSON file from the input media. This serves as the timing reference.
+    2.  **Label Generation**: Runs `build_training_pair_standalone.py` to align
+        the ground-truth SRT file with the ASR data, generate break labels
+        (`SB`, `LB`, `O`), and engineer a full set of features.
+
+    Args:
+        media_file: The path to the input audio or video file.
+        srt_file: The path to the corresponding ground-truth SRT file.
+        cfg: The main configuration dictionary.
+
+    Raises:
+        FileNotFoundError: If a critical intermediate file is not found after
+                           a processing step, indicating a failure in that step.
+    """
     print(f"\n--- STARTING TRAINING WORKFLOW FOR: {media_file.name} ---")
     base_name = media_file.stem
     project_root = Path(cfg["project_root"])
@@ -188,7 +255,24 @@ def process_training_file(media_file: Path, srt_file: Path, cfg: Dict):
 # Main Watch Folder Loop
 # =========================
 def main_loop(cfg: Dict):
-    """The main continuous loop to monitor the hot folders."""
+    """The main orchestrator loop that monitors hot folders for new files.
+
+    This function runs in an infinite loop, continuously scanning the
+    `drop_folder_inference` and `drop_folder_training` directories.
+
+    -   When a new media file is detected in the inference folder, it triggers
+        the `process_inference_file` workflow.
+    -   When a new media file is detected in the training folder, it waits for
+        a corresponding `.srt` file to appear in the `srt_placement_folder`
+        before triggering the `process_training_file` workflow.
+
+    Processed files are moved to a `_processed` directory to prevent
+    re-processing. The function includes error handling to gracefully manage
+    failures in the sub-pipelines and can be shut down with a KeyboardInterrupt.
+
+    Args:
+        cfg: The main configuration dictionary.
+    """
     print("--- Starting ISCE Pipeline Orchestrator ---")
     setup_directories(cfg)
     orch_settings = cfg.get("orchestrator", {})

@@ -8,7 +8,26 @@ from pathlib import Path
 
 @dataclass
 class Config:
-    """A typed configuration object for the captioning engine."""
+    """
+    A typed configuration object that holds all settings for the captioning engine.
+
+    This dataclass centralizes configuration parameters, ensuring that different
+    parts of the application access settings in a consistent and type-safe way.
+    It is typically instantiated by the `load_config` function.
+
+    Attributes:
+        beam_width: The number of hypotheses to keep at each step of the beam search.
+        min_block_duration_s: The minimum duration a subtitle block can have, in seconds.
+        max_block_duration_s: The maximum duration a subtitle block can have, in seconds.
+        line_length_constraints: A nested dictionary defining the soft and hard character
+                                 limits for each line of a subtitle block.
+        min_chars_for_single_word_block: The minimum character length required for a
+                                         block that contains only a single word.
+        sliders: A dictionary of user-adjustable floating-point values that tune the
+                 behavior of the scoring model.
+        paths: A dictionary containing the relative paths to model files like weights
+               and constraints.
+    """
     beam_width: int
     min_block_duration_s: float
     max_block_duration_s: float
@@ -19,7 +38,24 @@ class Config:
 
 def load_config(path: str = "config.yaml") -> Config:
     """
-    Loads and validates the YAML configuration file into a unified Config object.
+    Loads, merges, and validates configuration files into a single Config object.
+
+    This function is the primary entry point for loading all application settings.
+    It reads the base settings from the user--editable `config.yaml` file. It then
+    intelligently loads the `constraints.json` file (which is generated during
+    model training) and merges its values, prioritizing the learned constraints
+    over the fallback values in the YAML file.
+
+    Args:
+        path: The path to the main `config.yaml` file.
+
+    Returns:
+        A fully populated and validated `Config` object.
+
+    Raises:
+        FileNotFoundError: If the specified `config.yaml` file cannot be found.
+        ValueError: If there is an error parsing the YAML file.
+        TypeError: If the root of the YAML file is not a dictionary.
     """
     try:
         with open(path, "r", encoding="utf-8") as f:

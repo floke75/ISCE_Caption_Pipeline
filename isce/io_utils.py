@@ -6,9 +6,26 @@ from .types import Token
 
 def load_tokens(path: str) -> List[Token]:
     """
-    Loads a list of tokens from a JSON file.
-    It safely handles cases where the JSON might have extra fields not present
-    in the Token dataclass, making it robust to variations in the input data.
+    Loads a list of Token objects from a JSON file.
+
+    This function is responsible for parsing a JSON file that contains a list
+    of token dictionaries under the "tokens" key. It is designed to be robust
+    by filtering the loaded dictionaries to only include keys that are valid
+    fields in the `Token` dataclass. This prevents errors if the input JSON
+    contains extra, unexpected fields.
+
+    Args:
+        path: The path to the input JSON file.
+
+    Returns:
+        A list of `Token` dataclass instances.
+
+    Raises:
+        FileNotFoundError: If the file at the specified path does not exist.
+        ValueError: If the file is not valid JSON.
+        TypeError: If the JSON structure is incorrect (e.g., "tokens" key is
+                   missing or not a list, or an item in the list is not a
+                   dictionary).
     """
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -39,7 +56,18 @@ def load_tokens(path: str) -> List[Token]:
     return out
 
 def save_tokens(path: str, tokens: List[Token]) -> None:
-    """Saves a list of Token objects to a JSON file in a structured format."""
+    """
+    Saves a list of Token objects to a JSON file.
+
+    This function serializes a list of `Token` dataclass instances into a
+    JSON file with a specific structure: the root of the JSON is a dictionary
+    with a single key, "tokens", which contains the list of token dictionaries.
+    The output is formatted with indentation for human readability.
+
+    Args:
+        path: The destination path for the output JSON file.
+        tokens: The list of `Token` objects to save.
+    """
     token_dicts = [t.__dict__ for t in tokens]
     data = {"tokens": token_dicts}
     

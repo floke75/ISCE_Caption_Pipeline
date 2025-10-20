@@ -17,7 +17,20 @@ from isce.beam_search import segment
 from isce.srt_writer import tokens_to_srt
 
 def main():
-    """Main command-line interface for the ISCE captioning engine."""
+    """
+    Main command-line interface for the ISCE captioning engine.
+
+    This script orchestrates the final segmentation and SRT generation process.
+    It performs the following steps:
+    1.  Loads the main configuration file (`config.yaml`), the statistical model
+        weights, and the corpus constraints.
+    2.  Loads the enriched tokens from the input JSON file.
+    3.  Initializes the `Scorer` with the loaded models and configuration.
+    4.  Runs the beam search segmentation algorithm (`segment`) to determine the
+        optimal break points (`SB`, `LB`, `O`).
+    5.  Formats the segmented tokens into the standard SRT file format.
+    6.  Writes the final output to the specified SRT file.
+    """
     parser = argparse.ArgumentParser(
         description="Generate subtitles from enriched token files using the ISCE model.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
