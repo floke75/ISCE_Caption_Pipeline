@@ -1,0 +1,62 @@
+# ====================================================================
+# ==         ISCE Pipeline - Central Configuration File             ==
+# ====================================================================
+# This is the single source of truth for all paths and settings.
+# This version is synchronized with the refactored pipeline scripts.
+
+# --- Core Paths ---
+project_root: "C:Users\AX-6\Documents\GitHub\ISCE_Caption_Pipeline"
+
+# --- Hot Folders & Archives (resolved from pipeline_root) ---
+drop_folder_inference: "{pipeline_root}/1_DROP_FOLDER_INFERENCE"
+drop_folder_training:  "{pipeline_root}/2_DROP_FOLDER_TRAINING"
+srt_placement_folder:  "{pipeline_root}/3_MANUAL_SRT_PLACEMENT"
+txt_placement_folder:  "{pipeline_root}/4_MANUAL_TXT_PLACEMENT"
+processed_dir:         "{pipeline_root}/_processed"
+
+# --- Intermediate & Final Data Paths (resolved from pipeline_root) ---
+intermediate_dir: "{pipeline_root}/_intermediate"
+output_dir:       "{pipeline_root}/_output"
+
+# --- Script-Specific Settings ---
+
+align_make:
+  # Paths used by the Audio-to-ASR engine (align_make.py)
+  out_root: "{intermediate_dir}"
+  cache_dir: "{project_root}/cache"
+
+  # WhisperX and Model settings
+  whisper_model_id: "KBLab/kb-whisper-large"
+  align_model_id: "KBLab/wav2vec2-large-voxrex-swedish"
+  language: "sv"
+  compute_type: "float16"
+  batch_size: 16
+  hf_token: "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"
+
+  # Diarization settings
+  do_diarization: true
+  diar_min_spk: null
+  diar_max_spk: null
+  skip_if_asr_exists: false
+
+build_pair:
+  # Paths used by the Text-to-Enrichment engine (build_training_pair_standalone.py)
+  out_training_dir: "{intermediate_dir}/_training"
+  out_inference_dir: "{intermediate_dir}/_inference_input"
+  
+  # Feature engineering settings
+  language: "sv"
+  time_tolerance_s: 0.15
+  round_seconds: 3
+  spacy_enable: true
+  spacy_model: "sv_core_news_lg"
+  spacy_add_dependencies: true
+  
+  # Text-to-ASR alignment settings (moved here from align_make)
+  txt_match_close: 0.82
+  txt_match_weak:  0.65
+
+orchestrator:
+  poll_interval_seconds: 10
+  file_settle_delay_seconds: 5
+  srt_wait_timeout_seconds: 300

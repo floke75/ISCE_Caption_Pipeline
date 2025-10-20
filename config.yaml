@@ -1,0 +1,33 @@
+# C:\dev\Captions_Formatter\Formatter_machine\config.yaml
+# This version is synchronized with the refactored ISCE package.
+
+# --- Algorithm Parameters ---
+beam_width: 14
+
+# --- Fallback Constraints ---
+# These are used by the trainer if the learned constraints.json cannot be found.
+constraints:
+  min_block_duration_s: 1.0
+  max_block_duration_s: 8.0
+  line_length_soft_target: 37
+  line_length_hard_limit: 42
+  min_chars_for_single_word_block: 10
+
+# --- Stylistic Sliders & Boosts ---
+sliders:
+  # Multipliers for learned statistical weights
+  flow: 1.0       # Controls importance of general rhythm (pauses, punctuation).
+  density: 2.0    # Controls importance of ideal reading speed (CPS).
+  balance: 2.0    # Controls importance of line balance.
+
+  # Leniency controls for dynamic penalties
+  line_length_leniency: 1.0 # >1.0 allows longer lines to avoid bad breaks.
+  orphan_leniency: 2.0      # >1.0 makes the penalty for orphans stronger.
+
+  # Additive boost for structural breaks (speaker changes, dashes, LLM hints)
+  structure_boost: 45.0
+
+# --- File Paths (relative to this config file's location) ---
+paths:
+  model_weights: "models/v1/model_weights.json"
+  constraints: "models/v1/constraints.json"
