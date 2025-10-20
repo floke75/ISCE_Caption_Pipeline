@@ -6,9 +6,8 @@ from typing import List
 from heapq import nlargest
 from tqdm import tqdm
 
-from .types import Token, BreakType
+from .types import Token, BreakType, TokenRow
 from .scorer import Scorer
-from scripts.train_model import TokenRow as ScorerTokenRow
 from .config import Config
 
 @dataclass(frozen=True)
@@ -98,7 +97,7 @@ class Segmenter:
             nxt_dict = dict(nxt.__dict__) if nxt else None
 
             # Create the dictionary-based TokenRow required by the refactored scorer
-            scorer_row = ScorerTokenRow(
+            scorer_row = TokenRow(
                 token=token_dict,
                 nxt=nxt_dict,
                 feats=None # feats object is no longer used by the scorer
