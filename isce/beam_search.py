@@ -1,7 +1,7 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\beam_search.py
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import List, Optional
 from heapq import nlargest
 from tqdm import tqdm
@@ -109,7 +109,7 @@ class Segmenter:
             if not candidates and self.beam:
                 fallback_state = self.beam[0]
                 if self._is_hard_ok_SB(fallback_state.block_start_idx, i):
-                    self.beam[0] = fallback_state._replace(breaks=fallback_state.breaks + ("SB",))
+                    self.beam[0] = replace(fallback_state, breaks=fallback_state.breaks + ("SB",))
                 break 
 
             self.beam = nlargest(self.cfg.beam_width, candidates, key=lambda s: s.score)
