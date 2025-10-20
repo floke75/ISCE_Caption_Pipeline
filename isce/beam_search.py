@@ -7,8 +7,8 @@ from heapq import nlargest
 from tqdm import tqdm
 
 from .types import Token, BreakType
+from .data_structures import TokenRow as ScorerTokenRow
 from .scorer import Scorer
-from scripts.train_model import TokenRow as ScorerTokenRow
 from .config import Config
 
 @dataclass(frozen=True)
@@ -51,9 +51,19 @@ class Segmenter:
         hard_limit = self.cfg.line_length_constraints.get(limit_key, {}).get("hard_limit", 42)
         return (line_len + 1 + next_word_len) <= hard_limit
 
-    def _is_hard_ok_LB(self, line_num: int) -> bool:
+    def _is_hard_ok_LB(self, state: PathState) -> bool:
         """Checks if a line break (`LB`) is allowed at the current position."""
-        return line_num == 1
+        # A line break is only allowed if we are on the first line of a block
+        # AND a line break has not already been placed in the current block.
+        if state.line_num != 1:
+            return False
+
+        # Check history of the current block for an existing LB
+        current_block_breaks = state.breaks[state.block_start_idx:]
+        if "LB" in current_block_breaks:
+            return False
+
+        return True
 
     def _is_hard_ok_SB(self, block_start_idx: int, current_idx: int) -> bool:
         """Checks if a block break (`SB`) violates hard constraints."""
@@ -120,7 +130,7 @@ class Segmenter:
                         candidates.append(PathState(score=score, line_num=state.line_num, line_len=new_line_len, block_start_idx=state.block_start_idx, breaks=state.breaks + ("O",)))
 
                 # Candidate: 'LB' (Line Break)
-                if nxt and self._is_hard_ok_LB(state.line_num):
+                if nxt and self._is_hard_ok_LB(state):
                     orphan_penalty = 0.0
                     if i + 2 < len(self.tokens) and self.tokens[i + 2].is_sentence_final:
                         orphan_penalty = 2.5
@@ -139,10 +149,22 @@ class Segmenter:
                     candidates.append(PathState(score=score, line_num=1, line_len=next_word_len, block_start_idx=i + 1, breaks=state.breaks + ("SB",)))
 
             if not candidates and self.beam:
+                # If all paths lead to dead ends, force a suboptimal SB to keep the search alive.
+                # This prevents the loop from exiting prematurely and failing to segment the full text.
                 fallback_state = self.beam[0]
-                if self._is_hard_ok_SB(fallback_state.block_start_idx, i):
-                    self.beam[0] = replace(fallback_state, breaks=fallback_state.breaks + ("SB",))
-                break 
+
+                # Penalize this path heavily to reflect it's a fallback.
+                score = fallback_state.score - 100.0
+                next_word_len = len(nxt.w) if nxt else 0
+
+                fallback_candidate = PathState(
+                    score=score,
+                    line_num=1,
+                    line_len=next_word_len,
+                    block_start_idx=i + 1,
+                    breaks=fallback_state.breaks + ("SB",)
+                )
+                candidates.append(fallback_candidate)
 
             self.beam = nlargest(self.cfg.beam_width, candidates, key=lambda s: s.score)
 

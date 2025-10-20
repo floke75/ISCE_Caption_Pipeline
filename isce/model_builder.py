@@ -11,7 +11,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from .config import Config
-from scripts.train_model import TokenRow # Use the TokenRow from the trainer script
+from .data_structures import TokenRow
 
 # --- Helper Functions (Updated for Dictionary Input) ---
 def bin_pause_z(z: float | None) -> str:
