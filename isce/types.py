@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any, Literal, Optional
 
+__all__ = ["BreakType", "Token", "TokenRow"]
+
 BreakType = Literal["O", "LB", "SB"]
 
 @dataclass(frozen=True)
