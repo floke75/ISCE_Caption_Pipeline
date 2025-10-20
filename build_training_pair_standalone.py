@@ -322,7 +322,7 @@ def engineer_features(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
         
         token["starts_with_dialogue_dash"] = bool(nxt and nxt.get("w", "").strip().startswith(('-', '–', '—')))
         is_numeric = num_re.fullmatch(str(token.get("w", "")))
-        is_unit = str(nxt.get("w", "").lower() in unit_vocab if nxt else False
+        is_unit = bool(nxt and nxt.get("w", "").lower() in unit_vocab)
         token["num_unit_glue"] = bool(is_numeric and is_unit)
 
         current_word_is_capitalized = token.get("w", "") and token.get("w")[0].isupper()
