@@ -41,15 +41,19 @@ The repository is organized for clarity and maintainability, requiring no code c
 ├── align_make.py # Worker: Audio -> Timed ASR
 ├── build_training_pair_standalone.py # Worker: Text + ASR -> Enriched Data
 ├── main.py # Worker: Enriched Data -> SRT
-├── pipeline_config.py # Utility for loading YAML configs
+├── pipeline_config.py # Utility helpers for reading pipeline_config.yaml
+├── pipeline_config.yaml # Central hot-folder and worker configuration
+├── config.yaml # Beam-search and scorer configuration
 ├── requirements.txt # All Python dependencies
 ├── README.md # This file
 ├── AGENTS.md # A guide for LLM agents
 │
 ├── isce/ # Core ISCE toolkit (scorer, model builder, etc.)
-├── scripts/ # Standalone tools (train_model.py, etc.)
-├── configs/ # User-editable configuration files
-└── models/ # Your trained model artifacts
+└── scripts/ # Standalone tools (train_model.py, etc.)
+
+User-specific artifacts such as trained models (e.g., `models/`) and local hot folders
+are intentionally not committed. Create those directories locally before running the
+pipeline.
 
 ## Setup & Installation
 
@@ -79,11 +83,10 @@ The repository is organized for clarity and maintainability, requiring no code c
     ```
 
 5.  **Configure the Pipeline:**
-    *   Navigate to the `configs/` directory.
-    *   Make a copy of `pipeline_config.sample.yaml` and rename it to `pipeline_config.yaml`.
-    *   Make a copy of `config.sample.yaml` and rename it to `config.yaml`.
-    *   **Edit `pipeline_config.yaml`:** Update the `project_root` and `pipeline_root` paths to match your local system. Add your Hugging Face token to the `hf_token` field if you plan to use speaker diarization.
-    *   **Edit `config.yaml`:** Update the `paths` to point to the correct location of your trained model files within the `models/` directory.
+    *   Both `pipeline_config.yaml` and `config.yaml` live in the repository root and double as living templates. Copy them to a safe location before making local edits if you plan to keep untracked overrides.
+    *   **Edit `pipeline_config.yaml`:** Update `project_root` to your checkout path and set `pipeline_root` (add the key if it is missing) so every hot-folder entry resolves correctly. Provide your Hugging Face token in `align_make.hf_token` when diarization is enabled.
+    *   **Edit `config.yaml`:** Adjust the `paths` section so it points at the `model_weights.json` and `constraints.json` files you trained or received. Create the referenced directories (for example, `models/v1/`) before running the pipeline.
+    *   Create the hot folders declared in `pipeline_config.yaml` (`_intermediate`, `_output`, `_processed`, etc.) on your filesystem so the orchestrator can place artifacts where expected.
 
 ## Configuration Files Explained
 
@@ -177,7 +180,7 @@ Created by `build_training_pair_standalone.py` during inference runs. Each entry
 | `w` | Surface form of the token. |
 | `start` / `end` | Word-level timestamps in seconds (rounded per `round_seconds`). |
 | `speaker` | Speaker label propagated from the ASR or corrected by the Sole Winner algorithm. |
-| `cue_id` | Identifier linking a token back to its originating cue (training) or `null` during inference. |
+| `cue_id` | Identifier linking a token back to its originating SRT cue when available. Tokens without a matching cue use `null` (inference) or `-1` (training fallback). |
 | `is_sentence_initial` / `is_sentence_final` | Sentence boundary flags emitted by the enrichment pipeline. |
 | `pause_before_ms` / `pause_after_ms` / `pause_z` | Prosodic pause metrics. |
 | `pos`, `lemma`, `tag`, `morph`, `dep`, `head_idx` | SpaCy linguistic annotations when `spacy_enable: true`. |

@@ -83,7 +83,13 @@ def run_command(command: list, cwd: Path):
 # Refactored Workflow Implementations
 # =========================
 def process_inference_file(media_file: Path, cfg: Dict):
-    """Runs the full inference pipeline using the refactored scripts."""
+    """Run the full inference workflow for a media file.
+
+    The orchestrator always regenerates the ASR reference, aligns it with the
+    curated transcript when available, falls back to ASR-only mode when the TXT
+    file is missing, and finally dispatches the segmenter to emit the `.srt`
+    output.
+    """
     print(f"\n--- STARTING INFERENCE WORKFLOW FOR: {media_file.name} ---")
     base_name = media_file.stem
     project_root = Path(cfg["project_root"])
@@ -148,7 +154,12 @@ def process_inference_file(media_file: Path, cfg: Dict):
         print(f"Moved {txt_file_path.name} to processed folder.")
 
 def process_training_file(media_file: Path, srt_file: Path, cfg: Dict):
-    """Runs the full training data preparation pipeline using refactored scripts."""
+    """Generate a labeled training pair from a media file and its reference SRT.
+
+    The function rebuilds the ASR bridge, aligns the ground-truth subtitles,
+    enriches the tokens, and writes the `.train.words.json` artifact expected by
+    the training utilities.
+    """
     print(f"\n--- STARTING TRAINING WORKFLOW FOR: {media_file.name} ---")
     base_name = media_file.stem
     project_root = Path(cfg["project_root"])

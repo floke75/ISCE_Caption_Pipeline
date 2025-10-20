@@ -18,8 +18,12 @@ class Config:
     paths: dict[str, str]
 
 def load_config(path: str = "config.yaml") -> Config:
-    """
-    Loads and validates the YAML configuration file into a unified Config object.
+    """Load the YAML configuration and merge it with any learned constraint files.
+
+    The loader keeps the inline defaults from `config.yaml`, but, when the
+    referenced `constraints` JSON is present on disk, its dynamic limits take
+    precedence. File paths are resolved relative to the configuration file so a
+    copied config continues to work from arbitrary locations.
     """
     try:
         with open(path, "r", encoding="utf-8") as f:

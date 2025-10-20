@@ -23,15 +23,15 @@ from isce.scorer import Scorer
 # =========================================
 @dataclass(frozen=True)
 class Engineered:
-    """Minimal container for features requiring logical checks in the scorer."""
-    pass # In the new design, features are read directly from the token dict.
+    """Placeholder kept for backwards compatibility with legacy feature hooks."""
+    pass  # The scorer now reads features directly from the token dictionaries.
 
 @dataclass
 class TokenRow:
-    """A container holding dictionaries for the current and next token."""
+    """Bundle of the current token, the next token, and an optional feature stub."""
     token: dict
     nxt: Optional[dict]
-    feats: Engineered
+    feats: Optional[Engineered] = None
 
 # =========================================
 # REFACTORED DATA LOADING
