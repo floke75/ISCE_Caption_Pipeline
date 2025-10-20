@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, replace
-from typing import List, Optional
+from typing import List
 from heapq import nlargest
 from tqdm import tqdm
 
@@ -33,14 +33,17 @@ class Segmenter:
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
+        """Return True when adding the next word keeps the active line within limits."""
         limit_key = f"line{line_num}"
         hard_limit = self.cfg.line_length_constraints.get(limit_key, {}).get("hard_limit", 42)
         return (line_len + 1 + next_word_len) <= hard_limit
 
     def _is_hard_ok_LB(self, line_num: int) -> bool:
+        """Return True if a line break is allowed for the current line number."""
         return line_num == 1
 
     def _is_hard_ok_SB(self, block_start_idx: int, current_idx: int) -> bool:
+        """Return True when a block break satisfies duration and single-word constraints."""
         start_token = self.tokens[block_start_idx]
         end_token = self.tokens[current_idx]
         duration = max(1e-6, end_token.end - start_token.start)
@@ -54,6 +57,7 @@ class Segmenter:
         return True
 
     def run(self) -> List[BreakType]:
+        """Execute beam search and return the best-scoring sequence of break types."""
         if not self.tokens:
             return []
 
@@ -64,11 +68,14 @@ class Segmenter:
             candidates: List[PathState] = []
             is_last_token = (i == len(self.tokens) - 1)
             nxt = self.tokens[i + 1] if not is_last_token else None
-            
+
+            token_dict = dict(token.__dict__)
+            nxt_dict = dict(nxt.__dict__) if nxt else None
+
             # Create the dictionary-based TokenRow required by the refactored scorer
             scorer_row = ScorerTokenRow(
-                token=token.__dict__, 
-                nxt=nxt.__dict__ if nxt else None,
+                token=token_dict,
+                nxt=nxt_dict,
                 feats=None # feats object is no longer used by the scorer
             )
             transition_scores = self.scorer.score_transition(scorer_row)
@@ -99,7 +106,7 @@ class Segmenter:
 
                 # Candidate: 'SB' (Block Break)
                 if self._is_hard_ok_SB(state.block_start_idx, i):
-                    block_token_dicts = [t.__dict__ for t in self.tokens[state.block_start_idx : i + 1]]
+                    block_token_dicts = [dict(t.__dict__) for t in self.tokens[state.block_start_idx : i + 1]]
                     block_breaks = list(state.breaks[state.block_start_idx:]) + ["SB"]
                     block_score = self.scorer.score_block(block_token_dicts, block_breaks)
                     score = state.score + transition_scores["SB"] + block_score
@@ -132,11 +139,4 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
     segmenter = Segmenter(tokens, scorer, cfg)
     final_breaks = segmenter.run()
 
-    output_tokens = []
-    for i, token in enumerate(tokens):
-        token_dict = token.__dict__
-        token_dict["break_type"] = final_breaks[i]
-        # Create a new Token instance with the final break_type
-        output_tokens.append(Token(**token_dict))
-        
-    return output_tokens
+    return [replace(token, break_type=final_breaks[i]) for i, token in enumerate(tokens)]
