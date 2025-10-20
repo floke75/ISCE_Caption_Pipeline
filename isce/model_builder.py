@@ -15,6 +15,7 @@ from scripts.train_model import TokenRow # Use the TokenRow from the trainer scr
 
 # --- Helper Functions (Updated for Dictionary Input) ---
 def bin_pause_z(z: float | None) -> str:
+    """Categorizes a pause z-score into discrete bins."""
     if z is None: return "pz:none"
     if z < 0: return "pz:<0"
     if z < 0.5: return "pz:0-0.5"
@@ -23,6 +24,7 @@ def bin_pause_z(z: float | None) -> str:
     return "pz:>2.0"
 
 def punct_class(tok: dict) -> str:
+    """Classifies the final punctuation of a token."""
     w = tok.get("w", "")
     if not w: return "p:none"
     char = w.strip()[-1] if w.strip() else ''
@@ -31,6 +33,7 @@ def punct_class(tok: dict) -> str:
     return "p:none"
 
 def bin_rel_pos(x: float | None) -> str:
+    """Categorizes a relative position float (0.0 to 1.0) into discrete bins."""
     # This feature is not currently being generated in the new pipeline,
     # but we keep the helper for future compatibility.
     if x is None: return "rp:none"
@@ -39,12 +42,40 @@ def bin_rel_pos(x: float | None) -> str:
     return "rp:late"
 
 def log_odds(p: float, eps: float = 1e-6) -> float:
+    """
+    Converts a probability to log-odds.
+
+    Args:
+        p: The probability (0.0 to 1.0).
+        eps: A small epsilon value to prevent division by zero or log(0).
+
+    Returns:
+        The log-odds representation of the probability.
+    """
     p = min(1 - eps, max(eps, p))
     return math.log(p / (1 - p))
 
 # --- derive_constraints function (Updated for Dictionary Input) ---
 def derive_constraints(corpus_paths: List[str], fallback_cfg: Config) -> Dict[str, Any]:
-    """Analyzes a corpus of pre-enriched JSON files to derive data-driven constraints."""
+    """
+    Analyzes a training corpus to derive data-driven constraints for the model.
+
+    This function iterates through a collection of labeled training files and
+    calculates statistics about the human-generated subtitles. These statistics
+    are then used to define the "ideal" characteristics of a subtitle block,
+    such as its duration, characters-per-second (CPS), and line length. Using
+    percentiles helps create robust constraints that are representative of the
+    corpus.
+
+    Args:
+        corpus_paths: A list of file paths to the enriched training JSON files.
+        fallback_cfg: A `Config` object to provide default values if the
+                      corpus is empty or analysis fails.
+
+    Returns:
+        A dictionary containing the derived constraints, which will be saved
+        as `constraints.json`.
+    """
     block_durs, cps_vals, balances = [], [], []
     line1_lengths, line2_lengths = [], []
     LONG_PAUSE_THRESHOLD_MS = 500
@@ -111,7 +142,25 @@ def derive_constraints(corpus_paths: List[str], fallback_cfg: Config) -> Dict[st
 
 # --- Centralized Feature Extraction Logic (Updated for Dictionary Input) ---
 def create_feature_row(row: TokenRow, cfg: Config) -> dict:
-    """Creates a dictionary of features for a single breakpoint (TokenRow of dicts)."""
+    """
+    Creates a flat dictionary of discrete features for a single decision point.
+
+    This function takes a `TokenRow` (representing the boundary between two
+    tokens) and transforms its rich, continuous data into a set of discrete,
+    string-based features that can be used by the statistical model. It uses
+    the various `bin_*` and `*_class` helper functions to perform this
+    discretization. It also creates interaction features by combining
+    individual features.
+
+    Args:
+        row: The `TokenRow` object containing the current and next tokens as dicts.
+        cfg: The main `Config` object (currently unused but kept for future
+             compatibility).
+
+    Returns:
+        A dictionary where keys are feature names and values are the
+        discretized feature values for the given decision point.
+    """
     token = row.token
     nxt = row.nxt if row.nxt else {}
 
@@ -141,7 +190,30 @@ def create_feature_row(row: TokenRow, cfg: Config) -> dict:
     return base_features
 
 def build_weights(df: pd.DataFrame, cfg: Config, alpha: float = 0.1, sample_weights: pd.Series = None) -> Dict[str, Any]:
-    """Builds a statistical model from a pre-built feature DataFrame."""
+    """
+    Builds the statistical model weights from a featurized DataFrame.
+
+    This is the core training function. It takes a DataFrame where each row
+    represents a decision point and each column represents a discrete feature.
+    It then calculates the conditional probability of each outcome (`O`, `LB`,
+    `SB`) given each feature value. These probabilities are converted to
+    log-odds to create the final weights model.
+
+    Args:
+        df: The input DataFrame containing the featurized training data.
+        cfg: The main `Config` object (currently unused).
+        alpha: A smoothing factor (Laplace smoothing) to prevent zero probabilities.
+        sample_weights: An optional pandas Series to assign different weights to
+                        specific training examples, used for iterative reweighting.
+
+    Returns:
+        A nested dictionary representing the statistical model, where keys are
+        feature groups, feature values, and outcomes, and the final values are
+        the log-odds weights.
+
+    Raises:
+        ValueError: If the input DataFrame is empty.
+    """
     if df.empty:
         raise ValueError("Input DataFrame is empty. Cannot build weights.")
 

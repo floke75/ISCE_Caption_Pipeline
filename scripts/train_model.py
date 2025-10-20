@@ -23,12 +23,31 @@ from isce.scorer import Scorer
 # =========================================
 @dataclass(frozen=True)
 class Engineered:
-    """Minimal container for features requiring logical checks in the scorer."""
+    """
+    A container for engineered features.
+
+    In the refactored design, this class is a placeholder, as features are
+    now read directly from the token dictionaries. It is kept for structural
+    compatibility with the `TokenRow` object.
+    """
     pass # In the new design, features are read directly from the token dict.
 
 @dataclass
 class TokenRow:
-    """A container holding dictionaries for the current and next token."""
+    """
+    Represents a single decision point between two tokens.
+
+    This container holds the dictionary representation of the current token and
+    the next token. This pair represents the boundary or "decision point" where
+    a break (`O`, `LB`, or `SB`) could be placed. It is the primary data
+    structure passed to the feature engineering and scoring functions during
+    training.
+
+    Attributes:
+        token: The dictionary for the current token.
+        nxt: The dictionary for the subsequent token.
+        feats: A placeholder `Engineered` object.
+    """
     token: dict
     nxt: Optional[dict]
     feats: Engineered
@@ -38,8 +57,27 @@ class TokenRow:
 # =========================================
 def get_full_feature_table_and_rows(corpus_paths: list[str], cfg: Config) -> tuple[pd.DataFrame, list[TokenRow]]:
     """
-    Loads pre-enriched data, creates the feature DataFrame, and a
-    parallel list of TokenRow objects for accurate scoring.
+    Loads and processes the entire training corpus into a feature DataFrame.
+
+    This function iterates through all the pre-enriched training JSON files in
+    the corpus. For each decision point (boundary between two tokens), it calls
+    `create_feature_row` to generate a flat dictionary of discrete features.
+
+    It produces two key outputs:
+    1.  A pandas DataFrame where each row is a decision point and each column
+        is a feature. This is the primary input for the `build_weights` function.
+    2.  A parallel list of `TokenRow` objects, which is used during the
+        iterative reweighting process to re-score the training data with an
+        updated model.
+
+    Args:
+        corpus_paths: A list of file paths to the training JSON files.
+        cfg: The main `Config` object.
+
+    Returns:
+        A tuple containing:
+        - The featurized pandas DataFrame.
+        - A parallel list of `TokenRow` objects.
     """
     all_breakpoints_data = []
     all_token_rows = []
@@ -72,6 +110,24 @@ def get_full_feature_table_and_rows(corpus_paths: list[str], cfg: Config) -> tup
     return pd.DataFrame(all_breakpoints_data), all_token_rows
 
 def main():
+    """
+    Main entry point for the command-line model training script.
+
+    This script orchestrates the entire model training process, which includes:
+    1.  Parsing command-line arguments for corpus path, output paths, and
+        training parameters.
+    2.  Loading the base configuration.
+    3.  Running `derive_constraints` on the corpus to generate and save
+        `constraints.json`.
+    4.  Loading the entire training corpus into a feature DataFrame using
+        `get_full_feature_table_and_rows`.
+    5.  Executing an iterative reweighting loop:
+        a.  Build a weights model using the current sample weights.
+        b.  Score the entire training set with the new model.
+        c.  Identify misclassified examples ("hard examples").
+        d.  Increase the sample weight of the hard examples.
+    6.  Saving the final, trained `model_weights.json` after the last iteration.
+    """
     parser = argparse.ArgumentParser(
         description="Build an advanced statistical model using class balancing and iterative reweighting.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter

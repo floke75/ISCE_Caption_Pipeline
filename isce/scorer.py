@@ -10,8 +10,25 @@ from .types import BreakType
 
 class Scorer:
     """
-    Calculates scores for captioning decisions.
-    Refactored to work with TokenRows of dictionaries and pre-engineered features.
+    Calculates scores for captioning decisions based on a statistical model.
+
+    The Scorer is responsible for evaluating the quality of different break
+    types (`O`, `LB`, `SB`) at each potential decision point in the token
+    sequence. It uses a set of learned weights from a trained model, corpus-
+    derived constraints, and user-adjustable sliders to calculate scores.
+
+    The scoring process is divided into two main parts:
+    1.  `score_transition`: Scores the decision to place a break *after* a
+        given token, based on local features.
+    2.  `score_block`: Scores a *completed* subtitle block holistically, based
+        on aggregate features like CPS and line balance.
+
+    Attributes:
+        w: A dictionary of learned weights for different features.
+        c: A dictionary of corpus-derived constraints (e.g., ideal CPS range).
+        sl: A dictionary of user-adjustable sliders to tune model behavior.
+        structure_boost: A powerful, non-statistical bonus applied to breaks
+                         that align with strong structural hints.
     """
     def __init__(self, weights: Dict, constraints: Dict, sliders: Dict, cfg: Config):
         self.w = weights
@@ -21,14 +38,43 @@ class Scorer:
         self.structure_boost = self.sl.get("structure_boost", 15.0)
 
     def _get_weight(self, group: str, key: str, outcome: str) -> float:
-        """Safely retrieves a weight from the nested weights dictionary."""
+        """
+        Safely retrieves a specific weight from the nested weights dictionary.
+
+        This utility function prevents errors by handling cases where a
+        particular feature or outcome may not have an entry in the weights model,
+        returning 0.0 as a default.
+
+        Args:
+            group: The top-level feature group (e.g., "prosody", "syntax").
+            key: The specific feature key (e.g., "pz:long", "p:final").
+            outcome: The break type being scored (e.g., "O", "LB", "SB").
+
+        Returns:
+            The learned weight as a float, or 0.0 if not found.
+        """
         try:
             return float(self.w[group][key].get(outcome, 0.0))
         except (KeyError, AttributeError):
             return 0.0
 
     def score_transition(self, row: TokenRow) -> Dict[str, float]:
-        """Calculates scores for each possible break type (O, LB, SB) after a token."""
+        """
+        Calculates the scores for each possible break type after the current token.
+
+        This is the core function for scoring local decisions. It aggregates
+        weights from various feature groups (prosody, syntax, etc.) and applies
+        strong boosts based on pre-engineered structural hints like speaker
+        changes or LLM-suggested breaks.
+
+        Args:
+            row: A `TokenRow` object containing the current token and the next
+                 token, structured as dictionaries.
+
+        Returns:
+            A dictionary mapping each break type ('O', 'LB', 'SB') to its
+            calculated score.
+        """
         scores: Dict[str, float] = {"O": 0.0, "LB": 0.0, "SB": 0.0}
         token = row.token
         nxt = row.nxt if row.nxt else {}
@@ -90,7 +136,28 @@ class Scorer:
         return scores
 
     def score_block(self, block_tokens: List[dict], block_breaks: List[BreakType]) -> float:
-        """Calculates a holistic quality score for a completed block of dicts."""
+        """
+        Calculates a holistic quality score for a completed subtitle block.
+
+        This function evaluates a finished block based on aggregate metrics
+        that are crucial for readability, such as:
+        -   Characters-Per-Second (CPS): How fast the subtitle appears.
+        -   Line Balance: The relative length of the two lines (if a line
+            break exists).
+        -   Total Duration: Whether the subtitle is on screen for too long
+            or too short a time.
+
+        Scores are calculated by comparing these metrics against ideal ranges
+        defined in the corpus constraints.
+
+        Args:
+            block_tokens: A list of token dictionaries within the completed block.
+            block_breaks: The list of break types corresponding to the `block_tokens`.
+
+        Returns:
+            A float representing the overall quality score for the block. A higher
+            score is better. Penalties are applied for violating constraints.
+        """
         if not block_tokens: return 0.0
         score = 0.0
         

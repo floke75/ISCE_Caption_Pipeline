@@ -32,24 +32,69 @@ v
 v
 [Final .srt File]
 
-## File & Folder Structure
+## Getting Started
 
-The repository is organized for clarity and maintainability, requiring no code changes to the scripts.
+This section provides a step-by-step guide to get the ISCE pipeline up and running.
 
-/
-├── run_pipeline.py # The main orchestrator you run
-├── align_make.py # Worker: Audio -> Timed ASR
-├── build_training_pair_standalone.py # Worker: Text + ASR -> Enriched Data
-├── main.py # Worker: Enriched Data -> SRT
-├── pipeline_config.py # Utility for loading YAML configs
-├── requirements.txt # All Python dependencies
-├── README.md # This file
-├── AGENTS.md # A guide for LLM agents
-│
-├── isce/ # Core ISCE toolkit (scorer, model builder, etc.)
-├── scripts/ # Standalone tools (train_model.py, etc.)
-├── configs/ # User-editable configuration files
-└── models/ # Your trained model artifacts
+### 1. Prerequisites
+
+*   **Python:** 3.11 or higher.
+*   **ffmpeg:** Must be installed and accessible in your system's PATH.
+*   **GPU (Recommended):** A CUDA-enabled GPU is strongly recommended for WhisperX.
+*   **Hugging Face Token:** Required for speaker diarization.
+
+### 2. Installation
+
+1.  **Clone the Repository:**
+    ```bash
+    git clone <your-repository-url>
+    cd ISCE_Caption_Pipeline
+    ```
+
+2.  **Create a Virtual Environment:**
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate  # On Windows, use `.venv\Scripts\activate`
+    ```
+
+3.  **Install Dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+### 3. Configuration
+
+1.  **Copy and Edit Configuration Files:**
+    *   In the `configs/` directory, copy `pipeline_config.sample.yaml` to `pipeline_config.yaml`.
+    *   Copy `config.sample.yaml` to `config.yaml`.
+
+2.  **Update `pipeline_config.yaml`:**
+    *   Set `project_root` and `pipeline_root` to the absolute paths on your system.
+    *   Add your Hugging Face token to the `hf_token` field.
+
+3.  **Update `config.yaml`:**
+    *   Ensure the `paths` section points to the correct location of your trained model files within the `models/` directory.
+
+### 4. Running the Pipeline
+
+1.  **Start the Orchestrator:**
+    ```bash
+    python run_pipeline.py
+    ```
+
+2.  **Process Files:**
+    *   Drop your media and text files into the appropriate "hot folders" as defined in `pipeline_config.yaml`.
+
+## Folder Structure
+
+*   `run_pipeline.py`: The main orchestrator script that watches hot folders.
+*   `align_make.py`: Worker script for audio processing (ASR, alignment, diarization).
+*   `build_training_pair_standalone.py`: Worker script for text alignment and feature enrichment.
+*   `main.py`: Worker script that runs the final segmentation to create the `.srt` file.
+*   `isce/`: The core Python package containing the main logic (scoring, beam search, etc.).
+*   `scripts/`: Standalone scripts for training and evaluation.
+*   `configs/`: Directory for user-editable YAML configuration files.
+*   `models/`: Directory to store your trained model artifacts (`model_weights.json`, `constraints.json`).
 
 ## Setup & Installation
 
@@ -85,36 +130,53 @@ The repository is organized for clarity and maintainability, requiring no code c
     *   **Edit `pipeline_config.yaml`:** Update the `project_root` and `pipeline_root` paths to match your local system. Add your Hugging Face token to the `hf_token` field if you plan to use speaker diarization.
     *   **Edit `config.yaml`:** Update the `paths` to point to the correct location of your trained model files within the `models/` directory.
 
-## Configuration Files Explained
+## How It Works
 
-ISCE draws configuration values from two YAML files. The orchestrator can fall back to the embedded defaults, but supplying explicit files keeps multi-user deployments predictable and portable.
+The ISCE pipeline is a multi-stage process designed to create high-quality subtitles.
 
-| File | Purpose | Notable Sections |
-| --- | --- | --- |
-| `pipeline_config.yaml` | Central settings for the hot-folder workflow and worker scripts. | `project_root`/`pipeline_root` establish the base directories. The nested `align_make` block controls WhisperX model IDs, diarization toggles, cache directories, and Hugging Face token usage. The `build_pair` block governs language, alignment tolerance, SpaCy features, and output targets. |
-| `config.yaml` | Parameters for the segmentation engine (`main.py`). | `beam_width` sets the beam-search breadth; `constraints` provides fallback guardrails if learned constraints are absent; `sliders` adjusts per-feature multipliers; and `paths` points to the trained `model_weights.json` and `constraints.json`. |
+1.  **Audio Processing:** The `align_make.py` script takes a media file, extracts the audio, and uses a speech recognition model (WhisperX) to generate an initial transcript with highly accurate word-level timestamps. It can also perform speaker diarization to identify who is speaking. The output is a time-stamped JSON file that serves as a "timing reference."
 
-Any path-like entry in `pipeline_config.yaml` can reference previously defined keys using Python-style placeholders. For example, `{pipeline_root}` expands to the value of `pipeline_root` declared in the same file.
+2.  **Text Alignment & Enrichment:** The `build_training_pair_standalone.py` script is the core of the pipeline. It takes the timing reference from the previous step and a corrected text file (e.g., a `.txt` or `.srt` file). It intelligently aligns the corrected text to the timed words from the ASR output, effectively transferring the accurate timestamps onto the correct words. It then enriches this data with a wide range of features, including:
+    *   **Linguistic Features:** Part-of-speech tags, lemmas, and syntactic dependencies from SpaCy.
+    *   **Prosodic Features:** The duration of pauses between words.
+    *   **Heuristic Features:** Speaker changes, sentence boundaries, and other structural patterns.
+
+3.  **Segmentation:** The `main.py` script takes the enriched data and feeds it into the segmentation engine. This engine uses a beam search algorithm guided by a statistical model to find the optimal placement of subtitle breaks (`SB` for a block break, `LB` for a line break). The model scores different possibilities based on the features, and the beam search efficiently explores the most promising options.
+
+4.  **SRT Generation:** The final output is a standard `.srt` subtitle file, formatted with correct timings and line breaks.
+
+## Configuration
+
+ISCE uses two main configuration files, both located in the `configs/` directory.
+
+*   **`pipeline_config.yaml`:** This file controls the overall pipeline workflow and the behavior of the worker scripts. Key settings include:
+    *   `project_root` and `pipeline_root`: The base directories for the project and the pipeline hot folders.
+    *   `align_make`: Settings for the audio processing stage, including the Whisper model to use, whether to perform diarization, and your Hugging Face token.
+    *   `build_pair`: Settings for the data enrichment stage, including language, alignment tolerances, and whether to use SpaCy for linguistic features.
+
+*   **`config.yaml`:** This file configures the final segmentation engine. Key settings include:
+    *   `beam_width`: The width of the beam search algorithm. A larger number may yield better results but will be slower.
+    *   `sliders`: User-adjustable weights to fine-tune the importance of different features in the scoring model.
+    *   `paths`: The paths to your trained `model_weights.json` and `constraints.json` files.
 
 ## Usage
 
-The entire pipeline is managed via the `run_pipeline.py` orchestrator and its "hot folder" system.
+The pipeline is designed to be run continuously using the `run_pipeline.py` orchestrator, which monitors a set of "hot folders."
 
 1.  **Start the Orchestrator:**
-    ```powershell
-    # Ensure your virtual environment is active
+    ```bash
     python run_pipeline.py
     ```
 
-2.  **Run Inference:**
-    *   Place your media file (e.g., `MyVideo.mp4`) into the folder specified by `drop_folder_inference` in your config (e.g., `T:\AI-Subtitles\Pipeline\1_DROP_FOLDER_INFERENCE`).
-    *   Place your corresponding corrected text file (e.g., `MyVideo.txt`) into the folder specified by `txt_placement_folder` (e.g., `T:\AI-Subtitles\Pipeline\4_MANUAL_TXT_PLACEMENT`).
-    *   The orchestrator will automatically process the files. The final `.srt` file will appear in your `output_dir`.
+2.  **Inference Workflow:**
+    *   Place your media file (e.g., `video.mp4`) into the `1_DROP_FOLDER_INFERENCE`.
+    *   Place the corresponding corrected transcript (e.g., `video.txt`) into the `4_MANUAL_TXT_PLACEMENT` folder.
+    *   The orchestrator will detect the files, run the full pipeline, and place the final `video.srt` in the `_output` directory.
 
-3.  **Prepare Training Data:**
-    *   Place your media file into the `drop_folder_training`.
-    *   Place its corresponding ground-truth `.srt` file into the `srt_placement_folder`.
-    *   The orchestrator will process the pair and create a `.train.words.json` file in your intermediate training directory.
+3.  **Training Data Workflow:**
+    *   Place your media file (e.g., `training_video.mp4`) into the `2_DROP_FOLDER_TRAINING`.
+    *   Place the corresponding human-captioned ground-truth subtitle file (e.g., `training_video.srt`) into the `3_MANUAL_SRT_PLACEMENT` folder.
+    *   The orchestrator will process the pair and create a `training_video.train.words.json` file in the `_intermediate/_training` directory, ready to be used for model training.
 
 ## Command-Line Entry Points
 

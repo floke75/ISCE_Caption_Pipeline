@@ -29,7 +29,27 @@ except ImportError:
 from isce.io_utils import load_tokens
 
 def main():
-    """Command-line interface for evaluating caption segmentation performance."""
+    """
+    Main entry point for the command-line model evaluation script.
+
+    This script provides a comprehensive evaluation of a trained model's
+    performance by comparing its output against a ground-truth reference file.
+    It performs two main types of analysis:
+
+    1.  **Comparison Metrics**: It directly compares the break decisions (`SB`,
+        `LB`, `O`) between the generated file and the reference file,
+        calculating metrics like precision, recall, and F1-score for each
+        break type. It can optionally save a detailed CSV of every
+        disagreement.
+
+    2.  **Intrinsic Readability Metrics**: It analyzes the generated file on its
+        own to assess its quality based on the data-driven constraints. This
+        includes checking for violations of ideal CPS, block duration, and line
+        length, providing a "readability score."
+
+    The script requires both the generated and reference files to be in the
+    enriched token JSON format.
+    """
     parser = argparse.ArgumentParser(
         description="Evaluate caption segmentation performance against a reference.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter

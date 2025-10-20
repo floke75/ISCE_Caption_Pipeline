@@ -22,7 +22,20 @@ class PathState:
 
 class Segmenter:
     """
-    A stateful class to manage the beam search segmentation process.
+    Manages the beam search segmentation process.
+
+    This stateful class encapsulates the logic for the beam search algorithm,
+    iterating through tokens and maintaining a beam of the most likely
+    segmentation hypotheses (`PathState` objects). It uses a `Scorer` to
+    evaluate the quality of different break decisions at each step.
+
+    Attributes:
+        tokens: The list of `Token` objects to be segmented.
+        scorer: The `Scorer` instance used to score potential breaks.
+        cfg: The main configuration object.
+        beam: The list of current best `PathState` hypotheses.
+        line_len_leniency: A factor to adjust penalties for long lines.
+        orphan_leniency: A factor to adjust penalties for single-word lines.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -33,17 +46,17 @@ class Segmenter:
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
-        """Return True when adding the next word keeps the active line within limits."""
+        """Checks if continuing a line (`O`) violates hard length constraints."""
         limit_key = f"line{line_num}"
         hard_limit = self.cfg.line_length_constraints.get(limit_key, {}).get("hard_limit", 42)
         return (line_len + 1 + next_word_len) <= hard_limit
 
     def _is_hard_ok_LB(self, line_num: int) -> bool:
-        """Return True if a line break is allowed for the current line number."""
+        """Checks if a line break (`LB`) is allowed at the current position."""
         return line_num == 1
 
     def _is_hard_ok_SB(self, block_start_idx: int, current_idx: int) -> bool:
-        """Return True when a block break satisfies duration and single-word constraints."""
+        """Checks if a block break (`SB`) violates hard constraints."""
         start_token = self.tokens[block_start_idx]
         end_token = self.tokens[current_idx]
         duration = max(1e-6, end_token.end - start_token.start)
@@ -57,7 +70,19 @@ class Segmenter:
         return True
 
     def run(self) -> List[BreakType]:
-        """Execute beam search and return the best-scoring sequence of break types."""
+        """
+        Executes the main beam search algorithm.
+
+        This method iterates through each token in the input sequence. At each
+        step, it expands each hypothesis in the current beam by considering all
+        valid next break types ('O', 'LB', 'SB'). Each new potential path is
+        scored, and the beam is pruned to keep only the top N hypotheses, where
+        N is the beam width.
+
+        Returns:
+            A list of `BreakType` enums representing the best-scoring
+            segmentation path found.
+        """
         if not self.tokens:
             return []
 
@@ -132,7 +157,21 @@ class Segmenter:
         return final_breaks
 
 def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
-    """High-level wrapper for the stateful Segmenter class."""
+    """
+    High-level wrapper to perform beam search segmentation.
+
+    This function instantiates the `Segmenter` class, runs the beam search
+    algorithm, and applies the resulting break types to the input tokens.
+
+    Args:
+        tokens: The list of `Token` objects to segment.
+        scorer: The `Scorer` instance to use for evaluating breaks.
+        cfg: The main configuration object.
+
+    Returns:
+        A new list of `Token` objects with the `break_type` attribute set
+        according to the segmentation result.
+    """
     if not tokens:
         return []
     

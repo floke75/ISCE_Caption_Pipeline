@@ -54,6 +54,21 @@ warnings.filterwarnings("ignore", message=r".*torchaudio._backend.list_audio_bac
 # Configuration Helper Functions (Self-Contained)
 # =========================
 def _recursive_update(base: Dict, update: Dict) -> Dict:
+    """
+    Recursively updates a dictionary.
+
+    Merges the 'update' dictionary into the 'base' dictionary. If a key
+    exists in both dictionaries and its value is a dictionary in both,
+    it recursively merges the nested dictionaries. Otherwise, the value
+    from 'update' overwrites the value in 'base'.
+
+    Args:
+        base: The dictionary to be updated.
+        update: The dictionary containing new values.
+
+    Returns:
+        The updated 'base' dictionary.
+    """
     for k, v in update.items():
         if isinstance(v, dict) and k in base and isinstance(base[k], dict):
             base[k] = _recursive_update(base[k], v)
@@ -62,6 +77,20 @@ def _recursive_update(base: Dict, update: Dict) -> Dict:
     return base
 
 def _resolve_paths(config: Dict, context: Dict) -> Dict:
+    """
+    Resolves placeholder variables in configuration paths.
+
+    Recursively iterates through a configuration dictionary and formats any
+    string values that contain `{placeholder}` style variables using the
+    provided context dictionary.
+
+    Args:
+        config: The configuration dictionary with unresolved path strings.
+        context: A dictionary mapping placeholder keys to their values.
+
+    Returns:
+        The configuration dictionary with path placeholders resolved.
+    """
     for k, v in config.items():
         if isinstance(v, str) and "{" in v and "}" in v:
             try:
@@ -76,15 +105,40 @@ def _resolve_paths(config: Dict, context: Dict) -> Dict:
 # Utilities
 # =========================
 def ensure_dirs(p: Path):
+    """
+    Ensures that the directory for a given path exists.
+
+    Args:
+        p: A Path object representing the file or directory.
+    """
     p.mkdir(parents=True, exist_ok=True)
 
 def set_env_tokens(token: str):
+    """
+    Sets the Hugging Face authentication token as an environment variable.
+
+    This is used by the diarization model to download necessary resources.
+
+    Args:
+        token: The Hugging Face API token.
+    """
     if token:
         os.environ["HF_TOKEN"] = token
     else:
         print("[WARN] Hugging Face token is not set. Diarization may fail.")
 
 def pick_device(device_cfg: str = "auto") -> str:
+    """
+    Selects the optimal computation device based on availability and configuration.
+
+    It prioritizes CUDA if available and not explicitly disabled.
+
+    Args:
+        device_cfg: The desired device ('auto', 'cuda', or 'cpu').
+
+    Returns:
+        A string representing the selected device, either "cuda" or "cpu".
+    """
     if device_cfg == "cuda" and not torch.cuda.is_available():
         print("[WARN] CUDA specified but not available. Falling back to CPU.")
         return "cpu"
@@ -93,9 +147,28 @@ def pick_device(device_cfg: str = "auto") -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 def base_of(path: Path) -> str:
+    """
+    Gets the base name of a file path, excluding the extension.
+
+    Args:
+        path: A Path object.
+
+    Returns:
+        The filename stem.
+    """
     return path.stem
 
 def _save_json(obj: dict, p: Path):
+    """
+    Saves a dictionary to a JSON file.
+
+    Ensures the parent directory exists and writes the file with UTF-8 encoding
+    and human-readable indentation.
+
+    Args:
+        obj: The dictionary to save.
+        p: The destination Path object.
+    """
     ensure_dirs(p.parent)
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -103,6 +176,25 @@ def _save_json(obj: dict, p: Path):
 # Audio Processing
 # =========================
 def extract_and_convert_audio(video_path: Path, temp_dir: Path) -> Path:
+    """
+    Extracts audio from a media file and converts it to a standardized format.
+
+    Uses ffmpeg to convert the audio from any supported video or audio file
+    into a 16kHz mono WAV file, which is the required format for the
+    WhisperX ASR model.
+
+    Args:
+        video_path: Path to the input media file.
+        temp_dir: Directory to store the temporary WAV file.
+
+    Returns:
+        The path to the newly created WAV file.
+
+    Raises:
+        ffmpeg.Error: If ffmpeg encounters an error during conversion.
+        FileNotFoundError: If the `ffmpeg` executable is not found in the system's PATH.
+        IOError: If ffmpeg runs but fails to create the output file.
+    """
     output_wav_path = temp_dir / f"{video_path.stem}_16khz_mono.wav"
     print(f"[AUDIO] Extracting and converting audio to: {output_wav_path.name}")
     try:
@@ -128,6 +220,24 @@ def extract_and_convert_audio(video_path: Path, temp_dir: Path) -> Path:
 # Main per-file pipeline
 # =========================
 def process_file(audio_path: Path, device: str, paths: Dict[str, Path], settings: Dict[str, Any]):
+    """
+    Runs the complete ASR and diarization pipeline for a single audio file.
+
+    This function performs the following steps:
+    1.  Extracts and converts the audio to a standard format using `extract_and_convert_audio`.
+    2.  Transcribes the audio to text using a WhisperX model.
+    3.  Aligns the transcription to get precise word-level timestamps.
+    4.  Performs speaker diarization to assign a speaker label to each word.
+    5.  Saves the final, flattened list of word objects to a JSON file.
+
+    It manages GPU memory by loading and unloading models for each step.
+
+    Args:
+        audio_path: The path to the input media file.
+        device: The computation device to use ("cuda" or "cpu").
+        paths: A dictionary containing output directory paths.
+        settings: A dictionary of operational settings for the pipeline.
+    """
     base = base_of(audio_path)
     print(f"\n===== [{base}] =====")
 
@@ -207,6 +317,13 @@ def process_file(audio_path: Path, device: str, paths: Dict[str, Path], settings
             converted_audio_path.unlink()
 
 def main():
+    """
+    Main entry point for the command-line interface.
+
+    Parses command-line arguments, loads configuration from YAML files,
+    initializes the environment (device, tokens), and calls the main
+    `process_file` function to execute the ASR pipeline.
+    """
     parser = argparse.ArgumentParser(description="Run ASR, diarization, and alignment on an audio/video file.")
     parser.add_argument("--input-file", required=True, type=Path, help="Path to the audio/video file to process.")
     parser.add_argument("--out-root", required=True, type=Path, help="Root directory for output artifacts.")
