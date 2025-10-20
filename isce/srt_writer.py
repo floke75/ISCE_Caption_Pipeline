@@ -73,4 +73,4 @@ def tokens_to_srt(tokens: List[Token]) -> str:
         block_idx += 1
         current_token_idx = block_end_idx + 1
 
-    return "\n\n".join(output_blocks)```
+    return "\n\n".join(output_blocks)
