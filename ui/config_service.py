@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 import yaml
 
-from pipeline_config import load_pipeline_config
+from pipeline_config import _resolve_paths
 from run_pipeline import DEFAULT_SETTINGS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -41,19 +41,34 @@ def _merge_overrides(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[st
 
 def load_effective_pipeline_config(additional_overrides: Dict[str, Any] | None = None) -> Dict[str, Any]:
     defaults = _ensure_runtime_defaults()
-    resolved = load_pipeline_config(defaults, str(PIPELINE_CONFIG_PATH))
+
+    effective_overrides: Dict[str, Any] = {}
+    persisted_overrides = load_pipeline_overrides()
+    if persisted_overrides:
+        effective_overrides = _merge_overrides(effective_overrides, persisted_overrides)
+    if additional_overrides:
+        effective_overrides = _merge_overrides(effective_overrides, additional_overrides)
+
+    if effective_overrides:
+        working_config = _merge_overrides(defaults, effective_overrides)
+    else:
+        working_config = copy.deepcopy(defaults)
+
+    path_context = {k: v for k, v in working_config.items() if isinstance(v, str)}
+    resolved = _resolve_paths(working_config, path_context)
     resolved["project_root"] = str(PROJECT_ROOT)
     resolved.setdefault("pipeline_root", defaults["pipeline_root"])
-    if additional_overrides:
-        resolved = _merge_overrides(resolved, additional_overrides)
     return resolved
 
 
 def load_pipeline_overrides() -> Dict[str, Any]:
     if not PIPELINE_CONFIG_PATH.exists():
         return {}
-    with open(PIPELINE_CONFIG_PATH, "r", encoding="utf-8") as fh:
-        data = yaml.safe_load(fh) or {}
+    try:
+        with open(PIPELINE_CONFIG_PATH, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except Exception:
+        return {}
     return data if isinstance(data, dict) else {}
 
 
