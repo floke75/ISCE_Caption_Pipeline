@@ -20,7 +20,7 @@ from fastapi import APIRouter, Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, Field, model_validator
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -234,17 +234,17 @@ class InferenceRequest(BaseModel):
     transcript_file: Optional[str] = Field(None, description="Optional transcript to align against.")
     config_overrides: Optional[Dict[str, Any]] = Field(None, description="Per-run overrides for pipeline_config values.")
 
-    @root_validator
-    def _validate_paths(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        media = values.get("media_file")
+    @model_validator(mode="after")
+    def _validate_paths(self) -> "InferenceRequest":
+        media = self.media_file
         if not media:
             raise ValueError("media_file is required")
         if not Path(media).exists():
             raise ValueError(f"Media file not found: {media}")
-        transcript = values.get("transcript_file")
+        transcript = self.transcript_file
         if transcript and not Path(transcript).exists():
             raise ValueError(f"Transcript file not found: {transcript}")
-        return values
+        return self
 
 
 class TrainingPairRequest(BaseModel):
@@ -252,15 +252,15 @@ class TrainingPairRequest(BaseModel):
     srt_file: str = Field(..., description="Ground-truth SRT file to align.")
     config_overrides: Optional[Dict[str, Any]] = None
 
-    @root_validator
-    def _validate_paths(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        media = values.get("media_file")
-        srt = values.get("srt_file")
+    @model_validator(mode="after")
+    def _validate_paths(self) -> "TrainingPairRequest":
+        media = self.media_file
+        srt = self.srt_file
         if not Path(media).exists():
             raise ValueError(f"Media file not found: {media}")
         if not Path(srt).exists():
             raise ValueError(f"SRT file not found: {srt}")
-        return values
+        return self
 
 
 class ModelTrainingRequest(BaseModel):
@@ -271,12 +271,12 @@ class ModelTrainingRequest(BaseModel):
     iterations: int = Field(3, ge=1, description="Number of training iterations")
     error_boost_factor: float = Field(1.0, ge=0.0, description="Weight increment for misclassified samples")
 
-    @root_validator
-    def _check_paths(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        corpus_dir = Path(values.get("corpus_dir", ""))
+    @model_validator(mode="after")
+    def _check_paths(self) -> "ModelTrainingRequest":
+        corpus_dir = Path(self.corpus_dir)
         if not corpus_dir.exists() or not corpus_dir.is_dir():
             raise ValueError(f"Corpus directory not found: {corpus_dir}")
-        return values
+        return self
 
 
 class JobSummary(BaseModel):
