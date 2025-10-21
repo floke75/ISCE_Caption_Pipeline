@@ -40,11 +40,32 @@ from .schemas import (
 from run_pipeline import process_inference_file, process_training_file
 
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+
+def _load_allowed_origins() -> list[str]:
+    raw = os.getenv("ISCE_UI_ALLOWED_ORIGINS")
+    if not raw:
+        return DEFAULT_ALLOWED_ORIGINS
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or DEFAULT_ALLOWED_ORIGINS
+
+
+allowed_origins = _load_allowed_origins()
+allow_credentials = os.getenv("ISCE_UI_ALLOW_CREDENTIALS", "true").lower() == "true"
+
+if allow_credentials and any(origin == "*" for origin in allowed_origins):
+    allow_credentials = False
+
+
 app = FastAPI(title="ISCE Captioning Control Panel", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
