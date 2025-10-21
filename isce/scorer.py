@@ -81,7 +81,7 @@ class Scorer:
         # --- Feature Discretization from pre-engineered data ---
         pz_bin = bin_pause_z(token.get("pause_z"))
         pc_class = punct_class(token)
-        rp_bin = "rp:none" # Placeholder
+        rp_bin = bin_rel_pos(token.get("relative_position"))
         
         pos_bigram = f"{token.get('pos', 'none')}|{nxt.get('pos', 'none')}"
         pb_key = f"pb:{pos_bigram}"
@@ -131,8 +131,8 @@ class Scorer:
             scores["O"] -= self.structure_boost
         
         if token.get("is_llm_structural_break"):
-            scores["SB"] += self.structure_boost * 1.5 
-            scores["O"] -= self.structure_boost * 1.5
+            scores["SB"] += self.structure_boost
+            scores["O"] -= self.structure_boost
 
         return scores
 
