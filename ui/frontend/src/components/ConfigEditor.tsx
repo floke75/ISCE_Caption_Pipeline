@@ -9,7 +9,9 @@ interface Props {
 function flattenConfig(content: Record<string, unknown>, prefix = ""): Record<string, string> {
   return Object.entries(content).reduce<Record<string, string>>((acc, [key, value]) => {
     const path = prefix ? `${prefix}.${key}` : key;
-    if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (Array.isArray(value)) {
+      acc[path] = JSON.stringify(value);
+    } else if (value && typeof value === "object") {
       Object.assign(acc, flattenConfig(value as Record<string, unknown>, path));
     } else if (value !== undefined && value !== null) {
       acc[path] = String(value);
@@ -19,14 +21,24 @@ function flattenConfig(content: Record<string, unknown>, prefix = ""): Record<st
 }
 
 function parseValue(value: string): unknown {
-  if (value === "true" || value === "false") {
-    return value === "true";
+  const trimmed = value.trim();
+
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      // fall through to other parsers if JSON parsing fails
+    }
+  }
+
+  if (trimmed === "true" || trimmed === "false") {
+    return trimmed === "true";
   }
   if (/[/\\]/.test(value) || value.includes(":")) {
     return value;
   }
   const num = Number(value);
-  if (!Number.isNaN(num) && value.trim() !== "") {
+  if (!Number.isNaN(num) && trimmed !== "") {
     return num;
   }
   return value;
