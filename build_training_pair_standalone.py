@@ -233,10 +233,17 @@ def align_text_to_asr(
         aligned token back to its originating index in `edited_tokens`.
     """
     asr_token_texts = [str(w.get("w") or "") for w in asr_words]
-    if not edited_tokens: return []
+    if not edited_tokens:
+        return ([], []) if return_alignment else []
     if not asr_token_texts:
         slices = _safe_interval_split(0.0, 0.01 * len(edited_tokens), len(edited_tokens))
-        return [{"w": t, "start": s, "end": e, "speaker": None} for t, (s, e) in zip(edited_tokens, slices)]
+        aligned_tokens = [
+            {"w": t, "start": s, "end": e, "speaker": None}
+            for t, (s, e) in zip(edited_tokens, slices)
+        ]
+        if return_alignment:
+            return aligned_tokens, list(range(len(edited_tokens)))
+        return aligned_tokens
 
     path = _global_align(edited_tokens, asr_token_texts, settings)
     
