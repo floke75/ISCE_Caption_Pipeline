@@ -91,7 +91,8 @@ class Scorer:
         cap_key = "cap:split" if splits_cap_pair else "cap:ok"
         
         glue_key = str(token.get("num_unit_glue", False))
-        dangling_key = "False" # Placeholder
+        dangling_flag = str(token.get("is_dangling_eos", False))
+        dangling_key = f"is_dangling_eos:{dangling_flag}"
 
         interact_pp_key = f"pp:{pc_class}_{pz_bin}"
         interact_ps_key = f"ps:{pc_class}_{pb_key}" if pc_class in ['p:comma', 'p:final'] else "ps:none"
@@ -115,7 +116,8 @@ class Scorer:
 
         # --- Step 2: Apply structural scores from pre-engineered features ---
         sc_key = str(token.get("speaker_change", False))
-        dash_key = str(token.get("starts_with_dialogue_dash", False))
+        dash_flag = str(token.get("starts_with_dialogue_dash", False))
+        dash_key = f"starts_with_dash:{dash_flag}"
 
         for outcome in scores.keys():
             scores[outcome] += self.sl.get("structure", 1.0) * (

@@ -251,7 +251,10 @@ def build_weights(df: pd.DataFrame, cfg: Config, alpha: float = 0.1, sample_weig
             row_totals = counts.sum(axis=1)
             probs = counts.div(row_totals, axis=0)
             for feature_value, row in probs.iterrows():
-                weights[group][feature_value] = {
+                key_name = feature_value
+                if group == "structural_heuristics":
+                    key_name = f"{feature}:{feature_value}"
+                weights[group][key_name] = {
                     outcome: log_odds(row.get(outcome, 0.0)) for outcome in outcomes
                 }
                 

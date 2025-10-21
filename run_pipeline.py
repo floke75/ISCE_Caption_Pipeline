@@ -163,12 +163,14 @@ def process_inference_file(media_file: Path, cfg: Dict):
     print(f"  -> Media file base name: {base_name}")
     print(f"  -> Checking for TXT file at this exact path: {txt_file_path.resolve()}")
     
+    extra_args = []
     if txt_file_path.exists():
         print("  -> RESULT: TXT file FOUND. Setting primary input to TXT file.")
         primary_input_path = txt_file_path
     else:
-        print("  -> RESULT: TXT file NOT FOUND. Setting primary input to ASR file (ASR-Only mode).")
+        print("  -> RESULT: TXT file NOT FOUND. Entering ASR-only inference mode.")
         primary_input_path = asr_reference_path
+        extra_args.extend(["--asr-only-mode", "--output-basename", base_name])
     print("="*50 + "\n")
 
     run_command([
@@ -176,7 +178,8 @@ def process_inference_file(media_file: Path, cfg: Dict):
         "--primary-input", primary_input_path,
         "--asr-reference", asr_reference_path,
         "--out-inference-dir", intermediate_dir / "_inference_input",
-        "--config-file", config_file_path
+        "--config-file", config_file_path,
+        *extra_args,
     ], cwd=project_root)
     if not enriched_file_path.exists():
         raise FileNotFoundError(f"Enrichment did not produce expected output: {enriched_file_path}")
