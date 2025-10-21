@@ -142,7 +142,9 @@ def process_inference_file(media_file: Path, cfg: Dict):
     txt_file_path = Path(cfg["txt_placement_folder"]) / f"{base_name}.txt"
     enriched_file_path = intermediate_dir / "_inference_input" / f"{base_name}.enriched.json"
     final_srt_path = Path(cfg["output_dir"]) / f"{base_name}.srt"
-    config_file_path = get_project_path(cfg, "pipeline_config.yaml")
+    config_file_path = Path(
+        cfg.get("pipeline_config_path", get_project_path(cfg, "pipeline_config.yaml"))
+    )
 
     # Step 1: Always run the Audio-to-ASR engine first.
     print("\n[Step 1/3] Generating time-stamped ASR reference...")
@@ -226,7 +228,9 @@ def process_training_file(media_file: Path, srt_file: Path, cfg: Dict):
     
     asr_reference_path = intermediate_dir / "_align" / f"{base_name}.asr.visual.words.diar.json"
     final_training_file = intermediate_dir / "_training" / f"{base_name}.train.words.json"
-    config_file_path = get_project_path(cfg, "pipeline_config.yaml")
+    config_file_path = Path(
+        cfg.get("pipeline_config_path", get_project_path(cfg, "pipeline_config.yaml"))
+    )
 
     # Step 1: Generate the time-stamped ASR reference.
     print("\n[Step 1/2] Generating time-stamped ASR reference...")
