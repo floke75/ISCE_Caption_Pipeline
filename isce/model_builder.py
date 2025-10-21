@@ -173,9 +173,9 @@ def create_feature_row(row: TokenRow, cfg: Config) -> dict:
         "punct_class": punct_class(token),
         "pos_bigram": f"pb:{pos_bigram}",
         "splits_capital": "cap:split" if splits_cap_pair else "cap:ok",
-        "rel_pos_bin": "rp:none", # Placeholder
+        "rel_pos_bin": bin_rel_pos(token.get("relative_position")),
         "break_before_glue": str(token.get("num_unit_glue", False)),
-        "is_dangling_eos": "False", # Placeholder
+        "is_dangling_eos": str(token.get("is_dangling_eos", False)),
         "outcome": token.get("break_type"),
         "speaker_change": str(token.get("speaker_change", False)),
         "starts_with_dash": str(token.get("starts_with_dialogue_dash", False)),

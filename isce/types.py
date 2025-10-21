@@ -37,7 +37,14 @@ class Token:
         starts_with_dialogue_dash: True if the next token starts with a dialogue dash.
         speaker_change: True if a speaker change occurs immediately after this token.
         num_unit_glue: True if the token is a number followed by a unit (e.g., '5 kg').
-        is_llm_structural_break: True if an LLM suggested a structural break here.
+        is_llm_structural_break: True if an LLM or structural hint suggested a break.
+        is_dangling_eos: True if the token ends a sentence but the following token
+            does not look like a fresh sentence (short pause, no capitalization).
+        relative_position: Normalised index of the token within its sentence (0-1).
+        asr_source_word: The raw word text originating from the ASR alignment.
+        cue_line_index: (Training) Zero-based index of the line inside the cue.
+        line_break_after: (Training) True when the cue inserts a newline after this token.
+        is_last_in_cue: (Training) True when the token closes the cue.
         break_type: The final segmentation decision ('O', 'LB', 'SB'), assigned by
                     the beam search algorithm.
     """
@@ -65,7 +72,13 @@ class Token:
     speaker_change: bool = False
     num_unit_glue: bool = False
     is_llm_structural_break: bool = False
-    
+    is_dangling_eos: bool = False
+    relative_position: float = 0.0
+    asr_source_word: Optional[str] = None
+    cue_line_index: Optional[int] = None
+    line_break_after: bool = False
+    is_last_in_cue: bool = False
+
     # The final decision label, assigned by the segmenter
     break_type: Optional[BreakType] = None
 

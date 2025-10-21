@@ -25,7 +25,7 @@ sliders:
   orphan_leniency: 2.0      # >1.0 makes the penalty for orphans stronger.
 
   # Additive boost for structural breaks (speaker changes, dashes, LLM hints)
-  structure_boost: 45.0
+  structure_boost: 18.0
 
 # --- File Paths (relative to this config file's location) ---
 paths:
