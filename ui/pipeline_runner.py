@@ -4,6 +4,7 @@ from __future__ import annotations
 import shutil
 import sys
 from contextlib import redirect_stderr, redirect_stdout
+from copy import deepcopy
 from pathlib import Path
 from threading import Lock
 from typing import Any, Dict, Optional
@@ -45,7 +46,7 @@ def _initial_runtime_config(job_id: str, overrides: Optional[Dict[str, Any]] = N
     repo_root = _repo_root()
     config_path = pipeline_config_path or (repo_root / "pipeline_config.yaml")
 
-    config = load_pipeline_config(ORCHESTRATOR_DEFAULTS, str(config_path))
+    config = load_pipeline_config(deepcopy(ORCHESTRATOR_DEFAULTS), str(config_path))
 
     runtime_root = repo_root / "ui_data" / "jobs" / job_id
     intermediate_dir = runtime_root / "intermediate"
