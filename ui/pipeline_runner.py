@@ -5,6 +5,7 @@ import shutil
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from threading import Lock
 from typing import Any, Dict, Optional
 
 from pipeline_config import load_pipeline_config
@@ -18,6 +19,9 @@ from run_pipeline import (
 from scripts import train_model
 
 from ui.jobs import JobStatus, JobStore
+
+
+_train_model_lock = Lock()
 
 
 def _repo_root() -> Path:
@@ -227,36 +231,40 @@ def run_model_training_job(
         constraints_output.parent.mkdir(parents=True, exist_ok=True)
         weights_output.parent.mkdir(parents=True, exist_ok=True)
 
-        argv_backup = list(sys.argv)
-        sys.argv = [
-            "train_model",
-            "--corpus",
-            str(corpus_dir),
-            "--constraints",
-            str(constraints_output),
-            "--weights",
-            str(weights_output),
-            "--config",
-            str(config_path),
-            "--iterations",
-            str(iterations),
-            "--error-boost-factor",
-            str(error_boost_factor),
-        ]
-
         log_stream = store.log_stream(job_id)
 
-        with redirect_stdout(log_stream), redirect_stderr(log_stream):
+        with _train_model_lock:
+            argv_backup = list(sys.argv)
+            sys.argv = [
+                "train_model",
+                "--corpus",
+                str(corpus_dir),
+                "--constraints",
+                str(constraints_output),
+                "--weights",
+                str(weights_output),
+                "--config",
+                str(config_path),
+                "--iterations",
+                str(iterations),
+                "--error-boost-factor",
+                str(error_boost_factor),
+            ]
+
             try:
-                train_model.main()
-            except SystemExit as exc:
-                if exc.code not in (0, None):
-                    raise RuntimeError(f"Training script exited with code {exc.code}") from exc
+                with redirect_stdout(log_stream), redirect_stderr(log_stream):
+                    try:
+                        train_model.main()
+                    except SystemExit as exc:
+                        if exc.code not in (0, None):
+                            raise RuntimeError(
+                                f"Training script exited with code {exc.code}"
+                            ) from exc
+            finally:
+                sys.argv = argv_backup
     except Exception as exc:
         store.set_status(job_id, JobStatus.FAILED, error=str(exc))
         raise
-    finally:
-        sys.argv = argv_backup
 
     artifacts = {
         "constraints": str(constraints_output),
