@@ -172,10 +172,28 @@ async function loadJob(jobId) {
     jobLogViewer.textContent = logs.logs || "";
 
     if (details.result && Object.keys(details.result).length) {
-      const entries = Object.entries(details.result)
-        .map(([key, value]) => `<div><strong>${key}:</strong> ${value}</div>`)
-        .join("");
-      jobResult.innerHTML = entries;
+      jobResult.textContent = "";
+      for (const [key, value] of Object.entries(details.result)) {
+        const row = document.createElement("div");
+        const label = document.createElement("strong");
+        label.textContent = `${key}:`;
+        row.appendChild(label);
+        row.append(" ");
+
+        const valueSpan = document.createElement("span");
+        if (typeof value === "string") {
+          valueSpan.textContent = value;
+        } else {
+          try {
+            valueSpan.textContent = JSON.stringify(value, null, 2);
+          } catch (error) {
+            valueSpan.textContent = String(value);
+          }
+        }
+
+        row.appendChild(valueSpan);
+        jobResult.appendChild(row);
+      }
     } else {
       jobResult.textContent = "No artifacts recorded yet.";
     }
