@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any, Literal, Optional
 
-__all__ = ["BreakType", "Token", "TokenRow"]
+__all__ = ["BreakType", "Token", "TokenRow", "Engineered"]
 
 BreakType = Literal["O", "LB", "SB"]
 
@@ -90,4 +90,15 @@ class TokenRow:
     token: dict[str, Any]
     nxt: Optional[dict[str, Any]]
     feats: Any = None
+
+
+@dataclass(frozen=True)
+class Engineered:
+    """Compatibility shim for pre-engineered feature payloads."""
+
+    # In the refactored design, engineered features are stored directly on the
+    # token dictionaries.  The scorer still expects a distinct object to exist
+    # for backwards compatibility, so we provide a minimal, typed placeholder
+    # here to keep the data model centralized.
+    pass
 
