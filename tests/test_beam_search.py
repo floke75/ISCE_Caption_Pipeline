@@ -1,3 +1,4 @@
+import unittest
 import sys
 from pathlib import Path
 
@@ -28,28 +29,32 @@ def make_token(word: str, start: float) -> Token:
     return Token(w=word, start=start, end=start + 0.2, speaker="A")
 
 
-def test_fallback_candidate_keeps_beam_alive():
-    tokens = [
-        make_token("AAAAA0", 0.0),
-        make_token("BBBBB1", 0.2),
-        make_token("CCCCC2", 0.4),
-        make_token("DDDDD3", 0.6),
-    ]
+class TestBeamSearch(unittest.TestCase):
+    def test_fallback_candidate_keeps_beam_alive(self):
+        tokens = [
+            make_token("AAAAA0", 0.0),
+            make_token("BBBBB1", 0.2),
+            make_token("CCCCC2", 0.4),
+            make_token("DDDDD3", 0.6),
+        ]
 
-    cfg = Config(
-        beam_width=1,
-        min_block_duration_s=10.0,
-        max_block_duration_s=10.0,
-        line_length_constraints={
-            "line1": {"soft_target": 5, "hard_limit": 5},
-            "line2": {"soft_target": 5, "hard_limit": 5},
-        },
-        min_chars_for_single_word_block=1,
-        sliders={},
-        paths={},
-    )
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=10.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 5, "hard_limit": 5},
+                "line2": {"soft_target": 5, "hard_limit": 5},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+        )
 
-    segmented = segment(tokens, DummyScorer(), cfg)
-    breaks = [token.break_type for token in segmented]
+        segmented = segment(tokens, DummyScorer(), cfg)
+        breaks = [token.break_type for token in segmented]
 
-    assert breaks == ["LB", "SB", "LB", "SB"], breaks
+        self.assertEqual(breaks, ["LB", "SB", "LB", "SB"])
+
+if __name__ == "__main__":
+    unittest.main()
