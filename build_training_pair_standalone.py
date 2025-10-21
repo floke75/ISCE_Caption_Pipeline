@@ -52,6 +52,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "spacy_add_dependencies": True,
         "txt_match_close": 0.82,
         "txt_match_weak":  0.65,
+        "speaker_correction_window_size": 5,
     }
 }
 
@@ -297,16 +298,37 @@ def read_srt_cues(path: Path) -> List[Dict[str, Any]]:
     srt = pysrt.open(str(path), encoding="utf-8")
     return [{"id": i, "start": c.start.ordinal/1000.0, "end": c.end.ordinal/1000.0, "text": (c.text or "").replace("\r", "")} for i, c in enumerate(srt)]
 
-def tokenize_srt_cues(cues: List[Dict[str, Any]]) -> Tuple[List[str], List[int]]:
-    """Tokenizes the text from SRT cues into a flat list of words."""
-    tokens, cue_ids = [], []
+def tokenize_srt_cues(cues: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[int]]:
+    """
+    Tokenizes the text from SRT cues into a flat list of token dictionaries,
+    preserving cue IDs and identifying line breaks as structural hints.
+    """
+    processed_tokens: List[Dict[str, Any]] = []
+    cue_ids: List[int] = []
     for c in cues:
-        text = c["text"]
-        parts = [p for p in text.split() if p]
-        for t in parts:
-            tokens.append(t)
-            cue_ids.append(int(c["id"]))
-    return tokens, cue_ids
+        cue_id = int(c["id"])
+        # Clean the text once before splitting into lines
+        cleaned_text = strip_rendered_markup(c["text"]).strip()
+        lines = cleaned_text.split('\n')
+
+        # Filter out empty lines that might result from splitting
+        non_empty_lines = [line.strip() for line in lines if line.strip()]
+
+        for line_idx, line in enumerate(non_empty_lines):
+            words_in_line = line.split()
+            if not words_in_line:
+                continue
+
+            for word_idx, word in enumerate(words_in_line):
+                # A structural break is hinted at the end of every line except the last one in the cue.
+                is_hinted_break = (word_idx == len(words_in_line) - 1) and \
+                                  (line_idx < len(non_empty_lines) - 1)
+
+                processed_tokens.append({"w": word, "is_llm_structural_break": is_hinted_break})
+                cue_ids.append(cue_id)
+
+    return processed_tokens, cue_ids
+
 
 # =========================
 # Data Loading
@@ -340,44 +362,149 @@ def load_asr_words(path: Path) -> List[Dict[str, Any]]:
     return words
 
 # =========================
+# Data Loading & Pre-processing by Type
+# =========================
+def _process_asr_only(
+    asr_words: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]]]:
+    """Handles the ASR-only inference case."""
+    print("Operating in ASR-only mode. Skipping primary text alignment.")
+    tokens = [
+        {
+            "w": str(word.get("w", "")),
+            "start": float(word.get("start", 0.0)),
+            "end": float(word.get("end", 0.0)),
+            "speaker": word.get("speaker"),
+            "is_llm_structural_break": False, # No structural hints in ASR-only mode
+            "is_edited_transcript": False, # This is raw ASR
+        }
+        for word in asr_words
+    ]
+    return tokens, [], list(range(len(tokens)))
+
+def _process_txt(
+    primary_path: Path, asr_words: List[Dict[str, Any]], settings: Dict
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]]]:
+    """Handles the TXT-based inference case."""
+    print(f"Loading TXT for inference from: {primary_path.name}")
+    raw_text = primary_path.read_text(encoding="utf-8")
+    hint_groups = raw_text.strip().split('\n')
+
+    processed_tokens_with_hints = []
+    for group in hint_groups:
+        words_in_group = group.split()
+        if not words_in_group: continue
+        for i, word in enumerate(words_in_group):
+            is_hinted_break = (i == len(words_in_group) - 1)
+            processed_tokens_with_hints.append({"w": word, "llm_break_hint": is_hinted_break})
+    # The very last word cannot be a structural break.
+    if processed_tokens_with_hints:
+        processed_tokens_with_hints[-1]["llm_break_hint"] = False
+
+    primary_tokens = [d["w"] for d in processed_tokens_with_hints]
+
+    print("Aligning primary text to ASR reference...")
+    tokens, alignment_sources = align_text_to_asr(primary_tokens, asr_words, settings, return_alignment=True)
+
+    # Transfer the structural break hints to the aligned tokens.
+    if processed_tokens_with_hints:
+        for idx, token in enumerate(tokens):
+            source_idx = alignment_sources[idx] if idx < len(alignment_sources) else None
+            if source_idx is not None and 0 <= source_idx < len(processed_tokens_with_hints):
+                token["is_llm_structural_break"] = processed_tokens_with_hints[source_idx].get("llm_break_hint", False)
+            else:
+                token["is_llm_structural_break"] = False
+    else:
+        for token in tokens:
+            token["is_llm_structural_break"] = False
+
+    # Add edited transcript flag
+    for token in tokens:
+        token["is_edited_transcript"] = True
+
+    return tokens, [], alignment_sources
+
+
+def _process_srt(
+    primary_path: Path, asr_words: List[Dict[str, Any]], settings: Dict
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]]]:
+    """Handles the SRT-based training case."""
+    print(f"Loading SRT for training from: {primary_path.name}")
+    cues = read_srt_cues(primary_path)
+    processed_tokens_with_hints, _ = tokenize_srt_cues(cues)
+    primary_tokens = [d['w'] for d in processed_tokens_with_hints]
+
+    print("Aligning primary text to ASR reference...")
+    tokens, alignment_sources = align_text_to_asr(primary_tokens, asr_words, settings, return_alignment=True)
+
+    # Transfer the structural break hints from the SRT newlines.
+    if processed_tokens_with_hints:
+        for idx, token in enumerate(tokens):
+            source_idx = alignment_sources[idx] if idx < len(alignment_sources) else None
+            if source_idx is not None and 0 <= source_idx < len(processed_tokens_with_hints):
+                token["is_llm_structural_break"] = processed_tokens_with_hints[source_idx].get("is_llm_structural_break", False)
+            else:
+                token["is_llm_structural_break"] = False
+    else:
+        for token in tokens:
+            token["is_llm_structural_break"] = False
+
+    # Add edited transcript flag
+    for token in tokens:
+        token["is_edited_transcript"] = True
+
+    return tokens, cues, alignment_sources
+
+# =========================
 # Speaker Correction Logic
 # =========================
-def correct_speaker_labels(tokens: List[Dict[str, Any]]):
+def correct_speaker_labels(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
     """
-    Corrects speaker labels using a "sole winner" algorithm at the sentence level.
+    Corrects speaker labels using a sliding-window, "sole winner" algorithm.
 
-    This function groups tokens into sentences. Within each sentence, it
+    This function iterates through each token and considers a window of
+    surrounding tokens (including the token itself). Within this window, it
     counts the occurrences of each speaker label. The speaker with the most
-    occurrences is declared the "winner," and all tokens in that sentence
-    are reassigned to that winning speaker. This helps correct minor
--    diarization errors.
+    occurrences is declared the "winner," and the central token of the window
+    is reassigned to that winning speaker. This is more robust for short,
+    back-and-forth dialogue than a sentence-level approach.
 
     Args:
-        tokens: A list of word dictionaries, each potentially having a 'speaker' key.
+        tokens: A list of word dictionaries, each with a 'speaker' key.
+        settings: Configuration dictionary containing the window size.
     """
-    if not tokens: return
-    print("[INFO] Running 'Sole Winner' speaker correction...")
-    sentences = []
-    current_sentence = []
-    for token in tokens:
-        current_sentence.append(token)
-        if token.get("w", "").strip().endswith((".", "?", "!")):
-            sentences.append(current_sentence)
-            current_sentence = []
-    if current_sentence:
-        sentences.append(current_sentence)
+    if not tokens:
+        return
 
-    for sentence in sentences:
-        if not sentence: continue
-        speaker_counts = {}
-        for token in sentence:
+    window_size = settings.get("speaker_correction_window_size", 5)
+    print(f"[INFO] Running sliding-window speaker correction with window size {window_size}...")
+
+    # Create a new list for the corrected tokens to avoid in-place modification issues.
+    corrected_speakers = [token.get("speaker") for token in tokens]
+
+    for i in range(len(tokens)):
+        half_window = window_size // 2
+        start = max(0, i - half_window)
+        end = min(len(tokens), i + half_window + 1)
+
+        window_tokens = tokens[start:end]
+
+        speaker_counts: Dict[str, int] = {}
+        for token in window_tokens:
             speaker = token.get("speaker")
             if speaker:
                 speaker_counts[speaker] = speaker_counts.get(speaker, 0) + 1
-        if not speaker_counts: continue
-        winner_speaker = max(speaker_counts, key=speaker_counts.get)
-        for token in sentence:
-            token["speaker"] = winner_speaker
+
+        if not speaker_counts:
+            continue
+
+        # The 'winner' is the speaker with the highest count in the window.
+        winner_speaker = max(speaker_counts, key=lambda spk: speaker_counts[spk])
+        corrected_speakers[i] = winner_speaker
+
+    # Apply the corrected speaker labels back to the original token list.
+    for i, token in enumerate(tokens):
+        token["speaker"] = corrected_speakers[i]
 
 # =========================
 # Consolidated Feature Engineering
@@ -554,20 +681,9 @@ def process_file(
 ):
     """
     Main processing pipeline for a single file.
-
-    This function orchestrates the entire workflow:
-    1.  Loads the ASR reference and the primary input (TXT or SRT).
-    2.  Aligns the primary text to the ASR timestamps.
-    3.  Corrects speaker labels.
-    4.  (Training mode only) Generates ground-truth break labels from SRT cues.
-    5.  Engineers all linguistic and heuristic features.
-    6.  Saves the final enriched data to a JSON file.
-
-    Args:
-        primary_path: Path to the primary input file (.txt or .srt).
-        asr_reference_path: Path to the ASR JSON file.
-        paths: Dictionary of output paths.
-        settings: Configuration dictionary.
+    Orchestrates loading, alignment, feature engineering, and saving.
+    In training mode, it augments the data by creating a simulated ASR version
+    to improve model robustness against training-serving skew.
     """
     if output_basename:
         base = output_basename
@@ -584,95 +700,78 @@ def process_file(
     print(f"Loading ASR reference from: {asr_reference_path.name}")
     asr_words = load_asr_words(asr_reference_path)
 
-    processed_tokens_with_hints = []
-    alignment_sources: List[Optional[int]] = []
+    # --- Data Loading and Pre-processing ---
+    tokens: List[Dict[str, Any]] = []
+    cues: List[Dict[str, Any]] = []
+
     if asr_only_mode:
-        print("Operating in ASR-only mode. Skipping primary text alignment.")
-        tokens = [
-            {
-                "w": str(word.get("w", "")),
-                "start": float(word.get("start", 0.0)),
-                "end": float(word.get("end", 0.0)),
-                "speaker": word.get("speaker"),
-            }
-            for word in asr_words
-        ]
-        cues = []
+        tokens, _, _ = _process_asr_only(asr_words)
     elif is_training_mode:
-        print(f"Loading SRT for training from: {primary_path.name}")
-        cues = read_srt_cues(primary_path)
-        primary_tokens, _ = tokenize_srt_cues(cues)
-        print("Aligning primary text to ASR reference...")
-        tokens, alignment_sources = align_text_to_asr(primary_tokens, asr_words, settings, return_alignment=True)
-    else:
-        print(f"Loading TXT for inference from: {primary_path.name}")
-        raw_text = primary_path.read_text(encoding="utf-8")
-        hint_groups = raw_text.strip().split('\n')
-        for group in hint_groups:
-            words_in_group = group.split()
-            if not words_in_group: continue
-            for i, word in enumerate(words_in_group):
-                is_hinted_break = (i == len(words_in_group) - 1)
-                processed_tokens_with_hints.append({"w": word, "llm_break_hint": is_hinted_break})
-        if processed_tokens_with_hints:
-            processed_tokens_with_hints[-1]["llm_break_hint"] = False
-        primary_tokens = [d["w"] for d in processed_tokens_with_hints]
-        cues = []
-        print("Aligning primary text to ASR reference...")
-        tokens, alignment_sources = align_text_to_asr(primary_tokens, asr_words, settings, return_alignment=True)
+        tokens, cues, _ = _process_srt(primary_path, asr_words, settings)
+    else: # TXT mode
+        tokens, _, _ = _process_txt(primary_path, asr_words, settings)
+
     if not tokens:
         print("[WARN] Alignment produced no tokens. Skipping.")
         return
 
-    if not is_training_mode and not asr_only_mode:
-        if processed_tokens_with_hints:
-            for idx, token in enumerate(tokens):
-                source_idx = alignment_sources[idx] if idx < len(alignment_sources) else None
-                if source_idx is not None and 0 <= source_idx < len(processed_tokens_with_hints):
-                    token["is_llm_structural_break"] = processed_tokens_with_hints[source_idx].get("llm_break_hint", False)
-                else:
-                    token["is_llm_structural_break"] = False
-        else:
-            print(f"[INFO] No LLM hints found in TXT. Defaulting structural hint flags to False.")
-            for token in tokens:
-                token["is_llm_structural_break"] = False
-    elif asr_only_mode:
-        for token in tokens:
-            token["is_llm_structural_break"] = False
+    # --- Main Processing Block ---
+    def _enrich_and_finalize(
+        token_list: List[Dict[str, Any]],
+        cue_list: List[Dict[str, Any]],
+        is_training: bool
+    ) -> List[Dict[str, Any]]:
+        """Applies speaker correction, labeling, and feature engineering."""
+        correct_speaker_labels(token_list, settings)
+        if is_training:
+            generate_labels_from_cues(token_list, cue_list, settings)
+        engineer_features(token_list, settings)
 
-    correct_speaker_labels(tokens)
+        final_tokens = []
+        for t in token_list:
+            final_tokens.append({
+                "w": t.get("w", ""), "start": round(t.get("start", 0.0), settings.get("round_seconds", 3)),
+                "end": round(t.get("end", 0.0), settings.get("round_seconds", 3)), "speaker": t.get("speaker"),
+                "cue_id": t.get("cue_id"), "is_sentence_initial": t.get("is_sentence_initial", False),
+                "is_sentence_final": t.get("is_sentence_final", False), "pause_after_ms": t.get("pause_after_ms", 0),
+                "pause_before_ms": t.get("pause_before_ms", 0), "pause_z": t.get("pause_z", 0.0),
+                "pos": t.get("pos"), "lemma": t.get("lemma"), "tag": t.get("tag"), "morph": t.get("morph"),
+                "dep": t.get("dep"), "head_idx": t.get("head_idx"), "break_type": t.get("break_type"),
+                "starts_with_dialogue_dash": t.get("starts_with_dialogue_dash", False),
+                "speaker_change": t.get("speaker_change", False), "num_unit_glue": t.get("num_unit_glue", False),
+                "is_llm_structural_break": t.get("is_llm_structural_break", False),
+                "is_edited_transcript": t.get("is_edited_transcript", False)
+            })
+        return final_tokens
 
+    # --- Output Generation ---
     if is_training_mode:
-        print("Generating ground-truth labels from SRT cues...")
-        generate_labels_from_cues(tokens, cues, settings)
+        # 1. Process the original, edited transcript
+        print("\n--- Processing EDITED version for training ---")
+        edited_tokens = _enrich_and_finalize(tokens, cues, is_training=True)
+        out_path_edited = paths["out_training_dir"] / f"{base}.train.words.json"
+        _save_json({"tokens": edited_tokens}, out_path_edited)
+        print(f"[OK] Wrote EDITED training data to: {out_path_edited.name}")
 
-    print("Performing all feature engineering...")
-    engineer_features(tokens, settings)
-    
-    final_tokens = []
-    for t in tokens:
-        final_tokens.append({
-            "w": t.get("w", ""), "start": round(t.get("start", 0.0), settings.get("round_seconds", 3)),
-            "end": round(t.get("end", 0.0), settings.get("round_seconds", 3)), "speaker": t.get("speaker"),
-            "cue_id": t.get("cue_id"), "is_sentence_initial": t.get("is_sentence_initial", False),
-            "is_sentence_final": t.get("is_sentence_final", False), "pause_after_ms": t.get("pause_after_ms", 0),
-            "pause_before_ms": t.get("pause_before_ms", 0), "pause_z": t.get("pause_z", 0.0),
-            "pos": t.get("pos"), "lemma": t.get("lemma"), "tag": t.get("tag"), "morph": t.get("morph"),
-            "dep": t.get("dep"), "head_idx": t.get("head_idx"), "break_type": t.get("break_type"),
-            "starts_with_dialogue_dash": t.get("starts_with_dialogue_dash", False),
-            "speaker_change": t.get("speaker_change", False), "num_unit_glue": t.get("num_unit_glue", False),
-            "is_llm_structural_break": t.get("is_llm_structural_break", False)
-        })
+        # 2. Create and process the simulated ASR transcript
+        print("\n--- Processing SIMULATED ASR version for training ---")
+        simulated_asr_tokens = json.loads(json.dumps(tokens)) # Deep copy
+        for token in simulated_asr_tokens:
+            # Normalize text to simulate raw ASR output
+            raw_w = re.sub(r'[^\w\s]', '', token.get("w", "").lower())
+            token["w"] = raw_w
+            # Mark this as a non-edited transcript
+            token["is_edited_transcript"] = False
 
-    output_obj = {"tokens": final_tokens}
-    
-    if is_training_mode:
-        out_path = paths["out_training_dir"] / f"{base}.train.words.json"
-        _save_json(output_obj, out_path)
-        print(f"[OK] Wrote TRAINING data to: {out_path.name}")
-    else:
+        final_simulated_tokens = _enrich_and_finalize(simulated_asr_tokens, cues, is_training=True)
+        out_path_simulated = paths["out_training_dir"] / f"{base}.train.raw.words.json"
+        _save_json({"tokens": final_simulated_tokens}, out_path_simulated)
+        print(f"[OK] Wrote SIMULATED ASR training data to: {out_path_simulated.name}")
+
+    else: # Inference Mode
+        final_tokens = _enrich_and_finalize(tokens, cues, is_training=False)
         out_path = paths["out_inference_dir"] / f"{base}.enriched.json"
-        _save_json(output_obj, out_path)
+        _save_json({"tokens": final_tokens}, out_path)
         print(f"[OK] Wrote INFERENCE data to: {out_path.name}")
 
 def main():
