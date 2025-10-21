@@ -480,7 +480,11 @@ def _cors_allow_origins() -> List[str]:
         if origins:
             return origins
     # Default to common local development hosts.
-    return ["http://localhost:3000", "http://localhost:5173"]
+    return [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:4173",
+    ]
 
 
 app.add_middleware(
