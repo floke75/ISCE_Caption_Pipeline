@@ -254,6 +254,36 @@ Structurally identical to the enriched tokens, but `break_type` is pre-populated
 
 `main.py` writes the broadcast-ready `.srt` file and, when invoked with `--save-labeled-json`, emits a labeled JSON copy that mirrors the token schema with `break_type` filled in.
 
+## Web UI for Non-Technical Operators
+
+The repository ships with a lightweight FastAPI server and a static front-end (no build step required) under `ui/`. The UI lets production staff launch inference runs, build new training pairs, trigger model training, and edit the YAML configuration files without touching the terminal.
+
+### Launching the Control Center
+
+1. Install dependencies (make sure a Python virtual environment is activated):
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. Start the web server from the repository root:
+
+   ```bash
+   uvicorn ui.server:app --reload --port 8000
+   ```
+
+3. Visit [http://localhost:8000](http://localhost:8000) in a browser. The static assets are served from `/static`, so no additional build tooling is required.
+
+### What the UI Provides
+
+- **Manual inference:** supply a media path and optional transcript. You can paste JSON overrides for `pipeline_config.yaml` (for example to tweak diarization) or point to an alternate pipeline configuration file.
+- **Training pair generation:** align a media file with a verified SRT to produce the `.train.words.json` artifacts that feed the trainer.
+- **Model training:** kick off `scripts/train_model.py` with custom iteration counts, output destinations, and alternate `config.yaml` inputs.
+- **Live telemetry:** every job streams stdout/stderr into the activity view so operators can watch WhisperX progress, enrichment milestones, or training accuracy.
+- **Configuration editing:** both `pipeline_config.yaml` and `config.yaml` can be loaded, edited, and saved directly from the UI with YAML validation before write-back.
+
+All runtime artifacts are isolated under `ui_data/jobs/<job_id>/` so that UI-triggered runs do not interfere with the production hot folders.
+
 ## Operational Tips
 
 * The orchestrator enforces a short "settle" delay before reading new files. Increase `file_settle_delay_seconds` in `pipeline_config.yaml` if you routinely upload large files that take longer to finish copying.

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ISCE Caption Pipeline Control Center</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>ISCE Caption Pipeline Control Center</h1>
+      <p class="subtitle">
+        Launch inference and training runs, monitor progress, and adjust pipeline settings without touching the terminal.
+      </p>
+    </header>
+
+    <main class="layout">
+      <section class="panel" id="inference-panel">
+        <h2>Manual Inference</h2>
+        <p class="panel-description">
+          Provide a media file and an optional transcript to generate a segmented SRT file. Override pipeline settings with JSON when needed.
+        </p>
+        <form id="inference-form" class="form-grid">
+          <label>
+            Media path
+            <input type="text" name="media_path" placeholder="/path/to/video.mp4" required />
+          </label>
+          <label>
+            Transcript path (.txt)
+            <input type="text" name="transcript_path" placeholder="/optional/transcript.txt" />
+          </label>
+          <label>
+            Output SRT destination
+            <input type="text" name="output_path" placeholder="/optional/output.srt" />
+          </label>
+          <label class="full-width">
+            Config overrides (JSON)
+            <textarea name="config_overrides" rows="4" placeholder='{"align_make": {"batch_size": 8}}'></textarea>
+          </label>
+          <label class="full-width">
+            Alternate pipeline_config.yaml
+            <input type="text" name="pipeline_config_path" placeholder="/custom/pipeline_config.yaml" />
+          </label>
+          <button type="submit" class="primary">Launch inference job</button>
+        </form>
+        <div class="form-feedback" id="inference-feedback"></div>
+      </section>
+
+      <section class="panel" id="training-pair-panel">
+        <h2>Prepare Training Pair</h2>
+        <p class="panel-description">
+          Align a media file with a ground-truth SRT to produce a .train.words.json artifact for corpus building.
+        </p>
+        <form id="training-pair-form" class="form-grid">
+          <label>
+            Media path
+            <input type="text" name="media_path" placeholder="/path/to/video.mp4" required />
+          </label>
+          <label>
+            Ground-truth SRT path
+            <input type="text" name="srt_path" placeholder="/path/to/captions.srt" required />
+          </label>
+          <label class="full-width">
+            Config overrides (JSON)
+            <textarea name="config_overrides" rows="4" placeholder='{"align_make": {"do_diarization": false}}'></textarea>
+          </label>
+          <label class="full-width">
+            Alternate pipeline_config.yaml
+            <input type="text" name="pipeline_config_path" placeholder="/custom/pipeline_config.yaml" />
+          </label>
+          <button type="submit" class="primary">Launch training pair job</button>
+        </form>
+        <div class="form-feedback" id="training-pair-feedback"></div>
+      </section>
+
+      <section class="panel" id="model-training-panel">
+        <h2>Model Training</h2>
+        <p class="panel-description">
+          Run the iterative reweighting trainer on a directory of prepared training JSON files.
+        </p>
+        <form id="model-training-form" class="form-grid">
+          <label>
+            Corpus directory
+            <input type="text" name="corpus_dir" placeholder="/path/to/corpus" required />
+          </label>
+          <label>
+            Iterations
+            <input type="number" name="iterations" value="3" min="1" />
+          </label>
+          <label>
+            Error boost factor
+            <input type="number" name="error_boost_factor" step="0.1" value="1.0" min="0" />
+          </label>
+          <label>
+            Constraints output path
+            <input type="text" name="constraints_output" placeholder="/optional/constraints.json" />
+          </label>
+          <label>
+            Weights output path
+            <input type="text" name="weights_output" placeholder="/optional/model_weights.json" />
+          </label>
+          <label class="full-width">
+            Alternate config.yaml
+            <input type="text" name="config_path" placeholder="/custom/config.yaml" />
+          </label>
+          <button type="submit" class="primary">Launch model training job</button>
+        </form>
+        <div class="form-feedback" id="model-training-feedback"></div>
+      </section>
+
+      <section class="panel wide" id="config-panel">
+        <h2>Configuration Management</h2>
+        <div class="config-columns">
+          <div class="config-card">
+            <header>
+              <h3>pipeline_config.yaml</h3>
+              <div>
+                <button type="button" data-action="load" data-target="pipeline" class="secondary">Load</button>
+                <button type="button" data-action="save" data-target="pipeline" class="primary">Save</button>
+              </div>
+            </header>
+            <textarea id="pipeline-config-editor" spellcheck="false" rows="16"></textarea>
+          </div>
+          <div class="config-card">
+            <header>
+              <h3>config.yaml</h3>
+              <div>
+                <button type="button" data-action="load" data-target="model" class="secondary">Load</button>
+                <button type="button" data-action="save" data-target="model" class="primary">Save</button>
+              </div>
+            </header>
+            <textarea id="model-config-editor" spellcheck="false" rows="16"></textarea>
+          </div>
+        </div>
+        <div class="form-feedback" id="config-feedback"></div>
+      </section>
+
+      <section class="panel wide" id="jobs-panel">
+        <h2>Job Activity</h2>
+        <div class="jobs-layout">
+          <div class="jobs-list">
+            <table>
+              <thead>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody id="jobs-table-body"></tbody>
+            </table>
+          </div>
+          <div class="job-details">
+            <h3 id="selected-job-title">Select a job to inspect logs</h3>
+            <pre id="job-log-viewer" class="log-viewer"></pre>
+            <div id="job-result"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <span>Server health: <strong id="health-indicator">unknown</strong></span>
+      <button id="refresh-jobs" class="secondary">Refresh jobs</button>
+    </footer>
+
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>
