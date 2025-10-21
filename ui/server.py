@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -132,8 +133,6 @@ def _prepare_training_pair_job(
 
 
 def _run_training_script(request: TrainModelRequest) -> Dict[str, str]:
-    from scripts import train_model as train_model_script
-
     corpus_dir = _resolve_path(request.corpus_dir)
     constraints_path = ensure_path(_resolve_path(request.constraints_path) or request.constraints_path)
     weights_path = ensure_path(_resolve_path(request.weights_path) or request.weights_path)
@@ -143,7 +142,6 @@ def _run_training_script(request: TrainModelRequest) -> Dict[str, str]:
         raise FileNotFoundError(f"Corpus directory not found: {request.corpus_dir}")
 
     argv = [
-        "train_model.py",
         "--corpus",
         str(corpus_dir),
         "--constraints",
@@ -158,15 +156,12 @@ def _run_training_script(request: TrainModelRequest) -> Dict[str, str]:
         str(request.error_boost_factor),
     ]
 
-    print("Launching model training script with arguments:")
-    print(" ".join(argv))
+    cmd = [sys.executable, "-m", "scripts.train_model", *argv]
 
-    original_argv = sys.argv
-    try:
-        sys.argv = argv
-        train_model_script.main()
-    finally:
-        sys.argv = original_argv
+    print("Launching model training script with command:")
+    print(" ".join(cmd))
+
+    subprocess.run(cmd, check=True)
 
     return {
         "constraints": str(constraints_path),
