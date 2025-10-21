@@ -614,42 +614,6 @@ def engineer_features(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
             next_word_is_sentence_initial = ends_with_punctuation and next_is_cap
         token["is_sentence_final"] = ends_with_punctuation and (nxt is None or next_word_is_sentence_initial)
 
-    # Pass 4: Dangling sentence detection
-    dangling_threshold = settings.get("dangling_pause_threshold_ms", 300)
-    for i, token in enumerate(tokens):
-        nxt = tokens[i + 1] if i + 1 < len(tokens) else None
-        if not nxt:
-            token["is_dangling_eos"] = False
-            continue
-        same_speaker = token.get("speaker") == nxt.get("speaker")
-        next_is_sentence_initial = nxt.get("is_sentence_initial", False)
-        token["is_dangling_eos"] = bool(
-            token.get("is_sentence_final")
-            and same_speaker
-            and not next_is_sentence_initial
-            and token.get("pause_after_ms", 0) <= dangling_threshold
-        )
-
-    # Pass 5: Relative sentence position
-    def assign_relative_positions(sentence_tokens: List[Dict[str, Any]]):
-        if not sentence_tokens:
-            return
-        if len(sentence_tokens) == 1:
-            sentence_tokens[0]["relative_position"] = 1.0
-            return
-        denom = len(sentence_tokens) - 1
-        for idx, tok in enumerate(sentence_tokens):
-            tok["relative_position"] = idx / denom if denom else 0.0
-
-    current_sentence: List[Dict[str, Any]] = []
-    for token in tokens:
-        current_sentence.append(token)
-        if token.get("is_sentence_final"):
-            assign_relative_positions(current_sentence)
-            current_sentence = []
-    if current_sentence:
-        assign_relative_positions(current_sentence)
-
 
 # =========================
 # Labeling Logic (For Training Mode)
