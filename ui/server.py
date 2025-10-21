@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import sys
 import threading
 import uuid
@@ -542,11 +543,36 @@ def model_training_runner_factory(request: ModelTrainingRequest) -> Callable[[Jo
 # ---------------------------------------------------------------------------
 # API setup
 # ---------------------------------------------------------------------------
+TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def _parse_allowed_origins() -> List[str]:
+    raw_origins = os.getenv("PIPELINE_UI_ALLOW_ORIGINS")
+    if not raw_origins:
+        return ["*"]
+    return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
+
+def _should_allow_credentials() -> bool:
+    raw_value = os.getenv("PIPELINE_UI_ALLOW_CREDENTIALS")
+    if raw_value is None:
+        return False
+    return raw_value.strip().lower() in TRUE_VALUES
+
+
+allowed_origins = _parse_allowed_origins()
+allow_credentials = _should_allow_credentials()
+if allow_credentials and "*" in allowed_origins:
+    raise ValueError(
+        "PIPELINE_UI_ALLOW_CREDENTIALS cannot be enabled when PIPELINE_UI_ALLOW_ORIGINS "
+        "contains a wildcard origin. Provide explicit origins instead."
+    )
+
 app = FastAPI(title="ISCE Pipeline UI", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
