@@ -216,14 +216,27 @@ def _dump_yaml(path: Path, data: Dict[str, Any]) -> None:
         yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
 
 
+def _merge_dicts(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge ``updates`` into ``base`` preserving unknown keys."""
+
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            base[key] = _merge_dicts(dict(base[key]), value)
+        else:
+            base[key] = value
+    return base
+
+
 def load_pipeline_config_model() -> PipelineConfigModel:
     data = _load_yaml(PIPELINE_CONFIG_PATH)
     return PipelineConfigModel(**data)
 
 
 def save_pipeline_config_model(model: PipelineConfigModel) -> None:
+    existing = _load_yaml(PIPELINE_CONFIG_PATH)
     payload = json.loads(model.json(exclude_none=True, by_alias=True))
-    _dump_yaml(PIPELINE_CONFIG_PATH, payload)
+    merged = _merge_dicts(existing, payload)
+    _dump_yaml(PIPELINE_CONFIG_PATH, merged)
 
 
 def load_model_config_model() -> ModelConfigModel:
@@ -232,8 +245,10 @@ def load_model_config_model() -> ModelConfigModel:
 
 
 def save_model_config_model(model: ModelConfigModel) -> None:
+    existing = _load_yaml(MODEL_CONFIG_PATH)
     payload = json.loads(model.json(exclude_none=True, by_alias=True))
-    _dump_yaml(MODEL_CONFIG_PATH, payload)
+    merged = _merge_dicts(existing, payload)
+    _dump_yaml(MODEL_CONFIG_PATH, merged)
 
 
 def build_base_config() -> Dict[str, Any]:
