@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ISCE Caption Pipeline Control Center</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>ISCE Caption Pipeline Control Center</h1>
+      <p>Launch training runs, trigger manual inference, and monitor progress without touching the terminal.</p>
+    </header>
+
+    <main>
+      <section class="card" id="inference-card">
+        <h2>Manual Inference</h2>
+        <form id="inference-form" class="form-grid">
+          <label>
+            Media file (audio/video)
+            <input type="text" name="media_file" placeholder="/path/to/video.mp4" required />
+          </label>
+          <label>
+            Optional transcript (.txt)
+            <input type="text" name="txt_file" placeholder="/path/to/transcript.txt" />
+          </label>
+          <label>
+            Output directory override
+            <input type="text" name="output_directory" placeholder="Leave blank to use job workspace" />
+          </label>
+          <label>
+            Intermediate directory override
+            <input type="text" name="intermediate_directory" placeholder="Leave blank to use job workspace" />
+          </label>
+          <label>
+            Copy final SRT to
+            <input type="text" name="copy_srt_to" placeholder="/path/to/final/output.srt" />
+          </label>
+          <button type="submit">Start Inference</button>
+        </form>
+      </section>
+
+      <section class="card" id="training-pair-card">
+        <h2>Training Pair Generation</h2>
+        <form id="training-pair-form" class="form-grid">
+          <label>
+            Media file (audio/video)
+            <input type="text" name="media_file" placeholder="/path/to/video.mp4" required />
+          </label>
+          <label>
+            Ground truth SRT file
+            <input type="text" name="srt_file" placeholder="/path/to/reference.srt" required />
+          </label>
+          <label>
+            Intermediate directory override
+            <input type="text" name="intermediate_directory" placeholder="Leave blank to use job workspace" />
+          </label>
+          <button type="submit">Create Training JSON</button>
+        </form>
+      </section>
+
+      <section class="card" id="model-training-card">
+        <h2>Model Training</h2>
+        <form id="model-training-form" class="form-grid">
+          <label>
+            Training corpus directory
+            <input type="text" name="corpus" placeholder="/path/to/training/jsons" required />
+          </label>
+          <label>
+            Output constraints path
+            <input type="text" name="constraints" placeholder="/path/to/constraints.json" required />
+          </label>
+          <label>
+            Output weights path
+            <input type="text" name="weights" placeholder="/path/to/model_weights.json" required />
+          </label>
+          <label>
+            Config file
+            <input type="text" name="config" value="config.yaml" required />
+          </label>
+          <label>
+            Iterations
+            <input type="number" min="1" name="iterations" value="3" required />
+          </label>
+          <label>
+            Error boost factor
+            <input type="number" step="0.1" name="error_boost_factor" value="1.0" required />
+          </label>
+          <button type="submit">Start Training</button>
+        </form>
+      </section>
+
+      <section class="card" id="config-card">
+        <div class="config-header">
+          <h2>Configuration</h2>
+          <div class="config-actions">
+            <button id="refresh-config">Refresh</button>
+            <span id="config-status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="config-grid">
+          <form id="pipeline-config-form">
+            <h3>Pipeline Paths &amp; Engines</h3>
+            <div class="form-grid compact">
+              <label>Project root <input type="text" name="project_root" /></label>
+              <label>Pipeline root <input type="text" name="pipeline_root" /></label>
+              <label>Drop folder (inference) <input type="text" name="drop_folder_inference" /></label>
+              <label>Drop folder (training) <input type="text" name="drop_folder_training" /></label>
+              <label>SRT placement folder <input type="text" name="srt_placement_folder" /></label>
+              <label>TXT placement folder <input type="text" name="txt_placement_folder" /></label>
+              <label>Intermediate dir <input type="text" name="intermediate_dir" /></label>
+              <label>Output dir <input type="text" name="output_dir" /></label>
+              <label>Processed dir <input type="text" name="processed_dir" /></label>
+            </div>
+
+            <h4>Align &amp; ASR Settings</h4>
+            <div class="form-grid compact">
+              <label>Whisper model <input type="text" name="whisper_model_id" /></label>
+              <label>Align model <input type="text" name="align_model_id" /></label>
+              <label>Language <input type="text" name="align_language" /></label>
+              <label>Compute type <input type="text" name="compute_type" /></label>
+              <label>Batch size <input type="number" name="batch_size" min="1" /></label>
+              <label>HF token <input type="text" name="hf_token" /></label>
+              <label><input type="checkbox" name="do_diarization" /> Enable diarization</label>
+              <label><input type="checkbox" name="skip_if_asr_exists" /> Skip if ASR exists</label>
+            </div>
+
+            <h4>Feature Engineering</h4>
+            <div class="form-grid compact">
+              <label>Language <input type="text" name="build_language" /></label>
+              <label>Time tolerance (s) <input type="number" step="0.01" name="time_tolerance_s" /></label>
+              <label>Round seconds <input type="number" name="round_seconds" /></label>
+              <label><input type="checkbox" name="spacy_enable" /> Enable spaCy</label>
+              <label>SpaCy model <input type="text" name="spacy_model" /></label>
+              <label><input type="checkbox" name="spacy_add_dependencies" /> Add dependencies</label>
+              <label><input type="checkbox" name="emit_asr_style_training_copy" /> Emit ASR training copy</label>
+              <label>TXT match close <input type="number" step="0.01" name="txt_match_close" /></label>
+              <label>TXT match weak <input type="number" step="0.01" name="txt_match_weak" /></label>
+            </div>
+
+            <h4>Orchestrator</h4>
+            <div class="form-grid compact">
+              <label>Poll interval (s) <input type="number" name="poll_interval_seconds" /></label>
+              <label>File settle delay (s) <input type="number" name="file_settle_delay_seconds" /></label>
+              <label>SRT wait timeout (s) <input type="number" name="srt_wait_timeout_seconds" /></label>
+            </div>
+            <button type="submit">Save Pipeline Config</button>
+          </form>
+
+          <form id="model-config-form">
+            <h3>Segmentation Model</h3>
+            <div class="form-grid compact">
+              <label>Beam width <input type="number" name="beam_width" min="1" /></label>
+            </div>
+            <h4>Constraint Defaults</h4>
+            <div class="form-grid compact">
+              <label>Min block duration (s) <input type="number" step="0.1" name="min_block_duration_s" /></label>
+              <label>Max block duration (s) <input type="number" step="0.1" name="max_block_duration_s" /></label>
+              <label>Line soft target <input type="number" name="line_length_soft_target" /></label>
+              <label>Line hard limit <input type="number" name="line_length_hard_limit" /></label>
+              <label>Min chars single word <input type="number" name="min_chars_for_single_word_block" /></label>
+            </div>
+            <h4>Stylistic Sliders</h4>
+            <div class="form-grid compact">
+              <label>Flow <input type="number" step="0.1" name="flow" /></label>
+              <label>Density <input type="number" step="0.1" name="density" /></label>
+              <label>Balance <input type="number" step="0.1" name="balance" /></label>
+              <label>Line leniency <input type="number" step="0.1" name="line_length_leniency" /></label>
+              <label>Orphan leniency <input type="number" step="0.1" name="orphan_leniency" /></label>
+              <label>Structure boost <input type="number" step="0.1" name="structure_boost" /></label>
+            </div>
+            <h4>Model Paths</h4>
+            <div class="form-grid compact">
+              <label>Weights path <input type="text" name="model_weights" /></label>
+              <label>Constraints path <input type="text" name="constraints" /></label>
+            </div>
+            <button type="submit">Save Model Config</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="card" id="jobs-card">
+        <div class="jobs-header">
+          <h2>Job Monitor</h2>
+          <button id="refresh-jobs">Refresh Jobs</button>
+        </div>
+        <div class="jobs-container">
+          <table id="jobs-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <aside id="job-detail">
+            <h3>Job Details</h3>
+            <div id="job-meta"></div>
+            <h4>Logs</h4>
+            <pre id="job-logs" aria-live="polite"></pre>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <template id="toast-template">
+      <div class="toast" role="status"></div>
+    </template>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

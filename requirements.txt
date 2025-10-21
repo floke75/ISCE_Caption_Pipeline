@@ -10,6 +10,8 @@ whisperx
 pyannote.audio
 ffmpeg-python
 rapidfuzz
+fastapi
+uvicorn[standard]
 
 # SpaCy and its Swedish model
 spacy
