@@ -31,6 +31,7 @@ from run_pipeline import (
     DEFAULT_SETTINGS as PIPELINE_DEFAULTS,
     process_inference_file,
     process_training_file,
+    setup_directories,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -427,6 +428,7 @@ def inference_runner_factory(request: InferenceRequest) -> Callable[[JobRecord],
             if destination.resolve() != txt_path:
                 destination.write_text(txt_path.read_text(encoding="utf-8"), encoding="utf-8")
 
+        setup_directories(cfg)
         process_inference_file(media_path, cfg)
 
         final_srt = Path(cfg["output_dir"]) / f"{media_path.stem}.srt"
