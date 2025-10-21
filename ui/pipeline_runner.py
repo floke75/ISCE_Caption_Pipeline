@@ -23,6 +23,7 @@ from ui.jobs import JobStatus, JobStore
 
 
 _train_model_lock = Lock()
+_pipeline_io_lock = Lock()
 
 
 def _repo_root() -> Path:
@@ -123,8 +124,9 @@ def run_inference_job(
 
         log_stream = store.log_stream(job_id)
 
-        with redirect_stdout(log_stream), redirect_stderr(log_stream):
-            process_inference_file(media_path, config)
+        with _pipeline_io_lock:
+            with redirect_stdout(log_stream), redirect_stderr(log_stream):
+                process_inference_file(media_path, config)
 
         base_name = media_path.stem
         intermediate_dir = Path(config["intermediate_dir"])
@@ -182,8 +184,9 @@ def run_training_pair_job(
 
         log_stream = store.log_stream(job_id)
 
-        with redirect_stdout(log_stream), redirect_stderr(log_stream):
-            process_training_file(media_path, srt_path, config)
+        with _pipeline_io_lock:
+            with redirect_stdout(log_stream), redirect_stderr(log_stream):
+                process_training_file(media_path, srt_path, config)
 
         base_name = media_path.stem
         intermediate_dir = Path(config["intermediate_dir"])
@@ -254,14 +257,15 @@ def run_model_training_job(
             ]
 
             try:
-                with redirect_stdout(log_stream), redirect_stderr(log_stream):
-                    try:
-                        train_model.main()
-                    except SystemExit as exc:
-                        if exc.code not in (0, None):
-                            raise RuntimeError(
-                                f"Training script exited with code {exc.code}"
-                            ) from exc
+                with _pipeline_io_lock:
+                    with redirect_stdout(log_stream), redirect_stderr(log_stream):
+                        try:
+                            train_model.main()
+                        except SystemExit as exc:
+                            if exc.code not in (0, None):
+                                raise RuntimeError(
+                                    f"Training script exited with code {exc.code}"
+                                ) from exc
             finally:
                 sys.argv = argv_backup
     except Exception as exc:
