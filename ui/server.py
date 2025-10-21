@@ -91,6 +91,10 @@ class JobManager:
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._jobs: Dict[str, JobRecord] = {}
         self._lock = Lock()
+        # Only one job at a time may capture stdout/stderr because the redirector
+        # mutates process-wide globals. Serialising execution ensures we do not
+        # leak the redirected streams across concurrent jobs.
+        self._serial_lock = Lock()
 
     def submit(self, job_type: str, params: Dict[str, Any], func: Callable[[], Dict[str, Any] | None]) -> JobRecord:
         job_id = uuid4().hex
@@ -111,8 +115,9 @@ class JobManager:
     def _run_job(self, job_id: str, func: Callable[[], Dict[str, Any] | None]) -> None:
         self._set_status(job_id, JobStatus.RUNNING)
         try:
-            with self._capture_logs(job_id):
-                result = func() or {}
+            with self._serial_lock:
+                with self._capture_logs(job_id):
+                    result = func() or {}
             self._complete(job_id, result)
         except Exception as exc:  # pylint: disable=broad-except
             self.append_log(job_id, f"\n[ERROR] {exc}\n")
