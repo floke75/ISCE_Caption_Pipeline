@@ -131,12 +131,20 @@ def morph_to_str(m) -> Optional[str]:
 # Migrated TXT/SRT Alignment Logic (PERFORMANCE OPTIMIZED)
 # =========================
 _PUNCT_EDGES_RE = re.compile(r"^\W+|\W+$", flags=re.UNICODE)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_STYLE_TAG_RE = re.compile(r"\{[^}]*\}")
 
 def _norm_token(s: str) -> str:
     """Normalizes a token for robust comparison."""
     s2 = unicodedata.normalize("NFKC", s).casefold()
     s2 = _PUNCT_EDGES_RE.sub("", s2)
     return re.sub(r"\s+", "", s2)
+
+def strip_rendered_markup(text: str) -> str:
+    """Removes markup tags that do not appear in rendered captions."""
+    without_styles = _STYLE_TAG_RE.sub("", text)
+    without_html = _HTML_TAG_RE.sub("", without_styles)
+    return without_html
 
 def _match_score(a: str, b: str, settings: Dict) -> int:
     """Calculates a similarity score between two tokens."""
@@ -193,7 +201,12 @@ def _safe_interval_split(t0: float, t1: float, k: int) -> List[Tuple[float,float
     step = (t1 - t0)/k if k > 0 else 0
     return [(t0 + i*step, t0 + (i+1)*step) for i in range(k)]
 
-def align_text_to_asr(edited_tokens: List[str], asr_words: List[Dict[str, Any]], settings: Dict) -> List[Dict[str, Any]]:
+def align_text_to_asr(
+    edited_tokens: List[str],
+    asr_words: List[Dict[str, Any]],
+    settings: Dict,
+    return_alignment: bool = False,
+) -> Any:
     """
     Aligns a list of edited text tokens to a reference ASR transcript.
 
@@ -210,19 +223,33 @@ def align_text_to_asr(edited_tokens: List[str], asr_words: List[Dict[str, Any]],
         settings: Configuration dictionary for alignment parameters.
 
     Returns:
-        A new list of word dictionaries, where each dictionary corresponds
-        to an edited token and has been assigned timestamps and a speaker.
+        If `return_alignment` is False (default), returns a new list of word
+        dictionaries where each dictionary corresponds to an edited token and
+        has been assigned timestamps and a speaker.
+
+        If `return_alignment` is True, returns a tuple of two elements:
+        (`aligned_tokens`, `source_indices`). `aligned_tokens` contains the
+        enriched tokens described above, while `source_indices` maps each
+        aligned token back to its originating index in `edited_tokens`.
     """
     asr_token_texts = [str(w.get("w") or "") for w in asr_words]
-    if not edited_tokens: return []
+    if not edited_tokens:
+        return ([], []) if return_alignment else []
     if not asr_token_texts:
         slices = _safe_interval_split(0.0, 0.01 * len(edited_tokens), len(edited_tokens))
-        return [{"w": t, "start": s, "end": e, "speaker": None} for t, (s, e) in zip(edited_tokens, slices)]
+        aligned_tokens = [
+            {"w": t, "start": s, "end": e, "speaker": None}
+            for t, (s, e) in zip(edited_tokens, slices)
+        ]
+        if return_alignment:
+            return aligned_tokens, list(range(len(edited_tokens)))
+        return aligned_tokens
 
     path = _global_align(edited_tokens, asr_token_texts, settings)
     
     print(f"[DEBUG] Reconstructing aligned words from path ({len(path)} steps)...", flush=True)
     out: List[Dict[str, Any]] = []
+    source_alignment: List[Optional[int]] = []
     last_time = 0.0
     idx = 0
     while idx < len(path):
@@ -234,6 +261,7 @@ def align_text_to_asr(edited_tokens: List[str], asr_words: List[Dict[str, Any]],
             st = max(last_time, float(w_info.get("start", 0.0)))
             en = max(st, float(w_info.get("end", 0.0)))
             out.append({"w": edited_tokens[i], "start": st, "end": en, "speaker": w_info.get("speaker")})
+            source_alignment.append(i)
             last_time = en
             idx += 1
         elif j is None:
@@ -251,6 +279,7 @@ def align_text_to_asr(edited_tokens: List[str], asr_words: List[Dict[str, Any]],
             for s_idx, i_tok in enumerate(run_i):
                 st, en = slices[s_idx]
                 out.append({"w": edited_tokens[i_tok], "start": st, "end": en, "speaker": spk_left or spk_right})
+                source_alignment.append(i_tok)
                 last_time = en
             idx = k
         else:
@@ -259,6 +288,8 @@ def align_text_to_asr(edited_tokens: List[str], asr_words: List[Dict[str, Any]],
         if out[u]["start"] < out[u-1]["end"]: out[u]["start"] = out[u-1]["end"]
         if out[u]["end"] < out[u]["start"]: out[u]["end"] = out[u]["start"]
     print(f"[DEBUG] Finished reconstructing {len(out)} words.", flush=True)
+    if return_alignment:
+        return out, source_alignment
     return out
 
 def read_srt_cues(path: Path) -> List[Dict[str, Any]]:
@@ -369,10 +400,25 @@ def engineer_features(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
     """
     if not tokens: return
     # Pass 1: Prosody Features
+    pause_after_values: List[int] = []
     for i in range(len(tokens)):
         prev_end = tokens[i-1]["end"] if i > 0 else tokens[i]["start"]
+        pause_before = max(0.0, tokens[i]["start"] - prev_end)
         pause_after = max(0.0, tokens[i+1]["start"] - tokens[i]["end"]) if i < len(tokens) - 1 else 0.0
-        tokens[i]["pause_after_ms"] = int(round(pause_after * 1000))
+        pause_before_ms = int(round(pause_before * 1000))
+        pause_after_ms = int(round(pause_after * 1000))
+        tokens[i]["pause_before_ms"] = pause_before_ms
+        tokens[i]["pause_after_ms"] = pause_after_ms
+        pause_after_values.append(pause_after_ms)
+
+    if pause_after_values:
+        pause_mean = statistics.mean(pause_after_values)
+        pause_std = statistics.pstdev(pause_after_values)
+        denom = pause_std if pause_std > 1e-6 else max(abs(pause_mean), 1.0)
+        if denom <= 0:
+            denom = 1.0
+        for token in tokens:
+            token["pause_z"] = (token.get("pause_after_ms", 0) - pause_mean) / denom
 
     # Pass 2: SpaCy Linguistic Features
     if settings.get("spacy_enable") and spacy:
@@ -482,7 +528,8 @@ def generate_labels_from_cues(tokens: List[Dict[str, Any]], cues: List[Dict[str,
         lines = [line.strip() for line in cue["text"].split('\n') if line.strip()]
         if len(lines) < 2: continue
 
-        line1_text = re.sub(r'\s+', ' ', lines[0]).strip()
+        line1_clean = strip_rendered_markup(lines[0])
+        line1_text = re.sub(r'\s+', ' ', line1_clean).strip()
         line1_char_len = len(line1_text)
         
         current_char_count = 0
@@ -496,7 +543,15 @@ def generate_labels_from_cues(tokens: List[Dict[str, Any]], cues: List[Dict[str,
 # =========================
 # Main Pipeline
 # =========================
-def process_file(primary_path: Path, asr_reference_path: Path, paths: Dict[str, Path], settings: Dict[str, Any]):
+def process_file(
+    primary_path: Path,
+    asr_reference_path: Path,
+    paths: Dict[str, Path],
+    settings: Dict[str, Any],
+    *,
+    asr_only_mode: bool = False,
+    output_basename: Optional[str] = None,
+):
     """
     Main processing pipeline for a single file.
 
@@ -514,19 +569,41 @@ def process_file(primary_path: Path, asr_reference_path: Path, paths: Dict[str, 
         paths: Dictionary of output paths.
         settings: Configuration dictionary.
     """
-    base = base_of(primary_path)
+    if output_basename:
+        base = output_basename
+    elif asr_only_mode:
+        base = base_of(asr_reference_path)
+        if base.endswith(".asr.visual.words.diar"):
+            base = base.split(".asr.visual.words.diar", 1)[0]
+    else:
+        base = base_of(primary_path)
     print(f"\n===== Processing: {base} =====")
 
-    is_training_mode = primary_path.suffix.lower() == ".srt"
-    
+    is_training_mode = (not asr_only_mode) and primary_path.suffix.lower() == ".srt"
+
     print(f"Loading ASR reference from: {asr_reference_path.name}")
     asr_words = load_asr_words(asr_reference_path)
 
     processed_tokens_with_hints = []
-    if is_training_mode:
+    alignment_sources: List[Optional[int]] = []
+    if asr_only_mode:
+        print("Operating in ASR-only mode. Skipping primary text alignment.")
+        tokens = [
+            {
+                "w": str(word.get("w", "")),
+                "start": float(word.get("start", 0.0)),
+                "end": float(word.get("end", 0.0)),
+                "speaker": word.get("speaker"),
+            }
+            for word in asr_words
+        ]
+        cues = []
+    elif is_training_mode:
         print(f"Loading SRT for training from: {primary_path.name}")
         cues = read_srt_cues(primary_path)
         primary_tokens, _ = tokenize_srt_cues(cues)
+        print("Aligning primary text to ASR reference...")
+        tokens, alignment_sources = align_text_to_asr(primary_tokens, asr_words, settings, return_alignment=True)
     else:
         print(f"Loading TXT for inference from: {primary_path.name}")
         raw_text = primary_path.read_text(encoding="utf-8")
@@ -541,19 +618,27 @@ def process_file(primary_path: Path, asr_reference_path: Path, paths: Dict[str, 
             processed_tokens_with_hints[-1]["llm_break_hint"] = False
         primary_tokens = [d["w"] for d in processed_tokens_with_hints]
         cues = []
-
-    print("Aligning primary text to ASR reference...")
-    tokens = align_text_to_asr(primary_tokens, asr_words, settings)
+        print("Aligning primary text to ASR reference...")
+        tokens, alignment_sources = align_text_to_asr(primary_tokens, asr_words, settings, return_alignment=True)
     if not tokens:
         print("[WARN] Alignment produced no tokens. Skipping.")
         return
 
-    if not is_training_mode:
-        if len(tokens) == len(processed_tokens_with_hints):
-            for i, token in enumerate(tokens):
-                token["is_llm_structural_break"] = processed_tokens_with_hints[i].get("llm_break_hint", False)
+    if not is_training_mode and not asr_only_mode:
+        if processed_tokens_with_hints:
+            for idx, token in enumerate(tokens):
+                source_idx = alignment_sources[idx] if idx < len(alignment_sources) else None
+                if source_idx is not None and 0 <= source_idx < len(processed_tokens_with_hints):
+                    token["is_llm_structural_break"] = processed_tokens_with_hints[source_idx].get("llm_break_hint", False)
+                else:
+                    token["is_llm_structural_break"] = False
         else:
-            print(f"[WARN] Token count mismatch after alignment. Cannot apply LLM break hints.")
+            print(f"[INFO] No LLM hints found in TXT. Defaulting structural hint flags to False.")
+            for token in tokens:
+                token["is_llm_structural_break"] = False
+    elif asr_only_mode:
+        for token in tokens:
+            token["is_llm_structural_break"] = False
 
     correct_speaker_labels(tokens)
 
@@ -607,6 +692,8 @@ def main():
     parser.add_argument("--out-training-dir", type=Path, help="Override the output directory for training files.")
     parser.add_argument("--out-inference-dir", type=Path, help="Override the output directory for inference files.")
     parser.add_argument("--config-file", type=Path, help="Path to the pipeline_config.yaml file.")
+    parser.add_argument("--asr-only-mode", action="store_true", help="Use ASR tokens directly without TXT/SRT alignment.")
+    parser.add_argument("--output-basename", type=str, help="Override the output base filename.")
     args = parser.parse_args()
 
     config = DEFAULT_SETTINGS.copy()
@@ -629,9 +716,18 @@ def main():
         raise FileNotFoundError(f"Primary input file not found: {args.primary_input}")
     if not args.asr_reference.exists():
         raise FileNotFoundError(f"ASR reference file not found: {args.asr_reference}")
-    
+
     try:
-        process_file(args.primary_input, args.asr_reference, paths, SETTINGS)
+        asr_only_mode = args.asr_only_mode or args.primary_input.resolve() == args.asr_reference.resolve()
+        base_override = args.output_basename.strip() if args.output_basename else None
+        process_file(
+            args.primary_input,
+            args.asr_reference,
+            paths,
+            SETTINGS,
+            asr_only_mode=asr_only_mode,
+            output_basename=base_override,
+        )
     except Exception:
         print(f"[FAIL] Unhandled error processing {args.primary_input.name}:\n{traceback.format_exc()}")
 
