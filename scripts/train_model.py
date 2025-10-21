@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
-from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 
 # Add project root to path
@@ -17,21 +16,7 @@ if str(project_root) not in sys.path:
 from isce.model_builder import build_weights, derive_constraints, create_feature_row
 from isce.config import Config, load_config
 from isce.scorer import Scorer
-from isce.types import TokenRow
-
-# =========================================
-# LOCAL DATA STRUCTURES
-# =========================================
-@dataclass(frozen=True)
-class Engineered:
-    """
-    A container for engineered features.
-
-    In the refactored design, this class is a placeholder, as features are
-    now read directly from the token dictionaries. It is kept for structural
-    compatibility with the `TokenRow` object.
-    """
-    pass # In the new design, features are read directly from the token dict.
+from isce.types import TokenRow, Engineered
 
 # =========================================
 # REFACTORED DATA LOADING

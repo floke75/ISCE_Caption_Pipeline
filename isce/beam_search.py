@@ -10,6 +10,8 @@ from .types import Token, BreakType, TokenRow
 from .scorer import Scorer
 from .config import Config
 
+FALLBACK_SB_PENALTY = 25.0
+
 @dataclass(frozen=True)
 class PathState:
     """Represents one hypothesis (a path) in the beam search."""
@@ -43,6 +45,7 @@ class Segmenter:
         self.beam: List[PathState] = []
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
+        self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
         """Checks if continuing a line (`O`) violates hard length constraints."""
@@ -50,9 +53,13 @@ class Segmenter:
         hard_limit = self.cfg.line_length_constraints.get(limit_key, {}).get("hard_limit", 42)
         return (line_len + 1 + next_word_len) <= hard_limit
 
-    def _is_hard_ok_LB(self, line_num: int) -> bool:
+    def _is_hard_ok_LB(self, state: PathState, current_idx: int) -> bool:
         """Checks if a line break (`LB`) is allowed at the current position."""
-        return line_num == 1
+        if state.line_num != 1:
+            return False
+        # Ensure we do not emit multiple LB decisions within the same block.
+        recent_breaks = state.breaks[state.block_start_idx : current_idx + 1]
+        return "LB" not in recent_breaks
 
     def _is_hard_ok_SB(self, block_start_idx: int, current_idx: int) -> bool:
         """Checks if a block break (`SB`) violates hard constraints."""
@@ -119,7 +126,7 @@ class Segmenter:
                         candidates.append(PathState(score=score, line_num=state.line_num, line_len=new_line_len, block_start_idx=state.block_start_idx, breaks=state.breaks + ("O",)))
 
                 # Candidate: 'LB' (Line Break)
-                if nxt and self._is_hard_ok_LB(state.line_num):
+                if nxt and self._is_hard_ok_LB(state, i):
                     orphan_penalty = 0.0
                     if i + 2 < len(self.tokens) and self.tokens[i + 2].is_sentence_final:
                         orphan_penalty = 2.5
@@ -139,9 +146,21 @@ class Segmenter:
 
             if not candidates and self.beam:
                 fallback_state = self.beam[0]
-                if self._is_hard_ok_SB(fallback_state.block_start_idx, i):
-                    self.beam[0] = replace(fallback_state, breaks=fallback_state.breaks + ("SB",))
-                break 
+                block_tokens = [dict(t.__dict__) for t in self.tokens[fallback_state.block_start_idx : i + 1]]
+                block_breaks = list(fallback_state.breaks[fallback_state.block_start_idx:]) + ["SB"]
+                block_score = self.scorer.score_block(block_tokens, block_breaks) if block_tokens else 0.0
+                next_word_len = len(nxt.w) if nxt else 0
+                fallback_candidate = PathState(
+                    score=fallback_state.score + transition_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
+                    line_num=1,
+                    line_len=next_word_len,
+                    block_start_idx=i + 1,
+                    breaks=fallback_state.breaks + ("SB",),
+                )
+                candidates.append(fallback_candidate)
+
+            if not candidates:
+                break
 
             self.beam = nlargest(self.cfg.beam_width, candidates, key=lambda s: s.score)
 
