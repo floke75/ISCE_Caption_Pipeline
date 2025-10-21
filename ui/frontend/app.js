@@ -389,9 +389,23 @@ function renderJobMeta(job) {
       entries.push([`Result: ${key.replace(/_/g, " ")}`, value]);
     });
   }
-  jobMeta.innerHTML = entries
-    .map(([label, value]) => `<div><strong>${label}:</strong> ${value}</div>`)
-    .join("");
+  while (jobMeta.firstChild) {
+    jobMeta.removeChild(jobMeta.firstChild);
+  }
+
+  entries.forEach(([label, value]) => {
+    const entry = document.createElement("div");
+    const strong = document.createElement("strong");
+    strong.textContent = `${label}:`;
+    entry.appendChild(strong);
+
+    if (value !== undefined && value !== null) {
+      entry.append(" ");
+      entry.append(document.createTextNode(String(value)));
+    }
+
+    jobMeta.appendChild(entry);
+  });
 }
 
 function startPolling() {
