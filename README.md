@@ -82,6 +82,30 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
     python run_pipeline.py
     ```
 
+### 5. Web Control Panel (Optional)
+
+The repository now includes a full-stack control panel that exposes manual inference, training pair creation, model retraining, and configuration editing through a browser UI.
+
+1. **Start the API server:**
+   ```bash
+   uvicorn ui.server:app --reload --port 8000
+   ```
+   The FastAPI service exposes REST endpoints under `http://localhost:8000/api` and automatically serves the pre-built UI (if available).
+
+2. **Run the frontend in development mode (optional):**
+   ```bash
+   cd ui/frontend
+   npm install
+   npm run dev
+   ```
+   The dev server proxies API requests to `localhost:8000` and hot-reloads UI changes at `http://localhost:5173`.
+
+3. **Build static assets for production:**
+   ```bash
+   npm run build
+   ```
+   The generated files land in `ui/frontend/dist/` and are automatically served by the FastAPI app when present.
+
 2.  **Process Files:**
     *   Drop your media and text files into the appropriate "hot folders" as defined in `pipeline_config.yaml`.
 

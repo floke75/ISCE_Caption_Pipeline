@@ -3,6 +3,8 @@
 # Core ISCE dependencies
 pyyaml
 pandas
+fastapi
+uvicorn[standard]
 
 # ASR & Alignment Dependencies
 pysrt
