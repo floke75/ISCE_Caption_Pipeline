@@ -122,8 +122,12 @@ def run_training(
     df, token_rows = get_full_feature_table_and_rows(corpus_paths, cfg)
 
     if df.empty:
-        print("\n[ERROR] No valid training data could be loaded. The feature table is empty. Aborting.")
-        sys.exit(1)
+        error_message = (
+            "No valid training data could be loaded. The feature table is empty. "
+            "Ensure the corpus contains enriched training JSON files."
+        )
+        print(f"\n[ERROR] {error_message} Aborting.")
+        raise RuntimeError(error_message)
 
     sample_weights = pd.Series(1.0, index=df.index)
     print("\nStarting with uniform sample weights.")

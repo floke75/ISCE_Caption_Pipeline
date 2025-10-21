@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import copy
 import io
+import os
 import sys
 import shutil
 from concurrent.futures import ThreadPoolExecutor
@@ -463,9 +464,23 @@ app = FastAPI(
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
 )
+
+
+def _cors_allow_origins() -> List[str]:
+    """Return the list of origins allowed to access the API."""
+
+    raw = os.getenv("UI_CORS_ORIGINS", "")
+    if raw:
+        origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        if origins:
+            return origins
+    # Default to common local development hosts.
+    return ["http://localhost:3000", "http://localhost:5173"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -481,7 +496,7 @@ def healthcheck() -> Dict[str, str]:
 def _mount_frontend(app: FastAPI) -> None:
     dist_dir = REPO_ROOT / "ui" / "frontend" / "dist"
     if dist_dir.exists():
-        app.mount("", StaticFiles(directory=str(dist_dir), html=True), name="ui-frontend")
+        app.mount("/ui", StaticFiles(directory=str(dist_dir), html=True), name="ui-frontend")
 
 
 _mount_frontend(app)
