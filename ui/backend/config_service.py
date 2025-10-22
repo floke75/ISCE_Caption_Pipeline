@@ -34,7 +34,7 @@ class PipelineConfigService:
 
     def __init__(self, config_path: Path) -> None:
         self._config_path = config_path
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     @property
     def config_path(self) -> Path:
@@ -42,11 +42,12 @@ class PipelineConfigService:
 
     def load(self) -> Dict[str, Any]:
         """Load the YAML configuration as a dictionary."""
-        if not self._config_path.exists():
-            return {}
-        with self._config_path.open("r", encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
-        return data
+        with self._lock:
+            if not self._config_path.exists():
+                return {}
+            with self._config_path.open("r", encoding="utf-8") as fh:
+                data = yaml.safe_load(fh) or {}
+            return data
 
     def save(self, data: Dict[str, Any]) -> None:
         """Persist ``data`` back to YAML."""
