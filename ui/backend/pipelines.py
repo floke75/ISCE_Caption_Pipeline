@@ -102,8 +102,9 @@ def run_inference(ctx: JobContext) -> None:
         "--config-file",
         str(config_path),
     ]
+    args.extend(["--output-basename", base_name])
     if transcript_copy is None:
-        args.extend(["--asr-only-mode", "--output-basename", base_name])
+        args.append("--asr-only-mode")
     ctx.stream_command(args, cwd=repo_root)
 
     enriched_path = intermediate_dir / "_inference_input" / f"{base_name}.enriched.json"
