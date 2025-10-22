@@ -2,7 +2,11 @@
 
 # Core ISCE dependencies
 pyyaml
+uvicorn[standard]
+fastapi
 pandas
+numpy
+tqdm
 
 # ASR & Alignment Dependencies
 pysrt

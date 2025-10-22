@@ -4,6 +4,52 @@ ISCE is a complete, end-to-end pipeline for transforming raw audio/video and a c
 
 This pipeline is intended to replace the inefficient and error-prone step of using a generic LLM for subtitle block formatting.
 
+## Console Quickstart
+
+The FastAPI control plane and single-page console expose the pipeline through a browser-based workflow monitor. Follow the steps below to launch both services together.
+
+### Prerequisites
+
+* **Python:** 3.11 or higher with `pip` available.
+* **Node.js & npm:** Node 18+ is recommended for Vite-based development tooling.
+* **ffmpeg:** Must be installed and accessible in your system `PATH` for the underlying pipeline workers.
+* **Optional GPU:** WhisperX acceleration still benefits from a CUDA-capable device.
+
+### Environment variables
+
+* `HF_TOKEN` – Provide a Hugging Face token if diarisation is enabled so WhisperX can fetch the required models at runtime.【F:align_make.py†L120-L128】
+* `PIPELINE_ALLOWED_ROOTS` – Optional `os.pathsep`-delimited list of extra directories that the console’s file pickers may target. Paths outside the allowlist are rejected by the backend validator to prevent accidental access to unsafe locations.【F:ui_server/path_validation.py†L18-L84】
+* `API_HOST`, `API_PORT`, `UI_HOST`, `UI_PORT`, `PYTHON_BIN` – Optional overrides consumed by `scripts/dev_console.sh` when you want the servers to bind to non-default addresses or a specific Python interpreter.【F:scripts/dev_console.sh†L5-L49】
+
+### Launching the developer console
+
+1. **Install Python dependencies**
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows use .venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+2. **Start the console**
+   ```bash
+   ./scripts/dev_console.sh
+   ```
+   The helper script starts the FastAPI service with auto-reload and the Vite dev server with the same command. A FastAPI log is written to `ui_runtime/dev-api.log` for quick inspection during development.【F:scripts/dev_console.sh†L5-L52】
+3. **Open the UI** – Visit `http://127.0.0.1:5173/` for the React console. The API is exposed at `http://127.0.0.1:8000/`, including the interactive docs at `/docs`.
+
+The console persists job history and artifacts below `ui_runtime/jobs/<job-id>`, so previously submitted runs remain visible after restarting the backend.【F:ui_server/job_manager.py†L68-L135】
+
+### Manual startup (optional)
+
+If you prefer separate terminals, start the API with `python -m uvicorn ui_server.app:app --reload --port 8000` and the frontend with `npm run dev --prefix ui_frontend -- --port 5173 --host 127.0.0.1`.
+
+### Troubleshooting the console
+
+* **File picker rejects my path** – Inputs must be absolute paths within the configured allowlist. Set `PIPELINE_ALLOWED_ROOTS` to include additional directories, restart the API, and try again.【F:ui_server/path_validation.py†L18-L84】
+* **Log streaming stays idle** – The UI tails the `/api/jobs/{id}/logs/stream` SSE endpoint. Live output appears line-by-line once the underlying subprocess writes to its log; check `ui_runtime/jobs/<id>/job.log` or the API log if updates stall.【F:ui_server/app.py†L70-L132】【F:ui_server/pipeline_runner.py†L23-L65】
+* **Where are my outputs?** – Each job receives its own workspace under `ui_runtime/jobs/<job-id>`, containing the generated configs, logs, and exported artifacts ready for download or manual inspection.【F:ui_server/job_manager.py†L68-L135】
+
+You can still run the legacy hot-folder scripts described below when automation outside the UI is required.
+
 ## Features
 
 *   **Hybrid Model:** Combines a statistical model trained on human captioning patterns with robust, rule-based guardrails.
