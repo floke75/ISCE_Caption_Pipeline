@@ -14,7 +14,7 @@ class BaseJobPayload(BaseModel):
 
 class InferenceRequest(BaseJobPayload):
     media_path: Path = Field(alias="mediaPath")
-    transcript_path: Path = Field(alias="transcriptPath")
+    transcript_path: Optional[Path] = Field(default=None, alias="transcriptPath")
     output_path: Optional[Path] = Field(default=None, alias="outputPath")
     output_basename: Optional[str] = Field(default=None, alias="outputBasename")
     model_overrides: Optional[Dict[str, Any]] = Field(default=None, alias="modelOverrides")

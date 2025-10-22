@@ -2,34 +2,17 @@ import { FormEvent, useState } from "react";
 import { createTrainingPairsJob, TrainingPairsPayload } from "../api";
 import { ConfigMap, JobRecord } from "../types";
 import Card from "./Card";
-import JsonEditor from "./JsonEditor";
+import OverridesEditor from "./OverridesEditor";
 
 interface TrainingPairsFormProps {
   onJobCreated: (job: JobRecord) => void;
-}
-
-function parseOverrides(input: string): { value: ConfigMap | null; error: string | null } {
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return { value: null, error: null };
-  }
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { value: null, error: "Overrides must be a JSON object" };
-    }
-    return { value: parsed as ConfigMap, error: null };
-  } catch (error) {
-    return { value: null, error: (error as Error).message };
-  }
 }
 
 export function TrainingPairsForm({ onJobCreated }: TrainingPairsFormProps) {
   const [transcriptPath, setTranscriptPath] = useState("");
   const [asrReferencePath, setAsrReferencePath] = useState("");
   const [outputBasename, setOutputBasename] = useState("");
-  const [pipelineOverrides, setPipelineOverrides] = useState("");
-  const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const [pipelineOverrides, setPipelineOverrides] = useState<ConfigMap | null>(null);
   const [asrOnlyMode, setAsrOnlyMode] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,18 +23,12 @@ export function TrainingPairsForm({ onJobCreated }: TrainingPairsFormProps) {
     setError(null);
     setMessage(null);
 
-    const parsed = parseOverrides(pipelineOverrides);
-    setPipelineError(parsed.error);
-    if (parsed.error) {
-      return;
-    }
-
     const payload: TrainingPairsPayload = {
       transcriptPath: transcriptPath.trim(),
       asrReferencePath: asrReferencePath.trim(),
       outputBasename: outputBasename.trim() || undefined,
       asrOnlyMode,
-      pipelineOverrides: parsed.value ?? undefined
+      pipelineOverrides: pipelineOverrides ?? undefined
     };
 
     if (!payload.transcriptPath || !payload.asrReferencePath) {
@@ -119,12 +96,12 @@ export function TrainingPairsForm({ onJobCreated }: TrainingPairsFormProps) {
             <span>ASR-only mode (skip transcript alignment)</span>
           </label>
         </div>
-        <JsonEditor
-          label="Pipeline overrides (JSON)"
+        <OverridesEditor
+          label="Pipeline overrides"
+          kind="pipeline"
           value={pipelineOverrides}
           onChange={setPipelineOverrides}
-          error={pipelineError}
-          placeholder='{"build_pair": {"emit_asr_style_training_copy": false}}'
+          description="Adjust build_pair settings for this run without editing YAML."
         />
         {error && <div className="form__message form__message--error">{error}</div>}
         {message && <div className="form__message form__message--success">{message}</div>}

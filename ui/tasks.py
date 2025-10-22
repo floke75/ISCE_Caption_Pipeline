@@ -25,9 +25,10 @@ class PipelineTasks:
     def launch_inference(self, payload: InferenceRequest) -> JobRecord:
         params = {
             "mediaPath": str(payload.media_path),
-            "transcriptPath": str(payload.transcript_path),
+            "transcriptPath": str(payload.transcript_path) if payload.transcript_path else None,
             "outputPath": str(payload.output_path) if payload.output_path else None,
             "outputBasename": payload.output_basename,
+            "asrOnlyMode": payload.transcript_path is None,
         }
         return self._jobs.start_job("inference", params, lambda ctx: self._run_inference(ctx, payload))
 
@@ -53,7 +54,7 @@ class PipelineTasks:
     def _run_inference(self, ctx, payload: InferenceRequest) -> None:
         if not payload.media_path.exists():
             raise FileNotFoundError(f"Media file not found: {payload.media_path}")
-        if not payload.transcript_path.exists():
+        if payload.transcript_path and not payload.transcript_path.exists():
             raise FileNotFoundError(f"Transcript file not found: {payload.transcript_path}")
 
         ctx.log("Preparing runtime configuration for inference job...")
@@ -69,7 +70,12 @@ class PipelineTasks:
             filename="config.yaml",
         )
 
-        media_base = payload.output_basename or payload.media_path.stem
+        if payload.output_basename:
+            media_base = payload.output_basename
+        elif payload.transcript_path:
+            media_base = payload.transcript_path.stem
+        else:
+            media_base = payload.media_path.stem
         align_out_root = Path(pipeline_config.get("align_make", {}).get("out_root", ctx.workspace / "pipeline" / "_intermediate"))
         inference_dir = Path(pipeline_config.get("build_pair", {}).get("out_inference_dir", ctx.workspace / "pipeline" / "_intermediate" / "_inference_input"))
 
@@ -97,11 +103,12 @@ class PipelineTasks:
             raise FileNotFoundError(f"Expected ASR output was not produced: {asr_path}")
         ctx.add_artifact("ASR reference", asr_path)
 
+        primary_input = payload.transcript_path or asr_path
         build_args = [
             self._python,
             str(self._repo_root / "build_training_pair_standalone.py"),
             "--primary-input",
-            payload.transcript_path,
+            primary_input,
             "--asr-reference",
             asr_path,
             "--out-inference-dir",
@@ -111,6 +118,9 @@ class PipelineTasks:
             "--output-basename",
             media_base,
         ]
+        if payload.transcript_path is None:
+            ctx.log("Transcript path not provided; running in ASR-only mode.")
+            build_args.append("--asr-only-mode")
         ctx.run_command(
             build_args,
             cwd=self._repo_root,

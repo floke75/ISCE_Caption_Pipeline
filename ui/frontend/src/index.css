@@ -467,6 +467,14 @@ pre {
   background: rgba(148, 163, 184, 0.08);
 }
 
+.config-node--root {
+  border-radius: 12px;
+}
+
+.config-node--root > .config-node__summary {
+  border-bottom: 1px solid var(--card-border);
+}
+
 .config-node__summary {
   font-weight: 600;
   padding: 8px 12px;
@@ -512,6 +520,50 @@ pre {
   border: 1px solid var(--card-border);
   border-radius: 6px;
   padding: 8px 10px;
+}
+
+.overrides-editor {
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.overrides-editor__summary {
+  list-style: none;
+  margin: 0;
+  padding: 10px 14px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.overrides-editor__summary::-webkit-details-marker {
+  display: none;
+}
+
+.overrides-editor__count {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.overrides-editor__body {
+  padding: 12px 14px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.overrides-editor__description {
+  margin: 0;
+}
+
+.overrides-editor__actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .config-actions {

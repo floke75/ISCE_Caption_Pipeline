@@ -51,7 +51,7 @@ export async function updateConfig(kind: "pipeline" | "model", config: ConfigMap
 
 export interface InferencePayload {
   mediaPath: string;
-  transcriptPath: string;
+  transcriptPath?: string | null;
   outputPath?: string | null;
   outputBasename?: string | null;
   pipelineOverrides?: ConfigMap | null;

@@ -2,37 +2,20 @@ import { FormEvent, useState } from "react";
 import { createInferenceJob, InferencePayload } from "../api";
 import { ConfigMap, JobRecord } from "../types";
 import Card from "./Card";
-import JsonEditor from "./JsonEditor";
+import OverridesEditor from "./OverridesEditor";
 
 interface InferenceFormProps {
   onJobCreated: (job: JobRecord) => void;
 }
 
-function parseOverrides(input: string): { value: ConfigMap | null; error: string | null } {
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return { value: null, error: null };
-  }
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { value: null, error: "Overrides must be a JSON object" };
-    }
-    return { value: parsed as ConfigMap, error: null };
-  } catch (error) {
-    return { value: null, error: (error as Error).message };
-  }
-}
-
 export function InferenceForm({ onJobCreated }: InferenceFormProps) {
   const [mediaPath, setMediaPath] = useState("");
   const [transcriptPath, setTranscriptPath] = useState("");
+  const [asrOnlyMode, setAsrOnlyMode] = useState(false);
   const [outputPath, setOutputPath] = useState("");
   const [outputBasename, setOutputBasename] = useState("");
-  const [pipelineOverrides, setPipelineOverrides] = useState("");
-  const [modelOverrides, setModelOverrides] = useState("");
-  const [pipelineError, setPipelineError] = useState<string | null>(null);
-  const [modelError, setModelError] = useState<string | null>(null);
+  const [pipelineOverrides, setPipelineOverrides] = useState<ConfigMap | null>(null);
+  const [modelOverrides, setModelOverrides] = useState<ConfigMap | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,25 +25,22 @@ export function InferenceForm({ onJobCreated }: InferenceFormProps) {
     setError(null);
     setMessage(null);
 
-    const pipeline = parseOverrides(pipelineOverrides);
-    const model = parseOverrides(modelOverrides);
-    setPipelineError(pipeline.error);
-    setModelError(model.error);
-    if (pipeline.error || model.error) {
+    const payload: InferencePayload = {
+      mediaPath: mediaPath.trim(),
+      transcriptPath: asrOnlyMode ? undefined : transcriptPath.trim() || undefined,
+      outputBasename: outputBasename.trim() || undefined,
+      outputPath: outputPath.trim() || undefined,
+      pipelineOverrides: pipelineOverrides ?? undefined,
+      modelOverrides: modelOverrides ?? undefined
+    };
+
+    if (!payload.mediaPath) {
+      setError("Media path is required");
       return;
     }
 
-    const payload: InferencePayload = {
-      mediaPath: mediaPath.trim(),
-      transcriptPath: transcriptPath.trim(),
-      outputBasename: outputBasename.trim() || undefined,
-      outputPath: outputPath.trim() || undefined,
-      pipelineOverrides: pipeline.value ?? undefined,
-      modelOverrides: model.value ?? undefined
-    };
-
-    if (!payload.mediaPath || !payload.transcriptPath) {
-      setError("Media path and transcript path are required");
+    if (!asrOnlyMode && !transcriptPath.trim()) {
+      setError("Provide a transcript path or enable ASR-only mode");
       return;
     }
 
@@ -101,8 +81,17 @@ export function InferenceForm({ onJobCreated }: InferenceFormProps) {
             value={transcriptPath}
             onChange={(event) => setTranscriptPath(event.target.value)}
             placeholder="/path/to/transcript.txt"
-            required
+            required={!asrOnlyMode}
+            disabled={asrOnlyMode}
           />
+        </label>
+        <label className="form-field form-field--checkbox">
+          <input
+            type="checkbox"
+            checked={asrOnlyMode}
+            onChange={(event) => setAsrOnlyMode(event.target.checked)}
+          />
+          <span>ASR-only mode (skip transcript alignment)</span>
         </label>
         <div className="form__grid">
           <label className="form-field">
@@ -126,19 +115,19 @@ export function InferenceForm({ onJobCreated }: InferenceFormProps) {
             />
           </label>
         </div>
-        <JsonEditor
-          label="Pipeline overrides (JSON)"
+        <OverridesEditor
+          label="Pipeline overrides"
+          kind="pipeline"
           value={pipelineOverrides}
           onChange={setPipelineOverrides}
-          error={pipelineError}
-          placeholder='{"pipeline_root": "/tmp/pipeline"}'
+          description="Modify the runtime pipeline configuration without editing YAML manually."
         />
-        <JsonEditor
-          label="Model overrides (JSON)"
+        <OverridesEditor
+          label="Model overrides"
+          kind="model"
           value={modelOverrides}
           onChange={setModelOverrides}
-          error={modelError}
-          placeholder='{"sliders": {"flow": 1.1}}'
+          description="Override segmentation parameters for this job."
         />
         {error && <div className="form__message form__message--error">{error}</div>}
         {message && <div className="form__message form__message--success">{message}</div>}

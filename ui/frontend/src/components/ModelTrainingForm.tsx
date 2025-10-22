@@ -2,26 +2,10 @@ import { FormEvent, useState } from "react";
 import { createModelTrainingJob, ModelTrainingPayload } from "../api";
 import { ConfigMap, JobRecord } from "../types";
 import Card from "./Card";
-import JsonEditor from "./JsonEditor";
+import OverridesEditor from "./OverridesEditor";
 
 interface ModelTrainingFormProps {
   onJobCreated: (job: JobRecord) => void;
-}
-
-function parseOverrides(input: string): { value: ConfigMap | null; error: string | null } {
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return { value: null, error: null };
-  }
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { value: null, error: "Overrides must be a JSON object" };
-    }
-    return { value: parsed as ConfigMap, error: null };
-  } catch (error) {
-    return { value: null, error: (error as Error).message };
-  }
 }
 
 export function ModelTrainingForm({ onJobCreated }: ModelTrainingFormProps) {
@@ -30,8 +14,7 @@ export function ModelTrainingForm({ onJobCreated }: ModelTrainingFormProps) {
   const [weightsOutput, setWeightsOutput] = useState("");
   const [iterations, setIterations] = useState(3);
   const [errorBoostFactor, setErrorBoostFactor] = useState(1.0);
-  const [modelOverrides, setModelOverrides] = useState("");
-  const [modelError, setModelError] = useState<string | null>(null);
+  const [modelOverrides, setModelOverrides] = useState<ConfigMap | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,19 +24,13 @@ export function ModelTrainingForm({ onJobCreated }: ModelTrainingFormProps) {
     setError(null);
     setMessage(null);
 
-    const overrides = parseOverrides(modelOverrides);
-    setModelError(overrides.error);
-    if (overrides.error) {
-      return;
-    }
-
     const payload: ModelTrainingPayload = {
       corpusDir: corpusDir.trim(),
       constraintsOutput: constraintsOutput.trim() || undefined,
       weightsOutput: weightsOutput.trim() || undefined,
       iterations,
       errorBoostFactor,
-      modelOverrides: overrides.value ?? undefined
+      modelOverrides: modelOverrides ?? undefined
     };
 
     if (!payload.corpusDir) {
@@ -134,12 +111,12 @@ export function ModelTrainingForm({ onJobCreated }: ModelTrainingFormProps) {
             />
           </label>
         </div>
-        <JsonEditor
-          label="Model overrides (JSON)"
+        <OverridesEditor
+          label="Model overrides"
+          kind="model"
           value={modelOverrides}
           onChange={setModelOverrides}
-          error={modelError}
-          placeholder='{"sliders": {"density": 2.5}}'
+          description="Fine-tune training parameters without editing YAML."
         />
         {error && <div className="form__message form__message--error">{error}</div>}
         {message && <div className="form__message form__message--success">{message}</div>}
