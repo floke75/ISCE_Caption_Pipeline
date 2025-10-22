@@ -784,17 +784,63 @@ def process_file(
         _save_json({"tokens": final_tokens}, out_path)
         print(f"[OK] Wrote INFERENCE data to: {out_path.name}")
 
+def run_build_training_pair(
+    primary_input: Path,
+    asr_reference: Path,
+    out_training_dir: Optional[Path] = None,
+    out_inference_dir: Optional[Path] = None,
+    config_file: Optional[Path] = None,
+    asr_only_mode: bool = False,
+    output_basename: Optional[str] = None,
+):
+    """
+    Callable function to execute the data enrichment pipeline.
+    """
+    config = DEFAULT_SETTINGS.copy()
+    if config_file and config_file.exists():
+        with open(config_file, "r", encoding="utf-8") as f:
+            yaml_config = yaml.safe_load(f)
+        if yaml_config:
+            config = _recursive_update(config, yaml_config)
+
+    path_context = {k: v for k, v in config.items() if isinstance(v, str)}
+    config = _resolve_paths(config, path_context)
+    SETTINGS = config.get("build_pair", {})
+
+    paths = {
+        "out_training_dir": out_training_dir or Path(SETTINGS["out_training_dir"]),
+        "out_inference_dir": out_inference_dir or Path(SETTINGS["out_inference_dir"]),
+    }
+    ensure_dirs(paths["out_training_dir"])
+    ensure_dirs(paths["out_inference_dir"])
+
+    if not primary_input.exists():
+        raise FileNotFoundError(f"Primary input file not found: {primary_input}")
+    if not asr_reference.exists():
+        raise FileNotFoundError(f"ASR reference file not found: {asr_reference}")
+
+    try:
+        asr_only = asr_only_mode or primary_input.resolve() == asr_reference.resolve()
+        base_override = output_basename.strip() if output_basename else None
+        process_file(
+            primary_input,
+            asr_reference,
+            paths,
+            SETTINGS,
+            asr_only_mode=asr_only,
+            output_basename=base_override,
+        )
+    except Exception:
+        print(f"[FAIL] Unhandled error processing {primary_input.name}:\n{traceback.format_exc()}")
+
+
 def main():
     """
     Main entry point for the command-line interface.
-
-    Parses command-line arguments, loads configuration from YAML files,
-    and calls the main `process_file` function to execute the data
-    enrichment pipeline.
     """
     parser = argparse.ArgumentParser(
         description="Align, enrich, and label word-level data.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--primary-input", required=True, type=Path, help="Path to the primary TXT or SRT file.")
     parser.add_argument("--asr-reference", required=True, type=Path, help="Path to the time-stamped ASR JSON file.")
@@ -805,40 +851,16 @@ def main():
     parser.add_argument("--output-basename", type=str, help="Override the output base filename.")
     args = parser.parse_args()
 
-    config = DEFAULT_SETTINGS.copy()
-    if args.config_file and args.config_file.exists():
-        with open(args.config_file, "r", encoding="utf-8") as f:
-            yaml_config = yaml.safe_load(f)
-        if yaml_config: config = _recursive_update(config, yaml_config)
-    
-    path_context = {k: v for k, v in config.items() if isinstance(v, str)}
-    config = _resolve_paths(config, path_context)
-    SETTINGS = config.get("build_pair", {})
+    run_build_training_pair(
+        primary_input=args.primary_input,
+        asr_reference=args.asr_reference,
+        out_training_dir=args.out_training_dir,
+        out_inference_dir=args.out_inference_dir,
+        config_file=args.config_file,
+        asr_only_mode=args.asr_only_mode,
+        output_basename=args.output_basename,
+    )
 
-    paths = {
-        "out_training_dir": args.out_training_dir or Path(SETTINGS["out_training_dir"]),
-        "out_inference_dir": args.out_inference_dir or Path(SETTINGS["out_inference_dir"]),
-    }
-    ensure_dirs(paths["out_training_dir"]); ensure_dirs(paths["out_inference_dir"])
-
-    if not args.primary_input.exists():
-        raise FileNotFoundError(f"Primary input file not found: {args.primary_input}")
-    if not args.asr_reference.exists():
-        raise FileNotFoundError(f"ASR reference file not found: {args.asr_reference}")
-
-    try:
-        asr_only_mode = args.asr_only_mode or args.primary_input.resolve() == args.asr_reference.resolve()
-        base_override = args.output_basename.strip() if args.output_basename else None
-        process_file(
-            args.primary_input,
-            args.asr_reference,
-            paths,
-            SETTINGS,
-            asr_only_mode=asr_only_mode,
-            output_basename=base_override,
-        )
-    except Exception:
-        print(f"[FAIL] Unhandled error processing {args.primary_input.name}:\n{traceback.format_exc()}")
 
 if __name__ == "__main__":
     main()
