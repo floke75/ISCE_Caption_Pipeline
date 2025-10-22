@@ -4,6 +4,7 @@ import logging
 import uuid
 import sys
 import os
+import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, redirect_stdout
@@ -22,9 +23,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 # Import pipeline functions
-from run_pipeline import process_inference_file, process_training_file
-from build_training_pair_standalone import run_build_training_pair
+from run_pipeline import DEFAULT_SETTINGS, process_inference_file, process_training_file
 from scripts.train_model import run_training
+from pipeline_config import load_pipeline_config
 
 
 # Setup logging
@@ -84,6 +85,10 @@ class JobManager:
         self._executor = ThreadPoolExecutor(max_workers=1)
         self._load_jobs_from_disk()
 
+    def _load_pipeline_config(self) -> Dict[str, Any]:
+        """Load the latest pipeline configuration for each job execution."""
+        return load_pipeline_config(DEFAULT_SETTINGS, str(REPO_ROOT / "pipeline_config.yaml"))
+
     def _load_jobs_from_disk(self):
         if JOBS_METADATA_FILE.exists():
             with open(JOBS_METADATA_FILE, "r") as f:
@@ -139,14 +144,25 @@ class JobManager:
 
         if job.type == JobType.INFERENCE:
             target_fn = process_inference_file
-            args = [Path(parameters["media_path"]), Path(parameters["transcript_path"]) if parameters.get("transcript_path") else None]
+            cfg = self._load_pipeline_config()
+            media_path = Path(parameters["media_path"])
+            transcript_path = parameters.get("transcript_path")
+            if transcript_path:
+                transcript_file = Path(transcript_path)
+                if transcript_file.exists():
+                    destination_dir = Path(cfg["txt_placement_folder"])
+                    destination_dir.mkdir(parents=True, exist_ok=True)
+                    destination_path = destination_dir / f"{media_path.stem}.txt"
+                    if transcript_file.resolve() != destination_path.resolve():
+                        shutil.copy2(transcript_file, destination_path)
+                else:
+                    logging.warning("Transcript path %s does not exist; running inference without external transcript.", transcript_file)
+            args = [media_path, cfg]
 
         elif job.type == JobType.TRAINING_PAIR:
-            target_fn = run_build_training_pair
-            kwargs = {
-                "primary_input": Path(parameters["srt_path"]),
-                "asr_reference": Path(parameters["media_path"])
-            }
+            target_fn = process_training_file
+            cfg = self._load_pipeline_config()
+            args = [Path(parameters["media_path"]), Path(parameters["srt_path"]), cfg]
 
         elif job.type == JobType.MODEL_TRAINING:
             target_fn = run_training
