@@ -225,13 +225,22 @@ def get_job(job_id: str) -> JobModel:
     return _serialize_job(record)
 
 
-@app.get("/api/jobs/{job_id}/log")
-def get_job_log(job_id: str, tail: int = Query(4000, ge=100, le=20000)) -> Dict[str, Any]:
+def _job_log_payload(job_id: str, tail: int) -> Dict[str, Any]:
     try:
         log = job_manager.get_log_tail(job_id, limit=tail)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Job not found") from exc
     return {"log": log}
+
+
+@app.get("/api/jobs/{job_id}/log")
+def get_job_log(job_id: str, tail: int = Query(4000, ge=100, le=20000)) -> Dict[str, Any]:
+    return _job_log_payload(job_id, tail)
+
+
+@app.get("/api/jobs/{job_id}/logs")
+def get_job_logs(job_id: str, tail: int = Query(4000, ge=100, le=20000)) -> Dict[str, Any]:
+    return _job_log_payload(job_id, tail)
 
 
 def _format_sse(data: str, *, event: Optional[str] = None) -> str:
@@ -270,10 +279,20 @@ def _log_event_stream(job_id: str, poll_interval: float = 0.5) -> Iterator[str]:
         time.sleep(poll_interval)
 
 
-@app.get("/api/jobs/{job_id}/log/stream")
-async def stream_job_log(job_id: str) -> StreamingResponse:
+def _stream_job_log(job_id: str) -> StreamingResponse:
     generator = _log_event_stream(job_id)
-    return StreamingResponse(generator, media_type="text/event-stream")
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    return StreamingResponse(generator, media_type="text/event-stream", headers=headers)
+
+
+@app.get("/api/jobs/{job_id}/logs/stream")
+def stream_job_logs(job_id: str) -> StreamingResponse:
+    return _stream_job_log(job_id)
+
+
+@app.get("/api/jobs/{job_id}/log/stream")
+def stream_job_log_legacy(job_id: str) -> StreamingResponse:
+    return _stream_job_log(job_id)
 
 
 @app.post("/api/jobs/inference", response_model=JobModel, status_code=201)

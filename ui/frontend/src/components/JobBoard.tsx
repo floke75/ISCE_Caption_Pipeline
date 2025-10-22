@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
+import { useEventStream } from '../hooks/useEventStream';
 import { useJobLog, useJobs } from '../hooks/useJobs';
 import { JobRecord } from '../types';
 import '../styles/jobs.css';
@@ -62,16 +63,98 @@ export function JobBoard() {
   }, [orderedJobs, selectedId]);
 
   const selectedJob = orderedJobs.find((job) => job.id === selectedId) ?? null;
-  const { data: logData } = useJobLog(selectedJob?.id ?? null);
+  const [logText, setLogText] = useState('');
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [completedStatus, setCompletedStatus] = useState<string | null>(null);
+  const logViewRef = useRef<HTMLPreElement | null>(null);
+  const streamResetRef = useRef(true);
+
+  useEffect(() => {
+    setLogText('');
+    setAutoScroll(true);
+    setCompletedStatus(null);
+    streamResetRef.current = true;
+  }, [selectedJob?.id]);
+
+  const streamUrl = selectedJob ? `/api/jobs/${selectedJob.id}/logs/stream` : null;
+
+  const stream = useEventStream(streamUrl, {
+    enabled: Boolean(selectedJob),
+    eventTypes: ['complete'],
+    onOpen: () => {
+      setCompletedStatus(null);
+      streamResetRef.current = true;
+    },
+    onMessage: (event) => {
+      if (!event.data) return;
+      const chunk = `${event.data}\n`;
+      setLogText((prev) => {
+        const next = streamResetRef.current ? chunk : prev ? prev + chunk : chunk;
+        streamResetRef.current = false;
+        return next;
+      });
+    },
+    onEvent: (type, event) => {
+      if (type === 'complete') {
+        setCompletedStatus(event.data);
+      }
+    },
+  });
+
+  const { status: streamStatus, supported: streamSupported, disconnect: closeStream } = stream;
+
+  useEffect(() => {
+    if (completedStatus) {
+      closeStream();
+    }
+  }, [closeStream, completedStatus]);
+
+  const shouldPoll = !streamSupported || streamStatus === 'error';
+  const { data: logData } = useJobLog(selectedJob?.id ?? null, {
+    enabled: Boolean(selectedJob),
+    refetchInterval: shouldPoll ? 4000 : false,
+  });
+
+  useEffect(() => {
+    if (!selectedJob || !logData?.log) {
+      return;
+    }
+    if (shouldPoll || !logText) {
+      setLogText(logData.log);
+    }
+  }, [logData?.log, logText, selectedJob, shouldPoll]);
+
+  useEffect(() => {
+    if (!autoScroll || !logViewRef.current) {
+      return;
+    }
+    logViewRef.current.scrollTop = logViewRef.current.scrollHeight;
+  }, [autoScroll, logText]);
+
+  const streamStatusLabel = useMemo(() => {
+    if (!selectedJob) return '';
+    if (!streamSupported) return 'Polling logs (SSE not supported)';
+    if (streamStatus === 'connecting') return 'Connecting to log stream…';
+    if (streamStatus === 'open') return 'Streaming live logs';
+    if (streamStatus === 'error') return 'Stream interrupted — retrying, polling enabled';
+    if (streamStatus === 'closed') {
+      return completedStatus ? `Stream ended (${completedStatus})` : 'Stream closed';
+    }
+    return '';
+  }, [completedStatus, selectedJob, streamStatus, streamSupported]);
 
   const copyLog = async () => {
-    if (!logData?.log) return;
+    if (!logText) return;
     try {
-      await navigator.clipboard.writeText(logData.log);
+      await navigator.clipboard.writeText(logText);
       toast.success('Log copied to clipboard');
     } catch (error) {
       toast.error('Clipboard copy failed');
     }
+  };
+
+  const toggleAutoScroll = () => {
+    setAutoScroll((value) => !value);
   };
 
   const copyJson = async (payload: unknown, label: string) => {
@@ -153,13 +236,23 @@ export function JobBoard() {
                 </div>
               ) : null}
               <div className="detail-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3>Logs</h3>
-                  <button type="button" className="copy-button" onClick={copyLog}>
-                    Copy log
-                  </button>
+                <div className="log-card-header">
+                  <div>
+                    <h3>Logs</h3>
+                    {streamStatusLabel ? <p className="log-status">{streamStatusLabel}</p> : null}
+                  </div>
+                  <div className="log-controls">
+                    <button type="button" className="copy-button" onClick={toggleAutoScroll}>
+                      {autoScroll ? 'Pause auto-scroll' : 'Resume auto-scroll'}
+                    </button>
+                    <button type="button" className="copy-button" onClick={copyLog}>
+                      Copy log
+                    </button>
+                  </div>
                 </div>
-                <pre>{logData?.log ?? 'Loading logs…'}</pre>
+                <pre ref={logViewRef} className="log-viewer">
+                  {logText || 'Waiting for log output…'}
+                </pre>
               </div>
               {selectedJob.error ? (
                 <div className="detail-card" style={{ borderColor: 'rgba(248, 113, 113, 0.4)' }}>
