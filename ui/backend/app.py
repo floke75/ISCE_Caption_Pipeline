@@ -163,7 +163,10 @@ def get_pipeline_config_yaml() -> Dict[str, str]:
 def update_pipeline_config_yaml(payload: ConfigYamlUpdate) -> ConfigSnapshot:
     import yaml
 
-    overrides = yaml.safe_load(payload.yaml) if payload.yaml.strip() else {}
+    try:
+        overrides = yaml.safe_load(payload.yaml) if payload.yaml.strip() else {}
+    except yaml.YAMLError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}") from exc
     if overrides is None:
         overrides = {}
     if not isinstance(overrides, dict):
