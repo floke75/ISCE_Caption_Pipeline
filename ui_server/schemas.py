@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, root_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class InferenceJobRequest(BaseModel):
@@ -50,19 +50,19 @@ class JobSummary(BaseModel):
     result: Optional[Dict[str, Any]]
     metrics: Dict[str, Any]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class JobDetail(JobSummary):
     parameters: Dict[str, Any]
     workspace: str
 
-    @root_validator(pre=True)
-    def _normalise_workspace(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        workspace = values.get("workspace")
-        if isinstance(workspace, Path):
-            values["workspace"] = str(workspace)
+    @model_validator(mode="before")
+    def _normalise_workspace(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            workspace = values.get("workspace")
+            if isinstance(workspace, Path):
+                values["workspace"] = str(workspace)
         return values
 
 
