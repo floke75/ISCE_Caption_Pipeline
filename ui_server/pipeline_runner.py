@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import select
 import shutil
 import subprocess
 import threading
@@ -27,6 +28,17 @@ class CommandError(RuntimeError):
     pass
 
 
+def _terminate_process(process: subprocess.Popen[Any]) -> None:
+    """Attempt to terminate the process gracefully, then force kill if needed."""
+
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
 def _stream_command(
     command: Iterable[Any],
     cwd: Path,
@@ -50,18 +62,33 @@ def _stream_command(
         )
         assert process.stdout is not None
         try:
-            for line in process.stdout:
+            stdout = process.stdout
+            assert stdout is not None
+            while True:
                 if cancel_event and cancel_event.is_set():
-                    process.terminate()
-                    process.wait(timeout=5)
+                    _terminate_process(process)
                     raise JobCancelledError("Command cancelled")
-                handle.write(line)
-                handle.flush()
+
+                ready, _, _ = select.select([stdout], [], [], 0.1)
+                if ready:
+                    line = stdout.readline()
+                    if line:
+                        handle.write(line)
+                        handle.flush()
+                        continue
+
+                if process.poll() is not None:
+                    # Process has finished; drain any remaining output.
+                    remaining = stdout.read()
+                    if remaining:
+                        handle.write(remaining)
+                        handle.flush()
+                    break
+
             process.wait()
             handle.flush()
             if cancel_event and cancel_event.is_set():
-                process.terminate()
-                process.wait(timeout=5)
+                _terminate_process(process)
                 raise JobCancelledError("Command cancelled")
             if process.returncode != 0:
                 raise CommandError(
