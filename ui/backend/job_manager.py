@@ -233,7 +233,9 @@ class JobManager:
             record.write_metadata()
 
     def prepare_runtime_config(self, record: JobRecord, overrides: Dict[str, Any]) -> Dict[str, Any]:
-        config = self._config_service.effective_config()
+        base = self._config_service.base_config()
+        stored_overrides = self._config_service.stored_overrides()
+        config = _recursive_update(base, stored_overrides)
         config["project_root"] = str(self._storage_root.parent)
         pipeline_root = record.workspace / "pipeline"
         config["pipeline_root"] = str(pipeline_root)
