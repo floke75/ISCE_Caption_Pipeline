@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 from starlette.staticfiles import StaticFiles
 
@@ -94,11 +95,18 @@ class JobManager:
             with open(JOBS_METADATA_FILE, "r") as f:
                 jobs_data = json.load(f)
                 for job_id, job_data in jobs_data.items():
-                    self._jobs[job_id] = Job(**job_data)
+                    try:
+                        self._jobs[job_id] = Job(**job_data)
+                    except ValueError as exc:
+                        logging.error("Failed to load job %s from disk: %s", job_id, exc)
 
     def _save_jobs_to_disk(self):
+        serialized_jobs = {
+            job_id: jsonable_encoder(job, by_alias=True, exclude_none=True)
+            for job_id, job in self._jobs.items()
+        }
         with open(JOBS_METADATA_FILE, "w") as f:
-            json.dump({job_id: job.dict() for job_id, job in self._jobs.items()}, f, indent=4, default=str)
+            json.dump(serialized_jobs, f, indent=4)
 
     def _update_job_status(self, job_id: str, status: JobStatus, error: Optional[str] = None, result: Optional[Dict[str, Any]] = None):
         job = self._jobs[job_id]
