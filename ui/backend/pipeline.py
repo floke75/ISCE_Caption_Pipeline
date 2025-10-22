@@ -64,7 +64,7 @@ def build_inference_steps(workspace: Path, config: Dict[str, object], params: Di
                 "--output",
                 str(srt_output),
                 "--config",
-                str(project_root / "config.yaml"),
+                str(config_path),
             ],
             cwd=project_root,
         ),

@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { PipelineConfig } from "../hooks/usePipelineConfig";
 
 interface Props {
@@ -105,6 +105,10 @@ function ConfigNode({ path, value, onChange }: NodeProps) {
 export function ConfigEditor({ config, isLoading, isUpdating, onSave, onReload }: Props) {
   const [draft, setDraft] = useState(config);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  useEffect(() => {
+    setDraft(config);
+  }, [config]);
 
   const entries = useMemo(() => Object.entries(draft ?? {}), [draft]);
 
