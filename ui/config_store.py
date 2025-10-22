@@ -131,6 +131,10 @@ class ConfigStore:
         if extra_context:
             context.update(extra_context)
         config = _resolve_templates(config, context)
+        config = _absolutify_resource_paths(
+            config,
+            self._path.parent.resolve(),
+        )
 
         runtime_path = runtime_dir / (filename or self._path.name)
         with runtime_path.open("w", encoding="utf-8") as handle:
@@ -172,3 +176,22 @@ def _apply_isolation(config: Dict[str, Any], workspace: Path, repo_root: Path) -
     Path(align_cfg["out_root"]).mkdir(parents=True, exist_ok=True)
 
     return rewritten
+
+
+def _absolutify_resource_paths(config: Dict[str, Any], base_dir: Path) -> Dict[str, Any]:
+    """Ensure resource paths remain valid when the config is relocated."""
+
+    if not isinstance(config, dict):
+        return config
+
+    paths_section = config.get("paths")
+    if not isinstance(paths_section, dict):
+        return config
+
+    for key, value in list(paths_section.items()):
+        if isinstance(value, str):
+            candidate = Path(value)
+            if not candidate.is_absolute():
+                paths_section[key] = str((base_dir / candidate).resolve())
+
+    return config
