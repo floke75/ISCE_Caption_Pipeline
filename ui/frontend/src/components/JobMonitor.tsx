@@ -179,51 +179,84 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
         <div className="job-monitor__details">
           {selectedJob ? (
             <div className="job-details">
-              <h3>Job {selectedJob.id}</h3>
-              <div className="job-details__grid">
+              <header className="job-details__header">
                 <div>
-                  <h4>Status</h4>
-                  <p>
-                    <span className={statusClass(selectedJob.status)}>{selectedJob.status}</span>
+                  <h3>{selectedJob.type.replace(/_/g, " ")}</h3>
+                  <p className="muted">
+                    {selectedJob.startedAt ? `Started ${formatDate(selectedJob.startedAt)}` : "Start time pending"}
+                    {selectedJob.finishedAt ? ` · Finished ${formatDate(selectedJob.finishedAt)}` : ""}
                   </p>
-                  {selectedJob.queuePosition && selectedJob.status === "pending" && (
-                    <>
-                      <h4>Queue position</h4>
-                      <p>#{selectedJob.queuePosition}</p>
-                    </>
-                  )}
-                  <h4>Stage</h4>
-                  <p>{selectedJob.stage ?? "—"}</p>
-                  {selectedJob.message && (
-                    <>
-                      <h4>Message</h4>
-                      <p>{selectedJob.message}</p>
-                    </>
-                  )}
-                  <h4>Artifacts</h4>
-                  {selectedJob.artifacts.length === 0 ? (
-                    <p className="muted">No artifacts yet.</p>
-                  ) : (
-                    <ul className="artifact-list">
-                      {selectedJob.artifacts.map((artifact) => (
-                        <li key={`${artifact.name}-${artifact.path}`}>
-                          <span>{artifact.name}</span>
-                          <code>{artifact.path}</code>
-                          <button
-                            type="button"
-                            className="button button--tiny"
-                            onClick={() => copyToClipboard(artifact.path)}
-                          >
-                            Copy
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
-                <div>
+                <div className="job-details__id">
+                  <code>{selectedJob.id}</code>
+                  <button
+                    type="button"
+                    className="button button--tiny button--secondary"
+                    onClick={() => copyToClipboard(selectedJob.id)}
+                  >
+                    Copy ID
+                  </button>
+                </div>
+              </header>
+              <div className="job-details__grid">
+                <section className="job-details__section job-details__section--summary">
+                  <h4>Summary</h4>
+                  <dl className="kv-list kv-list--details">
+                    <div className="kv-list__row">
+                      <dt>Status</dt>
+                      <dd>
+                        <span className={statusClass(selectedJob.status)}>{selectedJob.status}</span>
+                      </dd>
+                    </div>
+                    <div className="kv-list__row">
+                      <dt>Queue position</dt>
+                      <dd>{selectedJob.queuePosition && selectedJob.status === "pending" ? `#${selectedJob.queuePosition}` : "—"}</dd>
+                    </div>
+                    <div className="kv-list__row">
+                      <dt>Stage</dt>
+                      <dd>{selectedJob.stage ?? "—"}</dd>
+                    </div>
+                    <div className="kv-list__row">
+                      <dt>Started</dt>
+                      <dd>{formatDate(selectedJob.startedAt)}</dd>
+                    </div>
+                    <div className="kv-list__row">
+                      <dt>Duration</dt>
+                      <dd>{formatDuration(selectedJob)}</dd>
+                    </div>
+                    <div className="kv-list__row">
+                      <dt>Workspace</dt>
+                      <dd>
+                        {selectedJob.workspacePath ? (
+                          <div className="job-details__value">
+                            <code>{selectedJob.workspacePath}</code>
+                            <button
+                              type="button"
+                              className="button button--tiny"
+                              onClick={() => copyToClipboard(selectedJob.workspacePath ?? "")}
+                            >
+                              Copy path
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="muted">Not assigned yet</span>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="job-details__progress">
+                    <div className="progress">
+                      <div
+                        className="progress__bar"
+                        style={{ width: `${Math.min(100, Math.max(0, selectedJob.progress * 100))}%` }}
+                      />
+                    </div>
+                    <span className="progress__value">{formatProgress(selectedJob.progress)}</span>
+                  </div>
+                </section>
+                <section className="job-details__section">
                   <h4>Parameters</h4>
-                  <dl className="kv-list">
+                  <dl className="kv-list kv-list--details">
                     {Object.entries(selectedJob.params).map(([key, value]) => (
                       <div key={key} className="kv-list__row">
                         <dt>{key}</dt>
@@ -231,21 +264,49 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
                       </div>
                     ))}
                   </dl>
-                  {Object.keys(selectedJob.result).length > 0 && (
-                    <>
-                      <h4>Result</h4>
-                      <dl className="kv-list">
-                        {Object.entries(selectedJob.result).map(([key, value]) => (
-                          <div key={key} className="kv-list__row">
-                            <dt>{key}</dt>
-                            <dd>{String(value ?? "")}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </>
-                  )}
-                </div>
+                </section>
               </div>
+              {Object.keys(selectedJob.result).length > 0 && (
+                <section className="job-details__section">
+                  <h4>Result</h4>
+                  <dl className="kv-list kv-list--details">
+                    {Object.entries(selectedJob.result).map(([key, value]) => (
+                      <div key={key} className="kv-list__row">
+                        <dt>{key}</dt>
+                        <dd>{String(value ?? "")}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              )}
+              {selectedJob.message && (
+                <section className="job-details__section">
+                  <h4>Message</h4>
+                  <p className="job-details__message">{selectedJob.message}</p>
+                </section>
+              )}
+              <section className="job-details__section">
+                <h4>Artifacts</h4>
+                {selectedJob.artifacts.length === 0 ? (
+                  <p className="muted">No artifacts yet.</p>
+                ) : (
+                  <ul className="artifact-list">
+                    {selectedJob.artifacts.map((artifact) => (
+                      <li key={`${artifact.name}-${artifact.path}`}>
+                        <span>{artifact.name}</span>
+                        <code>{artifact.path}</code>
+                        <button
+                          type="button"
+                          className="button button--tiny"
+                          onClick={() => copyToClipboard(artifact.path)}
+                        >
+                          Copy
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
               <LogViewer jobId={selectedJob.id} status={selectedJob.status} />
             </div>
           ) : (
