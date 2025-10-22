@@ -66,8 +66,10 @@ def _stream_command(
             assert stdout is not None
             while True:
                 if cancel_event and cancel_event.is_set():
-                    _terminate_process(process)
-                    raise JobCancelledError("Command cancelled")
+                    if process.poll() is None:
+                        _terminate_process(process)
+                        raise JobCancelledError("Command cancelled")
+                    # The process has already exited; ignore late cancellation.
 
                 ready, _, _ = select.select([stdout], [], [], 0.1)
                 if ready:
@@ -77,7 +79,8 @@ def _stream_command(
                         handle.flush()
                         continue
 
-                if process.poll() is not None:
+                return_code = process.poll()
+                if return_code is not None:
                     # Process has finished; drain any remaining output.
                     remaining = stdout.read()
                     if remaining:
@@ -87,9 +90,6 @@ def _stream_command(
 
             process.wait()
             handle.flush()
-            if cancel_event and cancel_event.is_set():
-                _terminate_process(process)
-                raise JobCancelledError("Command cancelled")
             if process.returncode != 0:
                 raise CommandError(
                     f"Command {' '.join(cmd)} failed with exit code {process.returncode}"
