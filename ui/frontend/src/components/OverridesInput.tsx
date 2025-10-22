@@ -33,7 +33,7 @@ export function OverridesInput({ onChange }: Props) {
           setRaw(event.target.value);
         }}
         onBlur={handleBlur}
-        placeholder="{""build_pair"": {""time_tolerance_s"": 0.2}}"
+        placeholder='{"build_pair": {"time_tolerance_s": 0.2}}'
       />
       <span className="muted">Only provided keys will override the stored defaults.</span>
       {error && <span className="alert error" style={{ marginTop: "0.5rem" }}>{error}</span>}
