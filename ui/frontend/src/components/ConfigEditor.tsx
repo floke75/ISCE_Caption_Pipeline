@@ -60,7 +60,12 @@ function diffConfigs(original: ConfigValue, current: ConfigValue): ConfigValue |
   if (isObject(original)) {
     return current;
   }
-  if (Number.isNaN(original as number) && Number.isNaN(current as number)) {
+  if (
+    typeof original === "number" &&
+    typeof current === "number" &&
+    Number.isNaN(original) &&
+    Number.isNaN(current)
+  ) {
     return undefined;
   }
   return original === current ? undefined : current;
