@@ -35,6 +35,7 @@ def _stream_command(
     env.setdefault("PYTHONUNBUFFERED", "1")
     with log_file.open("a", encoding="utf-8") as handle:
         handle.write("$ " + " ".join(cmd) + "\n")
+        handle.flush()
         process = subprocess.Popen(
             cmd,
             cwd=str(cwd),
@@ -47,6 +48,7 @@ def _stream_command(
         assert process.stdout is not None
         for line in process.stdout:
             handle.write(line)
+            handle.flush()
         process.wait()
         handle.flush()
         if process.returncode != 0:
