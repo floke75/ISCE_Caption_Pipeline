@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from datetime import datetime
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from ui_server.path_validation import describe_allowlist
 
 
 class InferenceJobRequest(BaseModel):
@@ -69,3 +72,30 @@ class JobDetail(JobSummary):
 class LogChunk(BaseModel):
     content: str
     next_offset: int
+
+
+class PathValidationRequest(BaseModel):
+    path: str = Field(..., description="Path supplied by the operator")
+    kind: Literal["file", "directory", "any"] = Field(
+        "file", description="Expected filesystem entry type"
+    )
+    must_exist: bool = Field(True, description="Require the entry to exist")
+    allow_create: bool = Field(
+        False, description="Allow creation of the entry if it does not exist"
+    )
+    purpose: Optional[str] = Field(
+        None, description="Human-friendly label for error messages"
+    )
+
+
+class PathValidationResponse(BaseModel):
+    valid: bool
+    resolved_path: Optional[str] = None
+    exists: bool
+    is_file: bool
+    is_dir: bool
+    message: Optional[str] = None
+    allowed_roots: list[str] = Field(default_factory=describe_allowlist)
+    root: Optional[str] = Field(
+        None, description="Allowlisted root directory that contains the path"
+    )

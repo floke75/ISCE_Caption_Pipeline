@@ -11,6 +11,7 @@ import yaml
 from run_pipeline import setup_directories
 from ui_server.config_service import PipelineConfigService, ModelConfigService, _deep_merge
 from ui_server.job_manager import JobContext
+from ui_server.path_validation import require_path
 from ui_server.schemas import (
     InferenceJobRequest,
     ModelTrainingJobRequest,
@@ -150,18 +151,18 @@ def run_inference_job(
     inputs_dir = workspace / "inputs"
     inputs_dir.mkdir(exist_ok=True)
 
-    media_src = Path(request.media_path).expanduser().resolve()
-    if not media_src.exists():
-        raise FileNotFoundError(f"Media file not found: {media_src}")
+    media_src = require_path(request.media_path, kind="file", purpose="Media file")
     media_dst = inputs_dir / media_src.name
     if media_src != media_dst:
         shutil.copy2(media_src, media_dst)
 
     transcript_dst = None
     if request.transcript_path:
-        transcript_src = Path(request.transcript_path).expanduser().resolve()
-        if not transcript_src.exists():
-            raise FileNotFoundError(f"Transcript file not found: {transcript_src}")
+        transcript_src = require_path(
+            request.transcript_path,
+            kind="file",
+            purpose="Transcript file",
+        )
         transcript_name = media_dst.stem + transcript_src.suffix
         transcript_dst = Path(pipeline_config["txt_placement_folder"]) / transcript_name
         shutil.copy2(transcript_src, transcript_dst)
@@ -207,7 +208,13 @@ def run_inference_job(
     final_srt = Path(pipeline_config["output_dir"]) / f"{media_dst.stem}.srt"
     delivered_to = None
     if request.output_directory:
-        target_dir = Path(request.output_directory).expanduser().resolve()
+        target_dir = require_path(
+            request.output_directory,
+            kind="directory",
+            must_exist=False,
+            allow_create=True,
+            purpose="Output directory",
+        )
         target_dir.mkdir(parents=True, exist_ok=True)
         delivered_to = target_dir / final_srt.name
         shutil.copy2(final_srt, delivered_to)
@@ -265,12 +272,8 @@ def run_training_pair_job(
     inputs_dir = workspace / "inputs"
     inputs_dir.mkdir(exist_ok=True)
 
-    media_src = Path(request.media_path).expanduser().resolve()
-    srt_src = Path(request.srt_path).expanduser().resolve()
-    if not media_src.exists():
-        raise FileNotFoundError(f"Media file not found: {media_src}")
-    if not srt_src.exists():
-        raise FileNotFoundError(f"SRT file not found: {srt_src}")
+    media_src = require_path(request.media_path, kind="file", purpose="Media file")
+    srt_src = require_path(request.srt_path, kind="file", purpose="SRT file")
 
     media_dst = inputs_dir / media_src.name
     srt_dst = Path(pipeline_config["srt_placement_folder"]) / srt_src.name
@@ -316,7 +319,13 @@ def run_training_pair_job(
     training_file = Path(pipeline_config["intermediate_dir"]) / "_training" / f"{srt_dst.stem}.train.words.json"
     delivered_to = None
     if request.output_directory:
-        target_dir = Path(request.output_directory).expanduser().resolve()
+        target_dir = require_path(
+            request.output_directory,
+            kind="directory",
+            must_exist=False,
+            allow_create=True,
+            purpose="Output directory",
+        )
         target_dir.mkdir(parents=True, exist_ok=True)
         delivered_to = target_dir / training_file.name
         shutil.copy2(training_file, delivered_to)
@@ -341,17 +350,31 @@ def run_model_training_job(
 
     model_config_path = _prepare_model_config(model_service, workspace, request.model_overrides)
 
-    corpus_dir = Path(request.corpus_dir).expanduser().resolve()
-    if not corpus_dir.exists():
-        raise FileNotFoundError(f"Corpus directory not found: {corpus_dir}")
+    corpus_dir = require_path(
+        request.corpus_dir,
+        kind="directory",
+        purpose="Corpus directory",
+    )
 
     constraints_path = (
-        Path(request.constraints_path).expanduser().resolve()
+        require_path(
+            request.constraints_path,
+            kind="file",
+            must_exist=False,
+            allow_create=True,
+            purpose="Constraints output",
+        )
         if request.constraints_path
         else workspace / "models" / "constraints.json"
     )
     weights_path = (
-        Path(request.weights_path).expanduser().resolve()
+        require_path(
+            request.weights_path,
+            kind="file",
+            must_exist=False,
+            allow_create=True,
+            purpose="Weights output",
+        )
         if request.weights_path
         else workspace / "models" / "model_weights.json"
     )

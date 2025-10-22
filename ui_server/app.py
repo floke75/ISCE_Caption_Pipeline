@@ -11,6 +11,7 @@ from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from ui_server.config_service import ModelConfigService, PipelineConfigService
 from ui_server.job_manager import JobManager, JobStatus
+from ui_server.path_validation import PathValidationError, validate_path
 from ui_server.pipeline_runner import (
     run_inference_job,
     run_model_training_job,
@@ -22,6 +23,8 @@ from ui_server.schemas import (
     JobSummary,
     LogChunk,
     ModelTrainingJobRequest,
+    PathValidationRequest,
+    PathValidationResponse,
     TrainingPairJobRequest,
 )
 
@@ -232,6 +235,36 @@ def get_model_config_yaml() -> str:
     import yaml
 
     return yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
+
+
+@app.post("/api/files/validate", response_model=PathValidationResponse)
+def validate_filesystem_path(request: PathValidationRequest) -> PathValidationResponse:
+    try:
+        status = validate_path(
+            request.path,
+            kind=request.kind,
+            must_exist=request.must_exist,
+            allow_create=request.allow_create,
+            purpose=request.purpose,
+        )
+    except PathValidationError as exc:
+        return PathValidationResponse(
+            valid=False,
+            resolved_path=None,
+            exists=False,
+            is_file=False,
+            is_dir=False,
+            message=str(exc),
+        )
+
+    return PathValidationResponse(
+        valid=True,
+        resolved_path=str(status.path),
+        exists=status.exists,
+        is_file=status.is_file,
+        is_dir=status.is_dir,
+        root=str(status.root),
+    )
 
 
 @app.get("/healthz", response_class=PlainTextResponse)

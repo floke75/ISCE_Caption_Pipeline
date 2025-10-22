@@ -84,3 +84,31 @@ export const fetchModelYaml = async (): Promise<string> => {
   const { data } = await api.get('/api/config/model/yaml', { responseType: 'text' });
   return data;
 };
+
+export type PathKind = 'file' | 'directory' | 'any';
+
+export interface PathValidationRequest {
+  path: string;
+  kind?: PathKind;
+  must_exist?: boolean;
+  allow_create?: boolean;
+  purpose?: string;
+}
+
+export interface PathValidationResult {
+  valid: boolean;
+  resolved_path?: string | null;
+  exists: boolean;
+  is_file: boolean;
+  is_dir: boolean;
+  message?: string | null;
+  allowed_roots: string[];
+  root?: string | null;
+}
+
+export const validatePath = async (
+  payload: PathValidationRequest
+): Promise<PathValidationResult> => {
+  const { data } = await api.post('/api/files/validate', payload);
+  return data;
+};
