@@ -48,7 +48,7 @@ class ConfigStore:
     def __init__(self, path: Path, defaults: Optional[Dict[str, Any]] = None) -> None:
         self._path = Path(path)
         self._defaults = copy.deepcopy(defaults or {})
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     @property
     def path(self) -> Path:
@@ -56,14 +56,17 @@ class ConfigStore:
 
     def read(self) -> Dict[str, Any]:
         """Load the YAML configuration merged with the optional defaults."""
-        data = copy.deepcopy(self._defaults)
-        if self._path.exists():
-            with self._path.open("r", encoding="utf-8") as handle:
-                loaded = yaml.safe_load(handle) or {}
-            if not isinstance(loaded, dict):
-                raise ValueError(f"Configuration file {self._path} must contain a mapping.")
-            data = _deep_merge(data, loaded)
-        return data
+        with self._lock:
+            data = copy.deepcopy(self._defaults)
+            if self._path.exists():
+                with self._path.open("r", encoding="utf-8") as handle:
+                    loaded = yaml.safe_load(handle) or {}
+                if not isinstance(loaded, dict):
+                    raise ValueError(
+                        f"Configuration file {self._path} must contain a mapping."
+                    )
+                data = _deep_merge(data, loaded)
+            return data
 
     def write(self, config: Dict[str, Any]) -> None:
         """Persist ``config`` to disk, ensuring parent directories exist."""
