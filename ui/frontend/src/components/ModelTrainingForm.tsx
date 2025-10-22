@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import client from '../api/client';
 import { OverrideEditor } from './OverrideEditor';
+import { FilePathPicker } from './FilePathPicker';
 import '../styles/forms.css';
 
 type Props = {
@@ -16,11 +17,12 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
   const [notes, setNotes] = useState('');
   const [overridePatch, setOverridePatch] = useState<Record<string, unknown>>({});
   const [overrideInvalid, setOverrideInvalid] = useState(false);
+  const [corpusValid, setCorpusValid] = useState(false);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const payload: Record<string, unknown> = {
-        corpus_dir: corpusDir,
+        corpus_dir: corpusDir.trim(),
       };
       if (iterations !== '') payload.iterations = iterations;
       if (errorBoost !== '') payload.error_boost_factor = errorBoost;
@@ -42,8 +44,8 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!corpusDir.trim()) {
-      toast.error('Corpus directory is required');
+    if (!corpusValid) {
+      toast.error('Select a valid corpus directory before submitting');
       return;
     }
     if (overrideInvalid) {
@@ -65,10 +67,15 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
         <p className="section-subtitle">Launch the iterative weighting loop using an enriched training corpus.</p>
       </div>
       <div className="form-grid">
-        <label className="field">
-          <span>Training corpus directory *</span>
-          <input type="text" value={corpusDir} onChange={(event) => setCorpusDir(event.target.value)} placeholder="/data/corpus" />
-        </label>
+        <FilePathPicker
+          label="Training corpus directory"
+          value={corpusDir}
+          onChange={setCorpusDir}
+          required
+          type="directory"
+          placeholder="/data/corpus"
+          onValidityChange={setCorpusValid}
+        />
         <label className="field">
           <span>Iterations</span>
           <input

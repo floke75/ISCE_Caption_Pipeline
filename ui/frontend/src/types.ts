@@ -43,3 +43,39 @@ export interface PipelineConfigSnapshot {
   fields: ConfigField[];
   schema: ConfigNode[];
 }
+
+export interface FileRoot {
+  id: string;
+  label: string;
+  path: string;
+}
+
+export interface FileBreadcrumb {
+  label: string;
+  path: string;
+}
+
+export interface FileEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  isFile: boolean;
+}
+
+export interface FileListing {
+  root: FileRoot;
+  path: string;
+  parent?: string | null;
+  breadcrumbs: FileBreadcrumb[];
+  entries: FileEntry[];
+}
+
+export interface FileValidation {
+  path: string;
+  exists: boolean;
+  isDir: boolean;
+  isFile: boolean;
+  allowed: boolean;
+  root?: FileRoot | null;
+  detail?: string | null;
+}

@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import client from '../api/client';
 import { OverrideEditor } from './OverrideEditor';
+import { FilePathPicker } from './FilePathPicker';
 import '../styles/forms.css';
 
 type Props = {
@@ -15,12 +16,14 @@ export function TrainingPairForm({ onJobCreated }: Props) {
   const [notes, setNotes] = useState('');
   const [overridePatch, setOverridePatch] = useState<Record<string, unknown>>({});
   const [overrideInvalid, setOverrideInvalid] = useState(false);
+  const [mediaValid, setMediaValid] = useState(false);
+  const [srtValid, setSrtValid] = useState(false);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const payload: Record<string, unknown> = {
-        media_path: mediaPath,
-        srt_path: srtPath,
+        media_path: mediaPath.trim(),
+        srt_path: srtPath.trim(),
       };
       if (notes) payload.notes = notes;
       if (Object.keys(overridePatch).length) {
@@ -40,8 +43,8 @@ export function TrainingPairForm({ onJobCreated }: Props) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!mediaPath.trim() || !srtPath.trim()) {
-      toast.error('Media and SRT paths are required');
+    if (!mediaValid || !srtValid) {
+      toast.error('Provide valid media and SRT paths');
       return;
     }
     if (overrideInvalid) {
@@ -63,14 +66,24 @@ export function TrainingPairForm({ onJobCreated }: Props) {
         <p className="section-subtitle">Generate enriched training JSON from an SRT file and matching media.</p>
       </div>
       <div className="form-grid">
-        <label className="field">
-          <span>Media file path *</span>
-          <input type="text" value={mediaPath} onChange={(event) => setMediaPath(event.target.value)} placeholder="/data/media.mp4" />
-        </label>
-        <label className="field">
-          <span>SRT file path *</span>
-          <input type="text" value={srtPath} onChange={(event) => setSrtPath(event.target.value)} placeholder="/data/captions.srt" />
-        </label>
+        <FilePathPicker
+          label="Media file path"
+          value={mediaPath}
+          onChange={setMediaPath}
+          required
+          type="file"
+          placeholder="/data/media.mp4"
+          onValidityChange={setMediaValid}
+        />
+        <FilePathPicker
+          label="SRT file path"
+          value={srtPath}
+          onChange={setSrtPath}
+          required
+          type="file"
+          placeholder="/data/captions.srt"
+          onValidityChange={setSrtValid}
+        />
       </div>
       <label className="field">
         <span>Operator notes</span>

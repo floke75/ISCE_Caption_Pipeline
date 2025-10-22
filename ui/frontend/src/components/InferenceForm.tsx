@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import client from '../api/client';
 import { OverrideEditor } from './OverrideEditor';
+import { FilePathPicker } from './FilePathPicker';
 import '../styles/forms.css';
 
 type Props = {
@@ -17,15 +18,19 @@ export function InferenceForm({ onJobCreated }: Props) {
   const [notes, setNotes] = useState('');
   const [overridePatch, setOverridePatch] = useState<Record<string, unknown>>({});
   const [overrideInvalid, setOverrideInvalid] = useState(false);
+  const [mediaValid, setMediaValid] = useState(false);
+  const [transcriptValid, setTranscriptValid] = useState(true);
+  const [outputDirValid, setOutputDirValid] = useState(true);
+  const [configPathValid, setConfigPathValid] = useState(true);
 
   const mutation = useMutation({
     mutationFn: async () => {
       const payload: Record<string, unknown> = {
-        media_path: mediaPath,
+        media_path: mediaPath.trim(),
       };
-      if (transcriptPath) payload.transcript_path = transcriptPath;
-      if (outputDir) payload.output_dir = outputDir;
-      if (modelConfigPath) payload.model_config_path = modelConfigPath;
+      if (transcriptPath.trim()) payload.transcript_path = transcriptPath.trim();
+      if (outputDir.trim()) payload.output_dir = outputDir.trim();
+      if (modelConfigPath.trim()) payload.model_config_path = modelConfigPath.trim();
       if (notes) payload.notes = notes;
       if (Object.keys(overridePatch).length) {
         payload.config_overrides = overridePatch;
@@ -44,8 +49,20 @@ export function InferenceForm({ onJobCreated }: Props) {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!mediaPath.trim()) {
-      toast.error('Media file is required');
+    if (!mediaValid) {
+      toast.error('Select a valid media file path before submitting');
+      return;
+    }
+    if (!transcriptValid) {
+      toast.error('Transcript path must resolve to an allowed file');
+      return;
+    }
+    if (!outputDirValid) {
+      toast.error('Output directory must be a valid allowlisted path');
+      return;
+    }
+    if (!configPathValid) {
+      toast.error('Model config path must be a valid allowlisted file');
       return;
     }
     if (overrideInvalid) {
@@ -67,23 +84,40 @@ export function InferenceForm({ onJobCreated }: Props) {
         <p className="section-subtitle">Provide a media file and optional transcript to generate an SRT subtitle file.</p>
       </div>
       <div className="form-grid">
-        <label className="field">
-          <span>Media file path *</span>
-          <input type="text" value={mediaPath} onChange={(event) => setMediaPath(event.target.value)} placeholder="/data/media.mp4" />
-          <span className="field-help">Absolute path on the host machine</span>
-        </label>
-        <label className="field">
-          <span>Transcript (.txt)</span>
-          <input type="text" value={transcriptPath} onChange={(event) => setTranscriptPath(event.target.value)} placeholder="Optional" />
-        </label>
-        <label className="field">
-          <span>Output directory</span>
-          <input type="text" value={outputDir} onChange={(event) => setOutputDir(event.target.value)} placeholder="Override output folder" />
-        </label>
-        <label className="field">
-          <span>Model config</span>
-          <input type="text" value={modelConfigPath} onChange={(event) => setModelConfigPath(event.target.value)} placeholder="config.yaml" />
-        </label>
+        <FilePathPicker
+          label="Media file path"
+          value={mediaPath}
+          onChange={setMediaPath}
+          required
+          type="file"
+          helperText="Absolute media file path on the host"
+          placeholder="/data/media.mp4"
+          onValidityChange={setMediaValid}
+        />
+        <FilePathPicker
+          label="Transcript (.txt)"
+          value={transcriptPath}
+          onChange={setTranscriptPath}
+          type="file"
+          placeholder="Optional"
+          onValidityChange={setTranscriptValid}
+        />
+        <FilePathPicker
+          label="Output directory"
+          value={outputDir}
+          onChange={setOutputDir}
+          type="directory"
+          placeholder="Override output folder"
+          onValidityChange={setOutputDirValid}
+        />
+        <FilePathPicker
+          label="Model config"
+          value={modelConfigPath}
+          onChange={setModelConfigPath}
+          type="file"
+          placeholder="config.yaml"
+          onValidityChange={setConfigPathValid}
+        />
       </div>
       <label className="field">
         <span>Operator notes</span>

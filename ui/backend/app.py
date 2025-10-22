@@ -4,13 +4,14 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Set, Tuple
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ConfigDict
 
+from .api.routes.files import FileBrowser, create_file_router
 from .config_service import ConfigField, ConfigService
 from .job_manager import JobManager, JobQueueFull
 from . import pipelines
@@ -27,6 +28,52 @@ if max_workers < 1:
 
 config_service = ConfigService(REPO_ROOT, STORAGE_ROOT)
 job_manager = JobManager(STORAGE_ROOT, config_service, max_workers=max_workers, queue_limit=queue_limit)
+
+
+def _slugify(value: str) -> str:
+    slug = "".join(ch.lower() if ch.isalnum() else "_" for ch in value)
+    parts = [part for part in slug.split("_") if part]
+    return "_".join(parts)
+
+
+def _load_file_roots() -> List[Tuple[str, str, Path]]:
+    env_value = os.getenv("PIPELINE_FILE_ROOTS")
+    roots: List[Tuple[str, str, Path]] = []
+    seen_ids: Set[str] = set()
+
+    if env_value:
+        for index, raw in enumerate(env_value.split(os.pathsep), start=1):
+            chunk = raw.strip()
+            if not chunk:
+                continue
+            if "=" in chunk:
+                label_raw, path_raw = chunk.split("=", 1)
+                label = label_raw.strip() or f"Root {index}"
+                path_text = path_raw.strip()
+            else:
+                path_text = chunk
+                tentative = Path(path_text).expanduser()
+                label = tentative.name or tentative.as_posix()
+            identifier = _slugify(label) or f"root{index}"
+            candidate = identifier
+            suffix = 1
+            while candidate in seen_ids:
+                suffix += 1
+                candidate = f"{identifier}_{suffix}"
+            seen_ids.add(candidate)
+            roots.append((candidate, label, Path(path_text)))
+    else:
+        roots.extend(
+            [
+                ("workspace", "Workspace storage", STORAGE_ROOT),
+                ("repository", "Repository", REPO_ROOT),
+            ]
+        )
+
+    return roots
+
+
+file_browser = FileBrowser(_load_file_roots())
 
 app = FastAPI(title="ISCE Pipeline UI", version="1.0.0")
 app.add_middleware(
@@ -104,6 +151,8 @@ class ConfigYamlUpdate(BaseModel):
 
 
 ConfigTreeNodeModel.update_forward_refs()
+
+app.include_router(create_file_router(file_browser))
 
 
 class JobModel(BaseModel):
@@ -334,5 +383,5 @@ def create_model_training_job(payload: ModelTrainingRequest) -> JobModel:
     return _serialize_job(record)
 
 
-__all__ = ["app"]
+__all__ = ["app", "file_browser"]
 
