@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import threading
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -144,16 +145,31 @@ class JobContext:
         self.close()
 
 
+class JobQueueFull(Exception):
+    """Raised when the job queue is at capacity."""
+
+
 class JobManager:
     """Coordinates background pipeline jobs."""
 
-    def __init__(self, storage_root: Path, config_service: ConfigService, max_workers: int = 3) -> None:
+    def __init__(
+        self,
+        storage_root: Path,
+        config_service: ConfigService,
+        *,
+        max_workers: int = 3,
+        queue_limit: Optional[int] = None,
+    ) -> None:
         self._storage_root = storage_root
         self._config_service = config_service
         self._jobs: Dict[str, JobRecord] = {}
         self._futures: Dict[str, Future[Any]] = {}
         self._lock = threading.RLock()
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
+        self._queue_limit = queue_limit if queue_limit is not None else max_workers * 4
+        if self._queue_limit < 1:
+            raise ValueError("queue_limit must be at least 1")
+        self._concurrency_guard = threading.BoundedSemaphore(max_workers)
         self._jobs_root = storage_root / "jobs"
         self._jobs_root.mkdir(parents=True, exist_ok=True)
         self._load_existing_jobs()
@@ -178,23 +194,39 @@ class JobManager:
         record.write_metadata()
         with self._lock:
             self._jobs[job_id] = record
+            active = sum(1 for future in self._futures.values() if not future.done())
+            if active >= self._queue_limit:
+                del self._jobs[job_id]
+                shutil.rmtree(workspace, ignore_errors=True)
+                raise JobQueueFull("Job queue is at capacity; try again later.")
             future = self._executor.submit(self._run_job, record, runner)
             self._futures[job_id] = future
+            future.add_done_callback(lambda _: self._cleanup_future(job_id))
         return record
 
     def _run_job(self, record: JobRecord, runner) -> None:
-        with JobContext(self, record) as ctx:
-            self.update_job(record.id, status="running", progress=0.02, message="Starting")
-            try:
-                runner(ctx)
-                with self._lock:
-                    current = self._jobs[record.id]
-                    if current.status == "running":
-                        ctx.finalize("succeeded")
-            except Exception as exc:  # pragma: no cover - defensive
-                ctx.log(f"Job failed: {exc}")
-                ctx.finalize("failed", error=str(exc))
-                raise
+        self._concurrency_guard.acquire()
+        try:
+            with JobContext(self, record) as ctx:
+                self.update_job(record.id, status="running", progress=0.02, message="Starting")
+                try:
+                    runner(ctx)
+                    with self._lock:
+                        current = self._jobs[record.id]
+                        if current.status == "running":
+                            ctx.finalize("succeeded")
+                except Exception as exc:  # pragma: no cover - defensive
+                    ctx.log(f"Job failed: {exc}")
+                    ctx.finalize("failed", error=str(exc))
+                    raise
+        finally:
+            self._concurrency_guard.release()
+
+    def _cleanup_future(self, job_id: str) -> None:
+        with self._lock:
+            future = self._futures.get(job_id)
+            if future and future.done():
+                del self._futures[job_id]
 
     def update_job(
         self,
