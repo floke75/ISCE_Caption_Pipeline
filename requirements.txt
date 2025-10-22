@@ -4,6 +4,11 @@
 pyyaml
 pandas
 
+# Control Center API dependencies
+fastapi
+uvicorn
+pydantic
+
 # ASR & Alignment Dependencies
 pysrt
 whisperx
