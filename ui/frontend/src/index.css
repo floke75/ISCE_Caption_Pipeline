@@ -56,6 +56,14 @@ pre {
   body {
     background: #0b1220;
   }
+
+  .path-browser {
+    background: rgba(30, 41, 59, 0.5);
+  }
+
+  .link {
+    color: #93c5fd;
+  }
 }
 
 .app {
@@ -197,6 +205,84 @@ pre {
 
 .form-field__label {
   font-weight: 600;
+}
+
+.path-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.path-picker__input {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.path-picker__input .form-field__input {
+  flex: 1 1 auto;
+}
+
+.path-picker__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.path-browser {
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.12);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 240px;
+}
+
+.path-browser__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: "JetBrains Mono", "Fira Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 13px;
+}
+
+.path-browser__controls {
+  display: flex;
+  gap: 8px;
+}
+
+.path-browser__body {
+  overflow-y: auto;
+}
+
+.path-browser__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.path-browser__divider {
+  height: 1px;
+  background: var(--card-border);
+  margin: 4px 0;
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+
+.link:hover {
+  text-decoration: underline;
 }
 
 .form-field__input {

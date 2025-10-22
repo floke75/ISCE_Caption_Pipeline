@@ -13,6 +13,7 @@ ui_data/
 # Frontend build artifacts
 ui/frontend/node_modules/
 ui/frontend/dist/
+ui/static/
 
 # IDE and OS files
 .vscode/

@@ -3,6 +3,7 @@ import { createInferenceJob, InferencePayload } from "../api";
 import { ConfigMap, JobRecord } from "../types";
 import Card from "./Card";
 import OverridesEditor from "./OverridesEditor";
+import PathPicker from "./PathPicker";
 
 interface InferenceFormProps {
   onJobCreated: (job: JobRecord) => void;
@@ -62,29 +63,24 @@ export function InferenceForm({ onJobCreated }: InferenceFormProps) {
       description="Generate ASR, enrich features, and produce SRT captions for a single media file."
     >
       <form className="form" onSubmit={handleSubmit}>
-        <label className="form-field">
-          <span className="form-field__label">Media file path</span>
-          <input
-            className="form-field__input"
-            type="text"
-            value={mediaPath}
-            onChange={(event) => setMediaPath(event.target.value)}
-            placeholder="/path/to/video.mp4"
-            required
-          />
-        </label>
-        <label className="form-field">
-          <span className="form-field__label">Transcript file path</span>
-          <input
-            className="form-field__input"
-            type="text"
-            value={transcriptPath}
-            onChange={(event) => setTranscriptPath(event.target.value)}
-            placeholder="/path/to/transcript.txt"
-            required={!asrOnlyMode}
-            disabled={asrOnlyMode}
-          />
-        </label>
+        <PathPicker
+          label="Media file path"
+          value={mediaPath}
+          onChange={setMediaPath}
+          placeholder="/path/to/video.mp4"
+          required
+          expect="file"
+        />
+        <PathPicker
+          label="Transcript file path"
+          value={transcriptPath}
+          onChange={setTranscriptPath}
+          placeholder="/path/to/transcript.txt"
+          required={!asrOnlyMode}
+          disabled={asrOnlyMode}
+          expect="file"
+          description={asrOnlyMode ? "Disabled while ASR-only mode is enabled." : undefined}
+        />
         <label className="form-field form-field--checkbox">
           <input
             type="checkbox"
@@ -94,16 +90,14 @@ export function InferenceForm({ onJobCreated }: InferenceFormProps) {
           <span>ASR-only mode (skip transcript alignment)</span>
         </label>
         <div className="form__grid">
-          <label className="form-field">
-            <span className="form-field__label">Custom output SRT path (optional)</span>
-            <input
-              className="form-field__input"
-              type="text"
-              value={outputPath}
-              onChange={(event) => setOutputPath(event.target.value)}
-              placeholder="/desired/output/file.srt"
-            />
-          </label>
+          <PathPicker
+            label="Custom output SRT path (optional)"
+            value={outputPath}
+            onChange={setOutputPath}
+            placeholder="/desired/output/file.srt"
+            expect="any"
+            description="Leave blank to store the result in the job artifacts folder."
+          />
           <label className="form-field">
             <span className="form-field__label">Output base name override</span>
             <input

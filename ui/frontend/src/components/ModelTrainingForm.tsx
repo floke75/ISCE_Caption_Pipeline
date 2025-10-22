@@ -3,6 +3,7 @@ import { createModelTrainingJob, ModelTrainingPayload } from "../api";
 import { ConfigMap, JobRecord } from "../types";
 import Card from "./Card";
 import OverridesEditor from "./OverridesEditor";
+import PathPicker from "./PathPicker";
 
 interface ModelTrainingFormProps {
   onJobCreated: (job: JobRecord) => void;
@@ -56,38 +57,29 @@ export function ModelTrainingForm({ onJobCreated }: ModelTrainingFormProps) {
       description="Run the iterative weighting loop on a corpus of enriched training files."
     >
       <form className="form" onSubmit={handleSubmit}>
-        <label className="form-field">
-          <span className="form-field__label">Training corpus directory</span>
-          <input
-            className="form-field__input"
-            type="text"
-            value={corpusDir}
-            onChange={(event) => setCorpusDir(event.target.value)}
-            placeholder="/path/to/corpus"
-            required
-          />
-        </label>
+        <PathPicker
+          label="Training corpus directory"
+          value={corpusDir}
+          onChange={setCorpusDir}
+          placeholder="/path/to/corpus"
+          required
+          expect="directory"
+        />
         <div className="form__grid">
-          <label className="form-field">
-            <span className="form-field__label">Constraints output path</span>
-            <input
-              className="form-field__input"
-              type="text"
-              value={constraintsOutput}
-              onChange={(event) => setConstraintsOutput(event.target.value)}
-              placeholder="Defaults to job workspace"
-            />
-          </label>
-          <label className="form-field">
-            <span className="form-field__label">Model weights output path</span>
-            <input
-              className="form-field__input"
-              type="text"
-              value={weightsOutput}
-              onChange={(event) => setWeightsOutput(event.target.value)}
-              placeholder="Defaults to job workspace"
-            />
-          </label>
+          <PathPicker
+            label="Constraints output path"
+            value={constraintsOutput}
+            onChange={setConstraintsOutput}
+            placeholder="Defaults to job workspace"
+            expect="any"
+          />
+          <PathPicker
+            label="Model weights output path"
+            value={weightsOutput}
+            onChange={setWeightsOutput}
+            placeholder="Defaults to job workspace"
+            expect="any"
+          />
         </div>
         <div className="form__grid">
           <label className="form-field">

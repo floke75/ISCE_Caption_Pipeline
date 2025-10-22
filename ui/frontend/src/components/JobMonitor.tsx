@@ -87,6 +87,7 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
                   <th>ID</th>
                   <th>Type</th>
                   <th>Status</th>
+                  <th>Queue</th>
                   <th>Stage</th>
                   <th>Progress</th>
                   <th>Started</th>
@@ -105,6 +106,7 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
                     <td>
                       <span className={statusClass(job.status)}>{job.status}</span>
                     </td>
+                    <td>{job.queuePosition && job.status === "pending" ? `#${job.queuePosition}` : "—"}</td>
                     <td>{job.stage ?? "—"}</td>
                     <td>
                       <div className="progress">
@@ -130,6 +132,12 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
                   <p>
                     <span className={statusClass(selectedJob.status)}>{selectedJob.status}</span>
                   </p>
+                  {selectedJob.queuePosition && selectedJob.status === "pending" && (
+                    <>
+                      <h4>Queue position</h4>
+                      <p>#{selectedJob.queuePosition}</p>
+                    </>
+                  )}
                   <h4>Stage</h4>
                   <p>{selectedJob.stage ?? "—"}</p>
                   {selectedJob.message && (

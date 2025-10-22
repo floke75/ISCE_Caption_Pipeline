@@ -1,6 +1,6 @@
-import { ConfigMap, ConfigResponse, JobRecord, LogChunk } from "./types";
+import { ConfigMap, ConfigResponse, FileEntry, JobRecord } from "./types";
 
-const API_BASE = "/api";
+export const API_BASE = "/api";
 
 function transformJob(data: any): JobRecord {
   return {
@@ -15,7 +15,8 @@ function transformJob(data: any): JobRecord {
     message: data.message ?? null,
     artifacts: Array.isArray(data.artifacts) ? data.artifacts : [],
     params: data.params ?? {},
-    result: data.result ?? {}
+    result: data.result ?? {},
+    queuePosition: typeof data.queue_position === "number" ? data.queue_position : null
   };
 }
 
@@ -102,10 +103,40 @@ export function createModelTrainingJob(payload: ModelTrainingPayload): Promise<J
   return postJob("/jobs/model-training", payload);
 }
 
-export async function fetchJobLog(jobId: string, offset: number): Promise<LogChunk> {
-  const res = await fetch(`${API_BASE}/jobs/${jobId}/log?offset=${offset}`);
+export interface BrowseResponse {
+  path: string;
+  parent: string | null;
+  entries: FileEntry[];
+}
+
+export async function browseEntries(path?: string): Promise<BrowseResponse> {
+  const url = new URL(`${API_BASE}/files/browse`, window.location.origin);
+  if (path) {
+    url.searchParams.set("path", path);
+  }
+  const res = await fetch(url.toString());
   if (!res.ok) {
-    throw new Error(`Failed to read logs for job ${jobId}`);
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail ?? `Unable to browse ${path ?? "filesystem"}`);
   }
   return res.json();
+}
+
+export async function validatePath(
+  path: string,
+  expect: "file" | "directory" | "any" = "any"
+): Promise<FileEntry> {
+  const res = await fetch(`${API_BASE}/files/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, expect })
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail ?? `Path validation failed (${res.status})`);
+  }
+  const payload = await res.json();
+  const segments = typeof payload.path === "string" ? payload.path.split(/[/\\]/) : [];
+  const name = segments.length ? segments[segments.length - 1] || payload.path : payload.path;
+  return { name, path: payload.path, type: payload.type };
 }

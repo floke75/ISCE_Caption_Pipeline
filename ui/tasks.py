@@ -3,9 +3,10 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from typing import Dict
 
 from .config_store import ConfigStore
-from .job_manager import JobManager, JobRecord
+from .job_manager import JobContext, JobManager, JobRecord
 from .schemas import InferenceRequest, ModelTrainingRequest, TrainingPairsRequest
 
 
@@ -22,6 +23,10 @@ class PipelineTasks:
         self._repo_root = Path(__file__).resolve().parent.parent
         self._python = sys.executable
 
+        self._jobs.register_handler("inference", self._handle_inference)
+        self._jobs.register_handler("training_pairs", self._handle_training_pairs)
+        self._jobs.register_handler("model_training", self._handle_model_training)
+
     def launch_inference(self, payload: InferenceRequest) -> JobRecord:
         params = {
             "mediaPath": str(payload.media_path),
@@ -30,7 +35,8 @@ class PipelineTasks:
             "outputBasename": payload.output_basename,
             "asrOnlyMode": payload.transcript_path is None,
         }
-        return self._jobs.start_job("inference", params, lambda ctx: self._run_inference(ctx, payload))
+        payload_dict = payload.model_dump(mode="json")
+        return self._jobs.start_job("inference", params, payload_dict)
 
     def launch_training_pairs(self, payload: TrainingPairsRequest) -> JobRecord:
         params = {
@@ -39,7 +45,8 @@ class PipelineTasks:
             "outputBasename": payload.output_basename,
             "asrOnlyMode": payload.asr_only_mode,
         }
-        return self._jobs.start_job("training_pairs", params, lambda ctx: self._run_training_pairs(ctx, payload))
+        payload_dict = payload.model_dump(mode="json")
+        return self._jobs.start_job("training_pairs", params, payload_dict)
 
     def launch_model_training(self, payload: ModelTrainingRequest) -> JobRecord:
         params = {
@@ -49,7 +56,20 @@ class PipelineTasks:
             "iterations": payload.iterations,
             "errorBoostFactor": payload.error_boost_factor,
         }
-        return self._jobs.start_job("model_training", params, lambda ctx: self._run_model_training(ctx, payload))
+        payload_dict = payload.model_dump(mode="json")
+        return self._jobs.start_job("model_training", params, payload_dict)
+
+    def _handle_inference(self, ctx: JobContext, payload: Dict[str, Any]) -> None:
+        request = InferenceRequest.model_validate(payload)
+        self._run_inference(ctx, request)
+
+    def _handle_training_pairs(self, ctx: JobContext, payload: Dict[str, Any]) -> None:
+        request = TrainingPairsRequest.model_validate(payload)
+        self._run_training_pairs(ctx, request)
+
+    def _handle_model_training(self, ctx: JobContext, payload: Dict[str, Any]) -> None:
+        request = ModelTrainingRequest.model_validate(payload)
+        self._run_model_training(ctx, request)
 
     def _run_inference(self, ctx, payload: InferenceRequest) -> None:
         if not payload.media_path.exists():

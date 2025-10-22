@@ -33,8 +33,13 @@ export function configsEqual(a: ConfigValue | undefined, b: ConfigValue | undefi
   if (a === b) {
     return true;
   }
-  if (typeof a === "number" && typeof b === "number") {
-    return Number.isNaN(a) && Number.isNaN(b);
+  if (
+    typeof a === "number" &&
+    typeof b === "number" &&
+    Number.isNaN(a) &&
+    Number.isNaN(b)
+  ) {
+    return true;
   }
   if (isObject(a) && isObject(b)) {
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);

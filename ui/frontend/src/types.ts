@@ -18,6 +18,7 @@ export interface JobRecord {
   artifacts: JobArtifact[];
   params: Record<string, unknown>;
   result: Record<string, unknown>;
+  queuePosition: number | null;
 }
 
 export type ConfigValue = string | number | boolean | null | ConfigMap;
@@ -30,8 +31,8 @@ export interface ConfigResponse {
   yaml: string;
 }
 
-export interface LogChunk {
-  content: string;
-  offset: number;
-  complete: boolean;
+export interface FileEntry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
 }

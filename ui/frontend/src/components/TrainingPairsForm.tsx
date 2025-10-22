@@ -3,6 +3,7 @@ import { createTrainingPairsJob, TrainingPairsPayload } from "../api";
 import { ConfigMap, JobRecord } from "../types";
 import Card from "./Card";
 import OverridesEditor from "./OverridesEditor";
+import PathPicker from "./PathPicker";
 
 interface TrainingPairsFormProps {
   onJobCreated: (job: JobRecord) => void;
@@ -54,28 +55,22 @@ export function TrainingPairsForm({ onJobCreated }: TrainingPairsFormProps) {
       description="Convert edited subtitles and aligned ASR into enriched training corpora."
     >
       <form className="form" onSubmit={handleSubmit}>
-        <label className="form-field">
-          <span className="form-field__label">Transcript (.srt) path</span>
-          <input
-            className="form-field__input"
-            type="text"
-            value={transcriptPath}
-            onChange={(event) => setTranscriptPath(event.target.value)}
-            placeholder="/path/to/program.srt"
-            required
-          />
-        </label>
-        <label className="form-field">
-          <span className="form-field__label">ASR reference (.json) path</span>
-          <input
-            className="form-field__input"
-            type="text"
-            value={asrReferencePath}
-            onChange={(event) => setAsrReferencePath(event.target.value)}
-            placeholder="/path/to/asr.visual.words.diar.json"
-            required
-          />
-        </label>
+        <PathPicker
+          label="Transcript (.srt) path"
+          value={transcriptPath}
+          onChange={setTranscriptPath}
+          placeholder="/path/to/program.srt"
+          required
+          expect="file"
+        />
+        <PathPicker
+          label="ASR reference (.json) path"
+          value={asrReferencePath}
+          onChange={setAsrReferencePath}
+          placeholder="/path/to/asr.visual.words.diar.json"
+          required
+          expect="file"
+        />
         <div className="form__grid">
           <label className="form-field">
             <span className="form-field__label">Output base name override</span>

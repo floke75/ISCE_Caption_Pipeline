@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { fetchJobLog } from "../api";
+import { API_BASE } from "../api";
 import { JobStatus } from "../types";
 
 interface LogViewerProps {
@@ -13,6 +13,7 @@ export function LogViewer({ jobId, status }: LogViewerProps) {
   const [error, setError] = useState<string | null>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const offsetRef = useRef(0);
+  const sourceRef = useRef<EventSource | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -20,39 +21,63 @@ export function LogViewer({ jobId, status }: LogViewerProps) {
     setComplete(false);
     setError(null);
     offsetRef.current = 0;
+    if (sourceRef.current) {
+      sourceRef.current.close();
+      sourceRef.current = null;
+    }
   }, [jobId]);
 
   useEffect(() => {
-    let cancelled = false;
-    let timer: number | undefined;
+    const url = `${API_BASE}/jobs/${jobId}/log/stream`;
+    const source = new EventSource(url);
+    sourceRef.current = source;
 
-    async function loadChunk() {
+    source.onmessage = (event) => {
       try {
-        const chunk = await fetchJobLog(jobId, offsetRef.current);
-        if (cancelled) {
-          return;
+        const payload = JSON.parse(event.data ?? "{}");
+        if (typeof payload.offset === "number") {
+          offsetRef.current = payload.offset;
         }
-        if (chunk.content) {
-          setContent((current) => current + chunk.content);
-          offsetRef.current = chunk.offset;
+        if (typeof payload.complete === "boolean") {
+          setComplete(payload.complete);
         }
-        setComplete(chunk.complete);
+        if (typeof payload.content === "string" && payload.content.length > 0) {
+          setContent((current) => current + payload.content);
+        }
+        setError(null);
       } catch (err) {
         setError((err as Error).message);
       }
-    }
+    };
 
-    loadChunk();
-    const interval = status === "running" && !complete ? 2000 : 4000;
-    timer = window.setInterval(loadChunk, interval);
+    const handleComplete = (event: MessageEvent) => {
+      try {
+        const payload = JSON.parse(event.data ?? "{}");
+        if (typeof payload.offset === "number") {
+          offsetRef.current = payload.offset;
+        }
+      } catch (err) {
+        setError((err as Error).message);
+      }
+      setComplete(true);
+      source.close();
+      sourceRef.current = null;
+    };
+
+    source.addEventListener("complete", handleComplete);
+
+    source.onerror = () => {
+      setError("Disconnected from log stream; attempting to reconnect…");
+    };
 
     return () => {
-      cancelled = true;
-      if (timer) {
-        window.clearInterval(timer);
+      source.removeEventListener("complete", handleComplete);
+      source.close();
+      if (sourceRef.current === source) {
+        sourceRef.current = null;
       }
     };
-  }, [jobId, status, complete]);
+  }, [jobId]);
 
   useEffect(() => {
     if (!autoScroll) {
@@ -96,7 +121,13 @@ export function LogViewer({ jobId, status }: LogViewerProps) {
         <pre>{content || "No log output yet."}</pre>
       </div>
       <footer className="log-viewer__footer">
-        {complete ? <span className="muted">Log capture complete.</span> : <span className="muted">Streaming logs…</span>}
+        {complete ? (
+          <span className="muted">Log capture complete.</span>
+        ) : (
+          <span className="muted">
+            {status === "running" ? "Streaming logs…" : "Waiting for log output…"}
+          </span>
+        )}
       </footer>
     </div>
   );
