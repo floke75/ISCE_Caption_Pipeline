@@ -137,7 +137,13 @@ export function ConfigPanel() {
                       ) : field.fieldType === 'number' ? (
                         <input
                           type="number"
-                          value={typeof value === 'number' ? value : value ?? ''}
+                          value={
+                            typeof value === 'number'
+                              ? value
+                              : typeof value === 'string'
+                              ? value
+                              : ''
+                          }
                           onChange={(event) => handleFieldChange(field, event.target.value)}
                         />
                       ) : field.fieldType === 'list' ? (
@@ -169,8 +175,8 @@ export function ConfigPanel() {
             </div>
           );
         })}
-        <button type="button" className="primary" onClick={handleStructuredSave} disabled={updateMutation.isLoading}>
-          {updateMutation.isLoading ? 'Saving…' : 'Save changes'}
+        <button type="button" className="primary" onClick={handleStructuredSave} disabled={updateMutation.isPending}>
+          {updateMutation.isPending ? 'Saving…' : 'Save changes'}
         </button>
       </div>
 
@@ -180,13 +186,13 @@ export function ConfigPanel() {
             <h2 className="section-title">Raw overrides</h2>
             <p className="section-subtitle">Edit or paste YAML overrides for full control.</p>
           </div>
-          <button type="button" className="ghost" onClick={handleResetOverrides} disabled={replaceMutation.isLoading}>
+          <button type="button" className="ghost" onClick={handleResetOverrides} disabled={replaceMutation.isPending}>
             Reset overrides
           </button>
         </div>
         <textarea value={yamlOverrides} onChange={(event) => setYamlOverrides(event.target.value)} />
-        <button type="button" className="primary" onClick={handleYamlSave} disabled={yamlMutation.isLoading}>
-          {yamlMutation.isLoading ? 'Saving…' : 'Save YAML'}
+        <button type="button" className="primary" onClick={handleYamlSave} disabled={yamlMutation.isPending}>
+          {yamlMutation.isPending ? 'Saving…' : 'Save YAML'}
         </button>
       </div>
     </div>

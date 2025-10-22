@@ -1,6 +1,7 @@
 """Utilities for loading, describing, and updating pipeline configuration."""
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, MutableMapping, Optional
@@ -75,6 +76,7 @@ class ConfigService:
         self._base_config_path = repo_root / "pipeline_config.yaml"
         self._overrides_path = storage_root / "config" / "pipeline_overrides.yaml"
         self._field_catalog = self._build_field_catalog()
+        self._field_map = {tuple(field.path): field for field in self._field_catalog}
 
     # ------------------------------------------------------------------
     # Public API
@@ -100,6 +102,16 @@ class ConfigService:
 
     def describe_fields(self) -> List[ConfigField]:
         return list(self._field_catalog)
+
+    def describe_tree(self) -> List[Dict[str, Any]]:
+        base = self.base_config()
+        effective = self.effective_config()
+        overrides = self.stored_overrides()
+        keys = sorted(set(base.keys()) | set(effective.keys()) | set(overrides.keys()))
+        return [
+            self._build_node([key], base.get(key), effective.get(key), overrides)
+            for key in keys
+        ]
 
     def save_overrides(self, overrides: Dict[str, Any]) -> None:
         cleaned = _prune_nulls(overrides)
@@ -223,6 +235,101 @@ class ConfigService:
                 advanced=True,
             ),
         ]
+
+    def _build_node(
+        self,
+        path: List[str],
+        default_value: Any,
+        current_value: Any,
+        overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        field = self._field_map.get(tuple(path))
+        value_type = self._determine_value_type(field, default_value, current_value)
+        description = field.description if field else None
+        options = field.options if field else None
+        advanced = field.advanced if field else False
+        children: List[Dict[str, Any]] = []
+
+        # If this is a mapping node, recursively describe children.
+        if value_type == "object":
+            default_mapping = default_value if isinstance(default_value, dict) else {}
+            current_mapping = current_value if isinstance(current_value, dict) else {}
+            override_mapping = self._value_at(overrides, path)
+            child_keys = sorted(
+                set(default_mapping.keys())
+                | set(current_mapping.keys())
+                | (set(override_mapping.keys()) if isinstance(override_mapping, dict) else set())
+            )
+            for child_key in child_keys:
+                children.append(
+                    self._build_node(
+                        path + [child_key],
+                        default_mapping.get(child_key),
+                        current_mapping.get(child_key),
+                        overrides,
+                    )
+                )
+
+        return {
+            "key": path[-1],
+            "path": path,
+            "label": field.label if field else self._humanize_label(path[-1]),
+            "valueType": value_type,
+            "description": description,
+            "default": deepcopy(default_value),
+            "current": deepcopy(current_value),
+            "options": options,
+            "advanced": advanced,
+            "overridden": self._has_override(overrides, path),
+            "children": children,
+        }
+
+    def _determine_value_type(
+        self, field: Optional[ConfigField], default_value: Any, current_value: Any
+    ) -> str:
+        if field:
+            mapping = {
+                "string": "string",
+                "number": "number",
+                "boolean": "boolean",
+                "path": "path",
+                "list": "list",
+                "select": "select",
+            }
+            if field.field_type in mapping:
+                return mapping[field.field_type]
+        candidate = current_value if current_value is not None else default_value
+        if isinstance(candidate, dict):
+            return "object"
+        if isinstance(candidate, bool):
+            return "boolean"
+        if isinstance(candidate, (int, float)) and not isinstance(candidate, bool):
+            return "number"
+        if isinstance(candidate, list):
+            return "list"
+        return "string"
+
+    def _humanize_label(self, key: str) -> str:
+        cleaned = key.replace("_", " ").strip()
+        if not cleaned:
+            return key
+        return cleaned[:1].upper() + cleaned[1:]
+
+    def _has_override(self, overrides: Dict[str, Any], path: List[str]) -> bool:
+        target: Any = overrides
+        for segment in path:
+            if not isinstance(target, dict) or segment not in target:
+                return False
+            target = target[segment]
+        return True
+
+    def _value_at(self, source: Dict[str, Any], path: List[str]) -> Any:
+        target: Any = source
+        for segment in path:
+            if not isinstance(target, dict) or segment not in target:
+                return {}
+            target = target[segment]
+        return target
 
     # Utilities used by the API layer
     def extract_values(self, config: Dict[str, Any]) -> Dict[str, Any]:

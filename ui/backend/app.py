@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterator, List, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from .config_service import ConfigField, ConfigService
 from .job_manager import JobManager, JobQueueFull
@@ -42,6 +42,22 @@ app.add_middleware(
 )
 
 
+class ConfigTreeNodeModel(BaseModel):
+    key: str
+    path: List[str]
+    label: str
+    value_type: str = Field(alias="valueType")
+    description: Optional[str] = None
+    default: Any = None
+    current: Any = None
+    options: Optional[List[Any]] = None
+    advanced: bool = False
+    overridden: bool = False
+    children: List["ConfigTreeNodeModel"] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class ConfigFieldModel(BaseModel):
     path: List[str]
     label: str
@@ -63,14 +79,16 @@ class ConfigFieldModel(BaseModel):
             advanced=field.advanced,
         )
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ConfigSnapshot(BaseModel):
     effective: Dict[str, Any]
     overrides: Dict[str, Any]
     fields: List[ConfigFieldModel]
+    config_schema: List[ConfigTreeNodeModel] = Field(alias="schema")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ConfigPatch(BaseModel):
@@ -85,6 +103,9 @@ class ConfigYamlUpdate(BaseModel):
     yaml: str
 
 
+ConfigTreeNodeModel.update_forward_refs()
+
+
 class JobModel(BaseModel):
     id: str
     job_type: str = Field(alias="jobType")
@@ -97,8 +118,7 @@ class JobModel(BaseModel):
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class InferenceJobRequest(BaseModel):
@@ -135,7 +155,8 @@ def get_pipeline_config() -> ConfigSnapshot:
     effective = config_service.effective_config()
     overrides = config_service.stored_overrides()
     fields = [ConfigFieldModel.from_field(f) for f in config_service.describe_fields()]
-    return ConfigSnapshot(effective=effective, overrides=overrides, fields=fields)
+    schema = [ConfigTreeNodeModel(**node) for node in config_service.describe_tree()]
+    return ConfigSnapshot(effective=effective, overrides=overrides, fields=fields, config_schema=schema)
 
 
 @app.put("/api/config/pipeline", response_model=ConfigSnapshot)

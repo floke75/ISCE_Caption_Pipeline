@@ -23,13 +23,23 @@ export interface ConfigField {
   advanced?: boolean;
 }
 
+export interface ConfigNode {
+  key: string;
+  path: string[];
+  label: string;
+  valueType: 'string' | 'number' | 'boolean' | 'path' | 'list' | 'select' | 'object';
+  description?: string;
+  default?: unknown;
+  current?: unknown;
+  options?: unknown[];
+  advanced?: boolean;
+  overridden?: boolean;
+  children?: ConfigNode[];
+}
+
 export interface PipelineConfigSnapshot {
   effective: Record<string, unknown>;
   overrides: Record<string, unknown>;
   fields: ConfigField[];
-}
-
-export interface OverrideEntry {
-  path: string;
-  value: string;
+  schema: ConfigNode[];
 }

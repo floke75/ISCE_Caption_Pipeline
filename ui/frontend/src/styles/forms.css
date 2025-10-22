@@ -83,3 +83,128 @@ button.ghost {
   font-size: 0.85rem;
   color: #94a3b8;
 }
+
+.override-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.override-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.override-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.override-branch {
+  border-left: 1px solid rgba(148, 163, 184, 0.25);
+  padding-left: 0.75rem;
+  color: #e2e8f0;
+}
+
+.override-branch > summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.override-branch summary::-webkit-details-marker {
+  display: none;
+}
+
+.override-branch-label::before {
+  content: '▸ ';
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+.override-branch[open] .override-branch-label::before {
+  content: '▾ ';
+}
+
+.override-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.override-leaf {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.override-leaf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.override-leaf-label {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.override-meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.override-error {
+  color: #f87171;
+  font-size: 0.8rem;
+}
+
+.override-preview {
+  margin: 0;
+  background: rgba(15, 23, 42, 0.85);
+  border-radius: 12px;
+  padding: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  max-height: 220px;
+  overflow: auto;
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.override-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.override-control {
+  display: flex;
+  align-items: center;
+}
+
+label.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #e2e8f0;
+}
+
+label.toggle input[type='checkbox'] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: #22d3ee;
+}

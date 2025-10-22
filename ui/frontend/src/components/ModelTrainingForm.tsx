@@ -3,7 +3,6 @@ import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import client from '../api/client';
 import { OverrideEditor } from './OverrideEditor';
-import { OverrideEntry } from '../types';
 import '../styles/forms.css';
 
 type Props = {
@@ -15,8 +14,8 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
   const [iterations, setIterations] = useState<number | ''>('');
   const [errorBoost, setErrorBoost] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
-  const [overrideEntries, setOverrideEntries] = useState<OverrideEntry[]>([]);
-  const [overrideObject, setOverrideObject] = useState<Record<string, unknown>>({});
+  const [overridePatch, setOverridePatch] = useState<Record<string, unknown>>({});
+  const [overrideInvalid, setOverrideInvalid] = useState(false);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -26,8 +25,8 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
       if (iterations !== '') payload.iterations = iterations;
       if (errorBoost !== '') payload.error_boost_factor = errorBoost;
       if (notes) payload.notes = notes;
-      if (overrideEntries.some((entry) => entry.path.trim())) {
-        payload.config_overrides = overrideObject;
+      if (Object.keys(overridePatch).length) {
+        payload.config_overrides = overridePatch;
       }
       const { data } = await client.post('/jobs/model-training', payload);
       return data;
@@ -47,12 +46,16 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
       toast.error('Corpus directory is required');
       return;
     }
+    if (overrideInvalid) {
+      toast.error('Resolve override validation errors before submitting');
+      return;
+    }
     mutation.mutate();
   };
 
-  const handleOverrideChange = useCallback((entries: OverrideEntry[], value: Record<string, unknown>) => {
-    setOverrideEntries(entries);
-    setOverrideObject(value);
+  const handleOverrideChange = useCallback((patch: Record<string, unknown>, hasErrors: boolean) => {
+    setOverridePatch(patch);
+    setOverrideInvalid(hasErrors);
   }, []);
 
   return (
@@ -89,9 +92,9 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
         <span>Operator notes</span>
         <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" />
       </label>
-      <OverrideEditor onChange={handleOverrideChange} value={overrideEntries} />
-      <button type="submit" className="primary" disabled={mutation.isLoading}>
-        {mutation.isLoading ? 'Submitting…' : 'Launch training run'}
+      <OverrideEditor onChange={handleOverrideChange} />
+      <button type="submit" className="primary" disabled={mutation.isPending}>
+        {mutation.isPending ? 'Submitting…' : 'Launch training run'}
       </button>
     </form>
   );
