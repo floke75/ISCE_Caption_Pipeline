@@ -52,13 +52,14 @@ class JobSummary(BaseModel):
     finished_at: Optional[datetime]
     result: Optional[Dict[str, Any]]
     metrics: Dict[str, Any]
+    workspace: str
+    cancel_requested: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class JobDetail(JobSummary):
     parameters: Dict[str, Any]
-    workspace: str
 
     @model_validator(mode="before")
     def _normalise_workspace(cls, values: Any) -> Any:

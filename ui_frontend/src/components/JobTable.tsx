@@ -6,6 +6,9 @@ interface JobTableProps {
   jobs: JobSummary[];
   selectedJobId?: string;
   onSelect(jobId: string): void;
+  onCopyWorkspace(job: JobSummary): void;
+  onCancel(job: JobSummary): void;
+  pendingCancelId?: string;
 }
 
 const statusLabel: Record<string, string> = {
@@ -15,7 +18,16 @@ const statusLabel: Record<string, string> = {
   failed: 'Failed',
 };
 
-export function JobTable({ jobs, selectedJobId, onSelect }: JobTableProps) {
+const cancellableStatuses = new Set(['pending', 'running']);
+
+export function JobTable({
+  jobs,
+  selectedJobId,
+  onSelect,
+  onCopyWorkspace,
+  onCancel,
+  pendingCancelId,
+}: JobTableProps) {
   return (
     <table className="job-table">
       <thead>
@@ -24,6 +36,7 @@ export function JobTable({ jobs, selectedJobId, onSelect }: JobTableProps) {
           <th>Status</th>
           <th>Progress</th>
           <th>Updated</th>
+          <th aria-label="Actions" />
         </tr>
       </thead>
       <tbody>
@@ -53,6 +66,44 @@ export function JobTable({ jobs, selectedJobId, onSelect }: JobTableProps) {
                 : job.started_at
                 ? formatDistanceToNow(job.started_at)
                 : formatDistanceToNow(job.created_at)}
+            </td>
+            <td className="job-actions">
+              <button
+                type="button"
+                className="row-action"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(job.id);
+                }}
+                title="Inspect job"
+              >
+                Inspect
+              </button>
+              <button
+                type="button"
+                className="row-action"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCopyWorkspace(job);
+                }}
+                title="Copy workspace path"
+              >
+                Copy path
+              </button>
+              <button
+                type="button"
+                className="row-action destructive"
+                disabled={
+                  !cancellableStatuses.has(job.status) || job.cancel_requested || pendingCancelId === job.id
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCancel(job);
+                }}
+                title={job.cancel_requested ? 'Cancellation requested' : 'Cancel job'}
+              >
+                {job.cancel_requested || pendingCancelId === job.id ? 'Cancelling…' : 'Cancel'}
+              </button>
             </td>
           </tr>
         ))}

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 
@@ -10,7 +11,7 @@ import yaml
 
 from run_pipeline import setup_directories
 from ui_server.config_service import PipelineConfigService, ModelConfigService, _deep_merge
-from ui_server.job_manager import JobContext
+from ui_server.job_manager import JobContext, JobCancelledError
 from ui_server.path_validation import require_path
 from ui_server.schemas import (
     InferenceJobRequest,
@@ -30,6 +31,7 @@ def _stream_command(
     command: Iterable[Any],
     cwd: Path,
     log_file: Path,
+    cancel_event: threading.Event | None = None,
 ) -> None:
     cmd = [str(item) for item in command]
     env = os.environ.copy()
@@ -47,13 +49,27 @@ def _stream_command(
             env=env,
         )
         assert process.stdout is not None
-        for line in process.stdout:
-            handle.write(line)
+        try:
+            for line in process.stdout:
+                if cancel_event and cancel_event.is_set():
+                    process.terminate()
+                    process.wait(timeout=5)
+                    raise JobCancelledError("Command cancelled")
+                handle.write(line)
+                handle.flush()
+            process.wait()
             handle.flush()
-        process.wait()
-        handle.flush()
-        if process.returncode != 0:
-            raise CommandError(f"Command {' '.join(cmd)} failed with exit code {process.returncode}")
+            if cancel_event and cancel_event.is_set():
+                process.terminate()
+                process.wait(timeout=5)
+                raise JobCancelledError("Command cancelled")
+            if process.returncode != 0:
+                raise CommandError(
+                    f"Command {' '.join(cmd)} failed with exit code {process.returncode}"
+                )
+        finally:
+            if process.stdout:
+                process.stdout.close()
 
 def _resolve_placeholders(config: Dict[str, Any]) -> Dict[str, Any]:
     """Resolve template placeholders in the config using top-level context."""
@@ -147,6 +163,7 @@ def run_inference_job(
         pipeline_service, workspace, request.pipeline_overrides
     )
     model_config_path = _prepare_model_config(model_service, workspace, request.model_overrides)
+    context.raise_if_cancelled()
 
     inputs_dir = workspace / "inputs"
     inputs_dir.mkdir(exist_ok=True)
@@ -166,6 +183,7 @@ def run_inference_job(
         transcript_name = media_dst.stem + transcript_src.suffix
         transcript_dst = Path(pipeline_config["txt_placement_folder"]) / transcript_name
         shutil.copy2(transcript_src, transcript_dst)
+        context.raise_if_cancelled()
 
     stages = [
         (
@@ -202,7 +220,8 @@ def run_inference_job(
 
     for index, (stage, command) in enumerate(stages, start=1):
         context.update(stage=stage, progress=(index - 1) / len(stages))
-        _stream_command(command, REPO_ROOT, log_file)
+        context.raise_if_cancelled()
+        _stream_command(command, REPO_ROOT, log_file, context.cancel_event)
         context.update(progress=index / len(stages))
 
     final_srt = Path(pipeline_config["output_dir"]) / f"{media_dst.stem}.srt"
@@ -268,6 +287,7 @@ def run_training_pair_job(
     pipeline_config, pipeline_config_path = _prepare_pipeline_config(
         pipeline_service, workspace, request.pipeline_overrides
     )
+    context.raise_if_cancelled()
 
     inputs_dir = workspace / "inputs"
     inputs_dir.mkdir(exist_ok=True)
@@ -279,6 +299,7 @@ def run_training_pair_job(
     srt_dst = Path(pipeline_config["srt_placement_folder"]) / srt_src.name
     shutil.copy2(media_src, media_dst)
     shutil.copy2(srt_src, srt_dst)
+    context.raise_if_cancelled()
 
     stages = [
         (
@@ -313,7 +334,8 @@ def run_training_pair_job(
 
     for index, (stage, command) in enumerate(stages, start=1):
         context.update(stage=stage, progress=(index - 1) / len(stages))
-        _stream_command(command, REPO_ROOT, log_file)
+        context.raise_if_cancelled()
+        _stream_command(command, REPO_ROOT, log_file, context.cancel_event)
         context.update(progress=index / len(stages))
 
     training_file = Path(pipeline_config["intermediate_dir"]) / "_training" / f"{srt_dst.stem}.train.words.json"
@@ -349,6 +371,7 @@ def run_model_training_job(
     context.update(stage="preparing", progress=0.05)
 
     model_config_path = _prepare_model_config(model_service, workspace, request.model_overrides)
+    context.raise_if_cancelled()
 
     corpus_dir = require_path(
         request.corpus_dir,
@@ -380,6 +403,7 @@ def run_model_training_job(
     )
     constraints_path.parent.mkdir(parents=True, exist_ok=True)
     weights_path.parent.mkdir(parents=True, exist_ok=True)
+    context.raise_if_cancelled()
 
     command = [
         "python",
@@ -398,7 +422,8 @@ def run_model_training_job(
         request.error_boost_factor,
     ]
     context.update(stage="Training model", progress=0.1)
-    _stream_command(command, REPO_ROOT, log_file)
+    context.raise_if_cancelled()
+    _stream_command(command, REPO_ROOT, log_file, context.cancel_event)
     context.update(progress=1.0)
 
     return {

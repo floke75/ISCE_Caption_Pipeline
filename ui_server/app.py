@@ -58,6 +58,8 @@ def _job_summary(record) -> JobSummary:
         finished_at=record.finished_at,
         result=record.result,
         metrics=record.metrics,
+        workspace=str(record.workspace),
+        cancel_requested=record.cancel_requested,
     )
 
 
@@ -102,6 +104,22 @@ def get_job(job_id: str) -> JobDetail:
     if not record:
         raise HTTPException(status_code=404, detail="Job not found")
     return _job_detail(record)
+
+
+@app.post("/api/jobs/{job_id}/cancel", response_model=JobDetail)
+def cancel_job(job_id: str) -> JobDetail:
+    record = job_manager.get_job(job_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if record.status in {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}:
+        raise HTTPException(status_code=409, detail="Job can no longer be cancelled")
+    cancelled = job_manager.cancel_job(job_id)
+    if not cancelled:
+        raise HTTPException(status_code=409, detail="Job could not be cancelled")
+    updated = job_manager.get_job(job_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _job_detail(updated)
 
 
 @app.get("/api/jobs/{job_id}/logs", response_model=LogChunk)

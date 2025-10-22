@@ -17,6 +17,10 @@ class JobStatus(str):
     CANCELLED = "cancelled"
 
 
+class JobCancelledError(RuntimeError):
+    """Raised when a job is cancelled by the operator."""
+
+
 @dataclass
 class JobRecord:
     id: str
@@ -35,16 +39,25 @@ class JobRecord:
     log_path: Path = field(default_factory=Path)
     workspace: Path = field(default_factory=Path)
     metrics: Dict[str, Any] = field(default_factory=dict)
+    cancel_requested: bool = False
 
 
 class JobContext:
-    def __init__(self, manager: "JobManager", job_id: str) -> None:
+    def __init__(self, manager: "JobManager", job_id: str, cancel_event: threading.Event) -> None:
         self._manager = manager
         self._job_id = job_id
+        self._cancel_event = cancel_event
 
     @property
     def job_id(self) -> str:
         return self._job_id
+
+    def is_cancelled(self) -> bool:
+        return self._cancel_event.is_set()
+
+    def raise_if_cancelled(self) -> None:
+        if self.is_cancelled():
+            raise JobCancelledError("Job cancelled by operator")
 
     def update(self, *, progress: Optional[float] = None, stage: Optional[str] = None,
                message: Optional[str] = None, metrics: Optional[Dict[str, Any]] = None) -> None:
@@ -65,6 +78,10 @@ class JobContext:
             raise RuntimeError("Job context is no longer available")
         return job.workspace
 
+    @property
+    def cancel_event(self) -> threading.Event:
+        return self._cancel_event
+
     def log_path(self) -> Path:
         job = self._manager.get_job(self._job_id)
         if not job:
@@ -79,6 +96,7 @@ class JobManager:
         self._jobs_root = self._runtime_root / "jobs"
         self._jobs_root.mkdir(parents=True, exist_ok=True)
         self._jobs: Dict[str, JobRecord] = {}
+        self._cancel_events: Dict[str, threading.Event] = {}
         self._lock = threading.RLock()
         self._semaphore = threading.BoundedSemaphore(max_workers)
         self._load_jobs()
@@ -106,6 +124,7 @@ class JobManager:
         workspace = self._jobs_root / job_id
         workspace.mkdir(parents=True, exist_ok=True)
         log_path = workspace / "job.log"
+        cancel_event = threading.Event()
         record = JobRecord(
             id=job_id,
             job_type=job_type,
@@ -116,39 +135,73 @@ class JobManager:
         )
         with self._lock:
             self._jobs[job_id] = record
+            self._cancel_events[job_id] = cancel_event
             self._save_job(record)
-        thread = threading.Thread(target=self._run_job, args=(record.id, runner), daemon=True)
+        thread = threading.Thread(
+            target=self._run_job,
+            args=(record.id, runner, cancel_event),
+            daemon=True,
+        )
         thread.start()
         return copy_job(record)
 
-    def _run_job(self, job_id: str, runner: callable[[JobContext], Dict[str, Any]]) -> None:
-        context = JobContext(self, job_id)
-        with self._semaphore:
-            self.update_job(
-                job_id,
-                status=JobStatus.RUNNING,
-                started_at=datetime.utcnow(),
-                stage="initialising",
-            )
-            try:
-                result = runner(context)
-            except Exception as exc:  # pylint: disable=broad-except
+    def _run_job(
+        self,
+        job_id: str,
+        runner: callable[[JobContext], Dict[str, Any]],
+        cancel_event: threading.Event,
+    ) -> None:
+        context = JobContext(self, job_id, cancel_event)
+        try:
+            with self._semaphore:
+                if cancel_event.is_set():
+                    self.update_job(
+                        job_id,
+                        status=JobStatus.CANCELLED,
+                        finished_at=datetime.utcnow(),
+                        stage="cancelled",
+                        message="Job cancelled before start.",
+                    )
+                    return
                 self.update_job(
                     job_id,
-                    status=JobStatus.FAILED,
-                    finished_at=datetime.utcnow(),
-                    error=str(exc),
+                    status=JobStatus.RUNNING,
+                    started_at=datetime.utcnow(),
+                    stage="initialising",
                 )
-                context.log(f"[ERROR] {exc}")
-                return
-            self.update_job(
-                job_id,
-                status=JobStatus.COMPLETED,
-                finished_at=datetime.utcnow(),
-                progress=1.0,
-                stage="completed",
-                result=result,
-            )
+                try:
+                    context.raise_if_cancelled()
+                    result = runner(context)
+                except JobCancelledError:
+                    self.update_job(
+                        job_id,
+                        status=JobStatus.CANCELLED,
+                        finished_at=datetime.utcnow(),
+                        stage="cancelled",
+                        message="Job cancelled by operator.",
+                    )
+                    context.log("[INFO] Job cancelled by operator.")
+                    return
+                except Exception as exc:  # pylint: disable=broad-except
+                    self.update_job(
+                        job_id,
+                        status=JobStatus.FAILED,
+                        finished_at=datetime.utcnow(),
+                        error=str(exc),
+                    )
+                    context.log(f"[ERROR] {exc}")
+                    return
+                self.update_job(
+                    job_id,
+                    status=JobStatus.COMPLETED,
+                    finished_at=datetime.utcnow(),
+                    progress=1.0,
+                    stage="completed",
+                    result=result,
+                )
+        finally:
+            with self._lock:
+                self._cancel_events.pop(job_id, None)
 
     def update_job(
         self,
@@ -233,6 +286,7 @@ class JobManager:
                 log_path=workspace / "job.log",
                 workspace=workspace,
                 metrics=data.get("metrics", {}),
+                cancel_requested=bool(data.get("cancel_requested", False)),
             )
             if record.status in {JobStatus.RUNNING, JobStatus.PENDING}:
                 record.status = JobStatus.CANCELLED
@@ -269,10 +323,31 @@ class JobManager:
             "error": record.error,
             "metrics": record.metrics,
             "workspace": self._relative_workspace(record.workspace),
+            "cancel_requested": record.cancel_requested,
         }
         meta_path = record.workspace / "job.json"
         with meta_path.open("w", encoding="utf-8") as handle:
             json.dump(metadata, handle, default=_json_default, indent=2)
+
+    def cancel_job(self, job_id: str) -> bool:
+        with self._lock:
+            record = self._jobs.get(job_id)
+            if not record:
+                return False
+            if record.status in {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}:
+                return False
+            record.cancel_requested = True
+            record.message = "Cancellation requested by operator."
+            cancel_event = self._cancel_events.get(job_id)
+            if cancel_event:
+                cancel_event.set()
+            if record.status == JobStatus.PENDING:
+                record.status = JobStatus.CANCELLED
+                record.finished_at = datetime.utcnow()
+                record.stage = "cancelled"
+            self._save_job(record)
+            self.append_log(job_id, "Cancellation requested by operator.")
+            return True
 
     def _relative_workspace(self, workspace: Path) -> str:
         try:
@@ -301,6 +376,7 @@ def copy_job(record: Optional[JobRecord]) -> Optional[JobRecord]:
         log_path=record.log_path,
         workspace=record.workspace,
         metrics=record.metrics.copy(),
+        cancel_requested=record.cancel_requested,
     )
 
 

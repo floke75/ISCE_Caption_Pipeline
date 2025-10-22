@@ -23,6 +23,8 @@ export interface JobSummary {
   finished_at?: string | null;
   result?: Record<string, unknown> | null;
   metrics: Record<string, unknown>;
+  workspace: string;
+  cancel_requested: boolean;
 }
 
 export interface JobDetail extends JobSummary {
@@ -37,6 +39,11 @@ export const fetchJobs = async (): Promise<JobSummary[]> => {
 
 export const fetchJob = async (jobId: string): Promise<JobDetail> => {
   const { data } = await api.get(`/api/jobs/${jobId}`);
+  return data;
+};
+
+export const cancelJob = async (jobId: string): Promise<JobDetail> => {
+  const { data } = await api.post(`/api/jobs/${jobId}/cancel`);
   return data;
 };
 
