@@ -16,7 +16,8 @@ function transformJob(data: any): JobRecord {
     artifacts: Array.isArray(data.artifacts) ? data.artifacts : [],
     params: data.params ?? {},
     result: data.result ?? {},
-    queuePosition: typeof data.queue_position === "number" ? data.queue_position : null
+    queuePosition: typeof data.queue_position === "number" ? data.queue_position : null,
+    workspacePath: typeof data.workspace_path === "string" ? data.workspace_path : null
   };
 }
 
@@ -101,6 +102,16 @@ export function createTrainingPairsJob(payload: TrainingPairsPayload): Promise<J
 
 export function createModelTrainingJob(payload: ModelTrainingPayload): Promise<JobRecord> {
   return postJob("/jobs/model-training", payload);
+}
+
+export async function cancelJob(jobId: string): Promise<JobRecord> {
+  const res = await fetch(`${API_BASE}/jobs/${jobId}/cancel`, { method: "POST" });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail ?? `Failed to cancel job (${res.status})`);
+  }
+  const payload = await res.json();
+  return transformJob(payload);
 }
 
 export interface BrowseResponse {

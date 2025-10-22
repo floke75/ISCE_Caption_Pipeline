@@ -63,6 +63,7 @@ class JobResponse(BaseModel):
     params: Dict[str, Any]
     result: Dict[str, Any]
     queue_position: Optional[int] = Field(default=None, alias="queue_position")
+    workspace_path: Optional[str] = Field(default=None, alias="workspace_path")
 
 
 class LogChunk(BaseModel):
@@ -203,6 +204,17 @@ def create_training_pairs_job(payload: TrainingPairsRequest) -> JobResponse:
         record = tasks.launch_training_pairs(payload)
     except queue.Full as exc:
         raise HTTPException(status_code=429, detail="Job queue is full, try again later") from exc
+    return JobResponse(**record.to_dict())
+
+
+@app.post("/api/jobs/{job_id}/cancel", response_model=JobResponse)
+def cancel_job(job_id: str) -> JobResponse:
+    try:
+        record = job_manager.cancel(job_id)
+    except KeyError as exc:  # noqa: PERF203
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+    except ValueError as exc:  # noqa: PERF203
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return JobResponse(**record.to_dict())
 
 

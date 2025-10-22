@@ -55,6 +55,7 @@ class JobRecord:
         }
         if self.queue_position is not None:
             data["queue_position"] = self.queue_position
+        data["workspace_path"] = str(self.workspace) if self.workspace else None
         return data
 
     def to_metadata(self) -> Dict[str, Any]:
@@ -276,6 +277,10 @@ class JobManager:
             record = self._jobs.get(job_id)
             if not record:
                 return
+            if record.status in {JobStatus.CANCELLED, JobStatus.COMPLETED, JobStatus.FAILED}:
+                record.queue_position = None
+                self._persist_record(record)
+                return
             handler = self._handlers.get(record.job_type)
             if handler is None:
                 record.status = JobStatus.FAILED
@@ -318,6 +323,22 @@ class JobManager:
             record.progress = 1.0
             record.queue_position = None
             self._persist_record(record)
+
+    def cancel(self, job_id: str) -> JobRecord:
+        with self._lock:
+            if job_id not in self._jobs:
+                raise KeyError(job_id)
+            record = self._jobs[job_id]
+            if record.status != JobStatus.PENDING:
+                raise ValueError("Job is no longer pending and cannot be cancelled")
+            record.status = JobStatus.CANCELLED
+            record.finished_at = datetime.utcnow()
+            record.message = "Cancelled by user"
+            record.queue_position = None
+            if job_id in self._pending_order:
+                self._pending_order.remove(job_id)
+            self._persist_record(record)
+            return record
 
     def list_jobs(self) -> List[JobRecord]:
         with self._lock:

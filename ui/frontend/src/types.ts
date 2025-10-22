@@ -19,6 +19,7 @@ export interface JobRecord {
   params: Record<string, unknown>;
   result: Record<string, unknown>;
   queuePosition: number | null;
+  workspacePath: string | null;
 }
 
 export type ConfigValue = string | number | boolean | null | ConfigMap;

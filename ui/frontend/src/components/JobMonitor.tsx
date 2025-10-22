@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import type { MouseEvent } from "react";
+import { cancelJob } from "../api";
 import { JobRecord } from "../types";
 import Card from "./Card";
 import LogViewer from "./LogViewer";
@@ -53,6 +55,8 @@ function copyToClipboard(text: string) {
 
 export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [pendingCancelId, setPendingCancelId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jobs.length) {
@@ -66,6 +70,34 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
 
   const selectedJob = useMemo(() => jobs.find((job) => job.id === selectedJobId) ?? null, [jobs, selectedJobId]);
 
+  const handleCancel = async (event: MouseEvent<HTMLButtonElement>, job: JobRecord) => {
+    event.stopPropagation();
+    if (job.status !== "pending") {
+      setActionError("Only pending jobs can be cancelled.");
+      return;
+    }
+    setActionError(null);
+    setPendingCancelId(job.id);
+    try {
+      await cancelJob(job.id);
+      onRefresh();
+    } catch (err) {
+      setActionError((err as Error).message);
+    } finally {
+      setPendingCancelId(null);
+    }
+  };
+
+  const handleCopyWorkspace = (event: MouseEvent<HTMLButtonElement>, job: JobRecord) => {
+    event.stopPropagation();
+    if (!job.workspacePath) {
+      setActionError("Workspace path is not available yet.");
+      return;
+    }
+    setActionError(null);
+    copyToClipboard(job.workspacePath);
+  };
+
   return (
     <Card
       title="Job monitor"
@@ -78,6 +110,7 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
     >
       <div className="job-monitor">
         <div className="job-monitor__list">
+          {actionError && <div className="form__message form__message--error">{actionError}</div>}
           {jobs.length === 0 ? (
             <p className="muted">No jobs yet. Launch an inference, training pair, or training run to populate history.</p>
           ) : (
@@ -92,6 +125,7 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
                   <th>Progress</th>
                   <th>Started</th>
                   <th>Duration</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,6 +150,26 @@ export function JobMonitor({ jobs, onRefresh }: JobMonitorProps) {
                     </td>
                     <td>{formatDate(job.startedAt)}</td>
                     <td>{formatDuration(job)}</td>
+                    <td>
+                      <div className="job-table__actions">
+                        <button
+                          type="button"
+                          className="button button--tiny"
+                          disabled={job.status !== "pending" || pendingCancelId === job.id}
+                          onClick={(event) => handleCancel(event, job)}
+                        >
+                          {pendingCancelId === job.id ? "Cancelling…" : "Cancel"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--tiny button--secondary"
+                          onClick={(event) => handleCopyWorkspace(event, job)}
+                          disabled={!job.workspacePath}
+                        >
+                          Copy path
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
