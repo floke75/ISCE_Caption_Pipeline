@@ -291,7 +291,7 @@ def run_training_pair_job(
         _stream_command(command, REPO_ROOT, log_file)
         context.update(progress=index / len(stages))
 
-    training_file = Path(pipeline_config["intermediate_dir"]) / "_training" / f"{media_dst.stem}.train.words.json"
+    training_file = Path(pipeline_config["intermediate_dir"]) / "_training" / f"{srt_dst.stem}.train.words.json"
     delivered_to = None
     if request.output_directory:
         target_dir = Path(request.output_directory).expanduser().resolve()
