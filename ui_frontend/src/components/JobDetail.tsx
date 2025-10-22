@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { JobDetail as JobDetailType } from '../lib/api';
-import { useJobLogs } from '../hooks/useJobLogs';
+import { LogStreamStatus, useJobLogs } from '../hooks/useJobLogs';
 import { formatDistanceToNow } from '../lib/time';
 
 interface JobDetailProps {
@@ -8,7 +8,14 @@ interface JobDetailProps {
 }
 
 export function JobDetail({ job }: JobDetailProps) {
-  const { log, refresh, isFetching } = useJobLogs(job?.id);
+  const { log, status: logStatus, error: logError, reconnect } = useJobLogs(job?.id);
+
+  const statusText: Record<LogStreamStatus, string> = {
+    idle: 'Idle',
+    streaming: 'Streaming…',
+    complete: 'Stream closed',
+    error: 'Disconnected',
+  };
 
   const parameterText = useMemo(() => {
     if (!job) return '';
@@ -86,7 +93,15 @@ export function JobDetail({ job }: JobDetailProps) {
       <div className="detail-card">
         <div className="log-toolbar">
           <h3 style={{ margin: 0 }}>Live Log</h3>
-          <button onClick={() => refresh()}>{isFetching ? 'Refreshing…' : 'Refresh'}</button>
+          <div className="log-status">
+            <span className={`log-status-label ${logStatus}`}>{statusText[logStatus]}</span>
+            {logError && <span className="log-status-error">{logError}</span>}
+            {logStatus === 'error' && (
+              <button type="button" onClick={reconnect}>
+                Reconnect
+              </button>
+            )}
+          </div>
         </div>
         <div className="log-viewer">{log || 'Log output will appear here once the job starts.'}</div>
       </div>

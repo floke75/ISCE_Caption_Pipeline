@@ -304,6 +304,35 @@ button {
   margin-bottom: 0.5rem;
 }
 
+.log-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.log-status-label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.log-status-label.streaming {
+  color: #34d399;
+}
+
+.log-status-label.complete {
+  color: #cbd5f5;
+}
+
+.log-status-label.error {
+  color: #f87171;
+}
+
+.log-status-error {
+  font-size: 0.8rem;
+  color: #fca5a5;
+}
+
 .log-toolbar button {
   border: none;
   background: rgba(148, 163, 184, 0.15);

@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 export const api = axios.create({
-  baseURL,
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -37,14 +37,6 @@ export const fetchJobs = async (): Promise<JobSummary[]> => {
 
 export const fetchJob = async (jobId: string): Promise<JobDetail> => {
   const { data } = await api.get(`/api/jobs/${jobId}`);
-  return data;
-};
-
-export const fetchJobLogs = async (
-  jobId: string,
-  offset = 0
-): Promise<{ content: string; next_offset: number }> => {
-  const { data } = await api.get(`/api/jobs/${jobId}/logs`, { params: { offset } });
   return data;
 };
 

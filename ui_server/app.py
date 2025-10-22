@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 
 from ui_server.config_service import ModelConfigService, PipelineConfigService
-from ui_server.job_manager import JobManager
+from ui_server.job_manager import JobManager, JobStatus
 from ui_server.pipeline_runner import (
     run_inference_job,
     run_model_training_job,
@@ -106,6 +108,45 @@ def get_job_logs(job_id: str, offset: int = Query(0, ge=0)) -> LogChunk:
         raise HTTPException(status_code=404, detail="Job not found")
     chunk = job_manager.read_log(job_id, offset=offset)
     return LogChunk(**chunk)
+
+
+@app.get("/api/jobs/{job_id}/logs/stream")
+async def stream_job_logs(job_id: str, offset: int = Query(0, ge=0)) -> StreamingResponse:
+    record = job_manager.get_job(job_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    terminal_states = {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}
+
+    async def event_source() -> Any:
+        nonlocal offset
+        while True:
+            chunk = job_manager.read_log(job_id, offset)
+            content = chunk.get("content", "")
+            next_offset = chunk.get("next_offset", offset)
+            if content:
+                offset = next_offset
+                payload = json.dumps({"type": "log", "content": content, "offset": offset})
+                yield f"data: {payload}\n\n"
+                continue
+
+            offset = next_offset
+            current = job_manager.get_job(job_id)
+            if not current:
+                payload = json.dumps({"type": "status", "status": "missing", "offset": offset})
+                yield f"data: {payload}\n\n"
+                break
+
+            if current.status in terminal_states:
+                payload = json.dumps({"type": "status", "status": current.status, "offset": offset})
+                yield f"data: {payload}\n\n"
+                break
+
+            await asyncio.sleep(1.0)
+            yield ": keep-alive\n\n"
+
+    headers = {"Cache-Control": "no-cache"}
+    return StreamingResponse(event_source(), media_type="text/event-stream", headers=headers)
 
 
 @app.post("/api/jobs/inference", response_model=JobDetail, status_code=201)

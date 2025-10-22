@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -75,9 +76,12 @@ class JobManager:
     def __init__(self, runtime_root: Path, max_workers: int = 3) -> None:
         self._runtime_root = runtime_root
         self._runtime_root.mkdir(parents=True, exist_ok=True)
+        self._jobs_root = self._runtime_root / "jobs"
+        self._jobs_root.mkdir(parents=True, exist_ok=True)
         self._jobs: Dict[str, JobRecord] = {}
         self._lock = threading.RLock()
         self._semaphore = threading.BoundedSemaphore(max_workers)
+        self._load_jobs()
 
     @property
     def runtime_root(self) -> Path:
@@ -99,7 +103,7 @@ class JobManager:
         runner: callable[[JobContext], Dict[str, Any]],
     ) -> JobRecord:
         job_id = uuid.uuid4().hex
-        workspace = self._runtime_root / "jobs" / job_id
+        workspace = self._jobs_root / job_id
         workspace.mkdir(parents=True, exist_ok=True)
         log_path = workspace / "job.log"
         record = JobRecord(
@@ -112,6 +116,7 @@ class JobManager:
         )
         with self._lock:
             self._jobs[job_id] = record
+            self._save_job(record)
         thread = threading.Thread(target=self._run_job, args=(record.id, runner), daemon=True)
         thread.start()
         return copy_job(record)
@@ -181,6 +186,7 @@ class JobManager:
                 record.started_at = started_at
             if finished_at:
                 record.finished_at = finished_at
+            self._save_job(record)
 
     def append_log(self, job_id: str, text: str) -> None:
         job = self._jobs.get(job_id)
@@ -199,6 +205,80 @@ class JobManager:
             content = handle.read()
             next_offset = handle.tell()
         return {"content": content, "next_offset": next_offset}
+
+    def _load_jobs(self) -> None:
+        for meta_path in self._jobs_root.glob("*/job.json"):
+            try:
+                with meta_path.open("r", encoding="utf-8") as handle:
+                    data = json.load(handle)
+            except (OSError, json.JSONDecodeError):
+                continue
+            job_id = data.get("id") or meta_path.parent.name
+            workspace = self._resolve_workspace(data.get("workspace"), job_id)
+            workspace.mkdir(parents=True, exist_ok=True)
+            record = JobRecord(
+                id=job_id,
+                job_type=data.get("job_type", "unknown"),
+                name=data.get("name", job_id),
+                parameters=data.get("parameters", {}),
+                status=data.get("status", JobStatus.PENDING),
+                created_at=_parse_datetime(data.get("created_at")) or datetime.utcnow(),
+                started_at=_parse_datetime(data.get("started_at")),
+                finished_at=_parse_datetime(data.get("finished_at")),
+                progress=float(data.get("progress", 0.0)),
+                stage=data.get("stage"),
+                message=data.get("message"),
+                result=data.get("result"),
+                error=data.get("error"),
+                log_path=workspace / "job.log",
+                workspace=workspace,
+                metrics=data.get("metrics", {}),
+            )
+            if record.status in {JobStatus.RUNNING, JobStatus.PENDING}:
+                record.status = JobStatus.CANCELLED
+                record.message = "Job state reset after server restart."
+                if not record.finished_at:
+                    record.finished_at = datetime.utcnow()
+            with self._lock:
+                self._jobs[job_id] = record
+                self._save_job(record)
+
+    def _resolve_workspace(self, stored: Optional[str], job_id: str) -> Path:
+        if stored:
+            path = Path(stored)
+            if not path.is_absolute():
+                return (self._runtime_root / path).resolve()
+            return path
+        return self._jobs_root / job_id
+
+    def _save_job(self, record: JobRecord) -> None:
+        record.workspace.mkdir(parents=True, exist_ok=True)
+        metadata = {
+            "id": record.id,
+            "job_type": record.job_type,
+            "name": record.name,
+            "parameters": record.parameters,
+            "status": record.status,
+            "created_at": record.created_at.isoformat(),
+            "started_at": record.started_at.isoformat() if record.started_at else None,
+            "finished_at": record.finished_at.isoformat() if record.finished_at else None,
+            "progress": record.progress,
+            "stage": record.stage,
+            "message": record.message,
+            "result": record.result,
+            "error": record.error,
+            "metrics": record.metrics,
+            "workspace": self._relative_workspace(record.workspace),
+        }
+        meta_path = record.workspace / "job.json"
+        with meta_path.open("w", encoding="utf-8") as handle:
+            json.dump(metadata, handle, default=_json_default, indent=2)
+
+    def _relative_workspace(self, workspace: Path) -> str:
+        try:
+            return str(workspace.relative_to(self._runtime_root))
+        except ValueError:
+            return str(workspace)
 
 
 def copy_job(record: Optional[JobRecord]) -> Optional[JobRecord]:
@@ -222,3 +302,18 @@ def copy_job(record: Optional[JobRecord]) -> Optional[JobRecord]:
         workspace=record.workspace,
         metrics=record.metrics.copy(),
     )
+
+
+def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _json_default(value: Any) -> str:
+    if isinstance(value, Path):
+        return str(value)
+    return str(value)
