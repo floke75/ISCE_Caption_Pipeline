@@ -1,4 +1,4 @@
-# C:\dev\Captions_Formatter\Formatter_machine\requirements.txt
+# C:\\dev\\Captions_Formatter\\Formatter_machine\\requirements.txt
 
 # Core ISCE dependencies
 pyyaml
@@ -10,6 +10,12 @@ whisperx
 pyannote.audio
 ffmpeg-python
 rapidfuzz
+
+# Web UI server
+fastapi
+uvicorn
+starlette
+pydantic
 
 # SpaCy and its Swedish model
 spacy
