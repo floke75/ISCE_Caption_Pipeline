@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import YAML from 'yaml';
-import { usePipelineConfig, useReplaceConfig, useUpdateConfig, useUpdateConfigYaml } from '../hooks/useConfig';
-import { ConfigField } from '../types';
+import {
+  usePipelineConfig,
+  useReplaceConfig,
+  useSegmentationConfig,
+  useUpdateConfig,
+  useUpdateConfigYaml,
+} from '../hooks/useConfig';
+import { ConfigField, ConfigSnapshot } from '../types';
 import '../styles/forms.css';
 
 function getValueFromPath(source: Record<string, unknown>, path: string[]): unknown {
@@ -17,39 +23,56 @@ function areEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function ConfigPanel() {
-  const { data, isLoading } = usePipelineConfig();
-  const updateMutation = useUpdateConfig();
-  const replaceMutation = useReplaceConfig();
-  const yamlMutation = useUpdateConfigYaml();
+interface ConfigEditorProps {
+  label: string;
+  summary: string;
+  snapshot?: ConfigSnapshot;
+  isLoading: boolean;
+  updateMutation: ReturnType<typeof useUpdateConfig>;
+  replaceMutation: ReturnType<typeof useReplaceConfig>;
+  yamlMutation: ReturnType<typeof useUpdateConfigYaml>;
+}
 
+function ConfigEditor({
+  label,
+  summary,
+  snapshot,
+  isLoading,
+  updateMutation,
+  replaceMutation,
+  yamlMutation,
+}: ConfigEditorProps) {
   const [formValues, setFormValues] = useState<Record<string, unknown>>({});
   const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
   const [yamlOverrides, setYamlOverrides] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
-    if (!data) return;
+    if (!snapshot) return;
     const values: Record<string, unknown> = {};
-    data.fields.forEach((field) => {
+    snapshot.fields.forEach((field) => {
       const dotted = field.path.join('.');
-      values[dotted] = getValueFromPath(data.effective as Record<string, unknown>, field.path);
+      values[dotted] = getValueFromPath(snapshot.effective as Record<string, unknown>, field.path);
     });
     setFormValues(values);
     setInitialValues(values);
-    setYamlOverrides(data.overrides && Object.keys(data.overrides).length ? YAML.stringify(data.overrides) : '# no overrides');
-  }, [data]);
+    setYamlOverrides(
+      snapshot.overrides && Object.keys(snapshot.overrides).length
+        ? YAML.stringify(snapshot.overrides)
+        : '# no overrides'
+    );
+  }, [snapshot]);
 
   const groupedFields = useMemo(() => {
-    if (!data) return new Map<string, ConfigField[]>();
+    if (!snapshot) return new Map<string, ConfigField[]>();
     const map = new Map<string, ConfigField[]>();
-    data.fields.forEach((field) => {
+    snapshot.fields.forEach((field) => {
       const arr = map.get(field.section) ?? [];
       arr.push(field);
       map.set(field.section, arr);
     });
     return map;
-  }, [data]);
+  }, [snapshot]);
 
   const handleFieldChange = (field: ConfigField, raw: unknown) => {
     const dotted = field.path.join('.');
@@ -99,12 +122,16 @@ export function ConfigPanel() {
     yamlMutation.mutate(yamlOverrides);
   };
 
-  if (isLoading || !data) {
+  if (isLoading || !snapshot) {
     return <div className="form-card">Loading configuration…</div>;
   }
 
   return (
-    <div className="config-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div className="config-editor" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div>
+        <h2 className="section-title">{label}</h2>
+        <p className="section-subtitle">{summary}</p>
+      </div>
       <div className="form-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
@@ -195,6 +222,81 @@ export function ConfigPanel() {
           {yamlMutation.isPending ? 'Saving…' : 'Save YAML'}
         </button>
       </div>
+    </div>
+  );
+}
+
+type ConfigTab = 'pipeline' | 'segmentation';
+
+type ConfigTabState = {
+  label: string;
+  summary: string;
+  query: ReturnType<typeof usePipelineConfig>;
+  update: ReturnType<typeof useUpdateConfig>;
+  replace: ReturnType<typeof useReplaceConfig>;
+  yaml: ReturnType<typeof useUpdateConfigYaml>;
+};
+
+export function ConfigPanel() {
+  const [activeTab, setActiveTab] = useState<ConfigTab>('pipeline');
+
+  const pipelineQuery = usePipelineConfig();
+  const segmentationQuery = useSegmentationConfig();
+
+  const pipelineUpdate = useUpdateConfig('pipeline');
+  const segmentationUpdate = useUpdateConfig('segmentation');
+
+  const pipelineReplace = useReplaceConfig('pipeline');
+  const segmentationReplace = useReplaceConfig('segmentation');
+
+  const pipelineYaml = useUpdateConfigYaml('pipeline');
+  const segmentationYaml = useUpdateConfigYaml('segmentation');
+
+  const tabs: Record<ConfigTab, ConfigTabState> = {
+    pipeline: {
+      label: 'Pipeline configuration',
+      summary: 'Paths, stage toggles, and orchestration defaults for the ingestion pipeline.',
+      query: pipelineQuery,
+      update: pipelineUpdate,
+      replace: pipelineReplace,
+      yaml: pipelineYaml,
+    },
+    segmentation: {
+      label: 'Segmentation model configuration',
+      summary: 'Beam search knobs, stylistic sliders, and model asset paths for segmentation.',
+      query: segmentationQuery,
+      update: segmentationUpdate,
+      replace: segmentationReplace,
+      yaml: segmentationYaml,
+    },
+  };
+
+  const active = tabs[activeTab];
+
+  return (
+    <div className="config-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div className="config-tabs">
+        {(Object.keys(tabs) as ConfigTab[]).map((tabKey) => (
+          <button
+            key={tabKey}
+            type="button"
+            className={tabKey === activeTab ? 'config-tab active' : 'config-tab'}
+            onClick={() => setActiveTab(tabKey)}
+          >
+            {tabs[tabKey].label}
+          </button>
+        ))}
+      </div>
+      <ConfigEditor
+        key={activeTab}
+        label={active.label}
+        summary={active.summary}
+        snapshot={active.query.data}
+        isLoading={active.query.isLoading}
+        updateMutation={active.update}
+        replaceMutation={active.replace}
+        yamlMutation={active.yaml}
+      />
     </div>
   );
 }

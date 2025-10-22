@@ -69,13 +69,22 @@ def _ensure_parent(path: Path) -> None:
 
 
 class ConfigService:
-    """Loads the pipeline configuration and exposes metadata for the UI."""
+    """Loads a configuration document and exposes metadata for the UI."""
 
-    def __init__(self, repo_root: Path, storage_root: Path) -> None:
+    def __init__(
+        self,
+        repo_root: Path,
+        storage_root: Path,
+        *,
+        base_config_path: Optional[Path] = None,
+        overrides_path: Optional[Path] = None,
+        field_catalog: Optional[Iterable[ConfigField]] = None,
+    ) -> None:
         self._repo_root = repo_root
-        self._base_config_path = repo_root / "pipeline_config.yaml"
-        self._overrides_path = storage_root / "config" / "pipeline_overrides.yaml"
-        self._field_catalog = self._build_field_catalog()
+        self._base_config_path = base_config_path or (repo_root / "pipeline_config.yaml")
+        self._overrides_path = overrides_path or (storage_root / "config" / "pipeline_overrides.yaml")
+        catalog = list(field_catalog) if field_catalog is not None else self._build_field_catalog()
+        self._field_catalog = catalog
         self._field_map = {tuple(field.path): field for field in self._field_catalog}
 
     # ------------------------------------------------------------------
@@ -354,4 +363,103 @@ class ConfigService:
                 cursor = cursor.setdefault(part, {})
             cursor[parts[-1]] = value
         return patch
+
+
+def build_segmentation_field_catalog() -> List[ConfigField]:
+    """Field metadata for the segmentation (model) configuration."""
+
+    return [
+        ConfigField(
+            path=["beam_width"],
+            section="Beam search",
+            label="Beam width",
+            field_type="number",
+            description="Number of parallel hypotheses explored during segmentation.",
+        ),
+        ConfigField(
+            path=["constraints", "min_block_duration_s"],
+            section="Constraints",
+            label="Minimum block duration (s)",
+            field_type="number",
+        ),
+        ConfigField(
+            path=["constraints", "max_block_duration_s"],
+            section="Constraints",
+            label="Maximum block duration (s)",
+            field_type="number",
+        ),
+        ConfigField(
+            path=["constraints", "line_length_soft_target"],
+            section="Constraints",
+            label="Line length soft target",
+            field_type="number",
+        ),
+        ConfigField(
+            path=["constraints", "line_length_hard_limit"],
+            section="Constraints",
+            label="Line length hard limit",
+            field_type="number",
+        ),
+        ConfigField(
+            path=["constraints", "min_chars_for_single_word_block"],
+            section="Constraints",
+            label="Min chars for single-word block",
+            field_type="number",
+            description="Shortest caption length allowed when a block contains only one word.",
+        ),
+        ConfigField(
+            path=["sliders", "flow"],
+            section="Stylistic sliders",
+            label="Flow weight",
+            field_type="number",
+            description="Multiplier for rhythm-focused statistical weights.",
+        ),
+        ConfigField(
+            path=["sliders", "density"],
+            section="Stylistic sliders",
+            label="Density weight",
+            field_type="number",
+        ),
+        ConfigField(
+            path=["sliders", "balance"],
+            section="Stylistic sliders",
+            label="Balance weight",
+            field_type="number",
+        ),
+        ConfigField(
+            path=["sliders", "line_length_leniency"],
+            section="Stylistic sliders",
+            label="Line length leniency",
+            field_type="number",
+            description=">1.0 allows longer lines before applying penalties.",
+        ),
+        ConfigField(
+            path=["sliders", "orphan_leniency"],
+            section="Stylistic sliders",
+            label="Orphan leniency",
+            field_type="number",
+            description=">1.0 strengthens penalties for orphan words.",
+        ),
+        ConfigField(
+            path=["sliders", "structure_boost"],
+            section="Stylistic sliders",
+            label="Structure boost",
+            field_type="number",
+            description="Additive boost for structural cues like speaker changes.",
+        ),
+        ConfigField(
+            path=["paths", "model_weights"],
+            section="Model assets",
+            label="Model weights path",
+            field_type="path",
+            description="Relative path to the segmentation model weights JSON.",
+        ),
+        ConfigField(
+            path=["paths", "constraints"],
+            section="Model assets",
+            label="Constraints path",
+            field_type="path",
+            description="Relative path to the fallback constraints JSON.",
+        ),
+    ]
 

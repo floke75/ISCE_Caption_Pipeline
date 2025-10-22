@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ConfigDict
 
 from .api.routes.files import FileBrowser, create_file_router
-from .config_service import ConfigField, ConfigService
+from .config_service import ConfigField, ConfigService, build_segmentation_field_catalog
 from .job_manager import JobCancellationError, JobManager, JobQueueFull
 from . import pipelines
 
@@ -26,8 +26,20 @@ queue_limit = int(queue_limit_env) if queue_limit_env else None
 if max_workers < 1:
     raise ValueError("PIPELINE_MAX_CONCURRENT_JOBS must be at least 1")
 
-config_service = ConfigService(REPO_ROOT, STORAGE_ROOT)
-job_manager = JobManager(STORAGE_ROOT, config_service, max_workers=max_workers, queue_limit=queue_limit)
+pipeline_config_service = ConfigService(REPO_ROOT, STORAGE_ROOT)
+segmentation_config_service = ConfigService(
+    REPO_ROOT,
+    STORAGE_ROOT,
+    base_config_path=REPO_ROOT / "config.yaml",
+    overrides_path=STORAGE_ROOT / "config" / "segmentation_overrides.yaml",
+    field_catalog=build_segmentation_field_catalog(),
+)
+job_manager = JobManager(
+    STORAGE_ROOT,
+    pipeline_config_service,
+    max_workers=max_workers,
+    queue_limit=queue_limit,
+)
 
 
 def _slugify(value: str) -> str:
@@ -155,6 +167,14 @@ ConfigTreeNodeModel.update_forward_refs()
 app.include_router(create_file_router(file_browser))
 
 
+def _snapshot_for(service: ConfigService) -> ConfigSnapshot:
+    effective = service.effective_config()
+    overrides = service.stored_overrides()
+    fields = [ConfigFieldModel.from_field(f) for f in service.describe_fields()]
+    schema = [ConfigTreeNodeModel(**node) for node in service.describe_tree()]
+    return ConfigSnapshot(effective=effective, overrides=overrides, fields=fields, config_schema=schema)
+
+
 class JobModel(BaseModel):
     id: str
     job_type: str = Field(alias="jobType")
@@ -202,23 +222,19 @@ def healthcheck() -> Dict[str, str]:
 
 @app.get("/api/config/pipeline", response_model=ConfigSnapshot)
 def get_pipeline_config() -> ConfigSnapshot:
-    effective = config_service.effective_config()
-    overrides = config_service.stored_overrides()
-    fields = [ConfigFieldModel.from_field(f) for f in config_service.describe_fields()]
-    schema = [ConfigTreeNodeModel(**node) for node in config_service.describe_tree()]
-    return ConfigSnapshot(effective=effective, overrides=overrides, fields=fields, config_schema=schema)
+    return _snapshot_for(pipeline_config_service)
 
 
 @app.put("/api/config/pipeline", response_model=ConfigSnapshot)
 def update_pipeline_config(payload: ConfigPatch) -> ConfigSnapshot:
-    patch = config_service.build_patch(payload.updates)
-    config_service.apply_patch(patch)
+    patch = pipeline_config_service.build_patch(payload.updates)
+    pipeline_config_service.apply_patch(patch)
     return get_pipeline_config()
 
 
 @app.put("/api/config/pipeline/replace", response_model=ConfigSnapshot)
 def replace_pipeline_config(payload: ConfigReplace) -> ConfigSnapshot:
-    config_service.save_overrides(payload.overrides)
+    pipeline_config_service.save_overrides(payload.overrides)
     return get_pipeline_config()
 
 
@@ -226,7 +242,7 @@ def replace_pipeline_config(payload: ConfigReplace) -> ConfigSnapshot:
 def get_pipeline_config_yaml() -> Dict[str, str]:
     import yaml
 
-    overrides = config_service.stored_overrides()
+    overrides = pipeline_config_service.stored_overrides()
     return {"yaml": yaml.safe_dump(overrides, allow_unicode=True, sort_keys=False)}
 
 
@@ -242,8 +258,50 @@ def update_pipeline_config_yaml(payload: ConfigYamlUpdate) -> ConfigSnapshot:
         overrides = {}
     if not isinstance(overrides, dict):
         raise HTTPException(status_code=400, detail="YAML payload must represent a mapping")
-    config_service.save_overrides(overrides)
+    pipeline_config_service.save_overrides(overrides)
     return get_pipeline_config()
+
+
+@app.get("/api/config/segmentation", response_model=ConfigSnapshot)
+def get_segmentation_config() -> ConfigSnapshot:
+    return _snapshot_for(segmentation_config_service)
+
+
+@app.put("/api/config/segmentation", response_model=ConfigSnapshot)
+def update_segmentation_config(payload: ConfigPatch) -> ConfigSnapshot:
+    patch = segmentation_config_service.build_patch(payload.updates)
+    segmentation_config_service.apply_patch(patch)
+    return get_segmentation_config()
+
+
+@app.put("/api/config/segmentation/replace", response_model=ConfigSnapshot)
+def replace_segmentation_config(payload: ConfigReplace) -> ConfigSnapshot:
+    segmentation_config_service.save_overrides(payload.overrides)
+    return get_segmentation_config()
+
+
+@app.get("/api/config/segmentation/raw")
+def get_segmentation_config_yaml() -> Dict[str, str]:
+    import yaml
+
+    overrides = segmentation_config_service.stored_overrides()
+    return {"yaml": yaml.safe_dump(overrides, allow_unicode=True, sort_keys=False)}
+
+
+@app.put("/api/config/segmentation/raw", response_model=ConfigSnapshot)
+def update_segmentation_config_yaml(payload: ConfigYamlUpdate) -> ConfigSnapshot:
+    import yaml
+
+    try:
+        overrides = yaml.safe_load(payload.yaml) if payload.yaml.strip() else {}
+    except yaml.YAMLError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}") from exc
+    if overrides is None:
+        overrides = {}
+    if not isinstance(overrides, dict):
+        raise HTTPException(status_code=400, detail="YAML payload must represent a mapping")
+    segmentation_config_service.save_overrides(overrides)
+    return get_segmentation_config()
 
 
 def _serialize_job(record) -> JobModel:

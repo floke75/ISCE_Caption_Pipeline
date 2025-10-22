@@ -38,7 +38,7 @@ export interface ConfigNode {
   children?: ConfigNode[];
 }
 
-export interface PipelineConfigSnapshot {
+export interface ConfigSnapshot {
   effective: Record<string, unknown>;
   overrides: Record<string, unknown>;
   fields: ConfigField[];
