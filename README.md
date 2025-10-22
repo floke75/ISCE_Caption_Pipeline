@@ -96,6 +96,44 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 *   `configs/`: Directory for user-editable YAML configuration files.
 *   `models/`: Directory to store your trained model artifacts (`model_weights.json`, `constraints.json`).
 
+## Web control center
+
+In addition to the CLI orchestrator, the repository now ships with a full-stack control surface that exposes the most common
+operations (inference, training data generation, model training, and configuration management) through a browser-based
+interface.
+
+### Backend API
+
+The API is implemented with FastAPI in `ui/backend`. It wraps the existing pipeline scripts, launches each run inside an
+isolated workspace under `ui_data/jobs/<job-id>/`, and streams stdout/stderr into per-job log files so long jobs can be
+monitored safely. Configuration updates are persisted in `ui_data/config/pipeline_overrides.yaml` and merged with the base
+`pipeline_config.yaml` at runtime.
+
+Start the API with:
+
+```bash
+uvicorn ui.backend.app:app --host 0.0.0.0 --port 8000
+```
+
+### Frontend SPA
+
+The React + TypeScript single-page application lives in `ui/frontend`. It provides:
+
+* Tabbed forms for inference, training pair generation, and model training, each with per-run override editors.
+* A structured configuration editor backed by typed field metadata plus a raw YAML override view.
+* A live job monitor with status pills, progress bars, detailed parameters/results panes, and log viewers with clipboard
+  shortcuts.
+
+To run the development server:
+
+```bash
+cd ui/frontend
+npm install
+npm run dev
+```
+
+By default the frontend expects the FastAPI backend on `http://localhost:8000` and proxies API calls via the `/api` prefix.
+
 ## Setup & Installation
 
 1.  **Prerequisites:**

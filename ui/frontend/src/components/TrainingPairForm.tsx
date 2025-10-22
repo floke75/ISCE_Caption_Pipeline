@@ -1,0 +1,82 @@
+import { FormEvent, useCallback, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import client from '../api/client';
+import { OverrideEditor } from './OverrideEditor';
+import { OverrideEntry } from '../types';
+import '../styles/forms.css';
+
+type Props = {
+  onJobCreated: () => void;
+};
+
+export function TrainingPairForm({ onJobCreated }: Props) {
+  const [mediaPath, setMediaPath] = useState('');
+  const [srtPath, setSrtPath] = useState('');
+  const [notes, setNotes] = useState('');
+  const [overrideEntries, setOverrideEntries] = useState<OverrideEntry[]>([]);
+  const [overrideObject, setOverrideObject] = useState<Record<string, unknown>>({});
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const payload: Record<string, unknown> = {
+        media_path: mediaPath,
+        srt_path: srtPath,
+      };
+      if (notes) payload.notes = notes;
+      if (overrideEntries.some((entry) => entry.path.trim())) {
+        payload.config_overrides = overrideObject;
+      }
+      const { data } = await client.post('/jobs/training-pair', payload);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Training-pair job queued');
+      onJobCreated();
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.detail ?? 'Failed to queue training data job');
+    },
+  });
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!mediaPath.trim() || !srtPath.trim()) {
+      toast.error('Media and SRT paths are required');
+      return;
+    }
+    mutation.mutate();
+  };
+
+  const handleOverrideChange = useCallback((entries: OverrideEntry[], value: Record<string, unknown>) => {
+    setOverrideEntries(entries);
+    setOverrideObject(value);
+  }, []);
+
+  return (
+    <form onSubmit={handleSubmit} className="form-card">
+      <div>
+        <h2 className="section-title">Build training pair</h2>
+        <p className="section-subtitle">Generate enriched training JSON from an SRT file and matching media.</p>
+      </div>
+      <div className="form-grid">
+        <label className="field">
+          <span>Media file path *</span>
+          <input type="text" value={mediaPath} onChange={(event) => setMediaPath(event.target.value)} placeholder="/data/media.mp4" />
+        </label>
+        <label className="field">
+          <span>SRT file path *</span>
+          <input type="text" value={srtPath} onChange={(event) => setSrtPath(event.target.value)} placeholder="/data/captions.srt" />
+        </label>
+      </div>
+      <label className="field">
+        <span>Operator notes</span>
+        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Context for this corpus artifact" />
+      </label>
+      <OverrideEditor onChange={handleOverrideChange} value={overrideEntries} />
+      <button type="submit" className="primary" disabled={mutation.isLoading}>
+        {mutation.isLoading ? 'Submitting…' : 'Launch training-pair job'}
+      </button>
+    </form>
+  );
+}
