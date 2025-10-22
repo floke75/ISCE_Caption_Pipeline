@@ -124,6 +124,7 @@ def build_training_steps(workspace: Path, config: Dict[str, object], params: Dic
 
     constraints_path = output_dir / "constraints.json"
     weights_path = output_dir / "model_weights.json"
+    config_path = workspace / "pipeline_config.yaml"
 
     return [
         JobStep(
@@ -138,7 +139,7 @@ def build_training_steps(workspace: Path, config: Dict[str, object], params: Dic
                 "--weights",
                 str(weights_path),
                 "--config",
-                str(project_root / "config.yaml"),
+                str(config_path),
                 "--iterations",
                 iterations,
                 "--error-boost-factor",
