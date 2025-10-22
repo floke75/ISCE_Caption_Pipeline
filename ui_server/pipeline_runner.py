@@ -52,6 +52,25 @@ def _stream_command(
         if process.returncode != 0:
             raise CommandError(f"Command {' '.join(cmd)} failed with exit code {process.returncode}")
 
+def _resolve_placeholders(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve template placeholders in the config using top-level context."""
+
+    context = {k: v for k, v in config.items() if isinstance(v, str)}
+
+    def _resolve(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {k: _resolve(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [_resolve(v) for v in value]
+        if isinstance(value, str) and "{" in value and "}" in value:
+            try:
+                return value.format(**context)
+            except KeyError:
+                return value
+        return value
+
+    return _resolve(config)
+
 
 def _prepare_pipeline_config(
     pipeline_service: PipelineConfigService,
@@ -59,7 +78,7 @@ def _prepare_pipeline_config(
     overrides: Dict[str, Any] | None = None,
 ) -> Tuple[Dict[str, Any], Path]:
     overrides = overrides or {}
-    base_config = pipeline_service.load()
+    base_config = pipeline_service.load(resolved=False)
     merged = _deep_merge(base_config, overrides)
     merged["project_root"] = str(REPO_ROOT)
     pipeline_root = workspace / "pipeline"
@@ -84,6 +103,7 @@ def _prepare_pipeline_config(
     (dirs["intermediate_dir"] / "_inference_input").mkdir(parents=True, exist_ok=True)
     (dirs["intermediate_dir"] / "_training").mkdir(parents=True, exist_ok=True)
 
+    merged = _resolve_placeholders(merged)
     setup_directories(merged)
 
     pipeline_config_path = workspace / "pipeline_config.yaml"
