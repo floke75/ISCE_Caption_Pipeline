@@ -2,6 +2,8 @@
 
 # Core ISCE dependencies
 pyyaml
+uvicorn[standard]
+fastapi
 pandas
 
 # ASR & Alignment Dependencies
