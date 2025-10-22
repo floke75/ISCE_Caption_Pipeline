@@ -18,6 +18,14 @@ from .config_service import ConfigService, _recursive_update
 JobStatus = Literal["pending", "running", "succeeded", "failed", "cancelled"]
 
 
+class JobCancelled(Exception):
+    """Raised when a running job should stop due to cancellation."""
+
+
+class JobCancellationError(RuntimeError):
+    """Raised when a cancellation request cannot be fulfilled."""
+
+
 @dataclass
 class JobRecord:
     """Represents a background pipeline execution."""
@@ -89,6 +97,10 @@ class JobContext:
         record.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log_file = record.log_path.open("a", encoding="utf-8")
 
+    def _ensure_not_cancelled(self) -> None:
+        if self._manager.is_cancelled(self.record.id):
+            raise JobCancelled()
+
     def log(self, message: str) -> None:
         timestamp = datetime.utcnow().isoformat()
         line = f"[{timestamp}] {message}\n"
@@ -118,17 +130,31 @@ class JobContext:
             with self._log_lock:
                 self._log_file.write(line)
                 self._log_file.flush()
+            if self._manager.is_cancelled(self.record.id):
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:  # pragma: no cover - defensive
+                    process.kill()
+                    process.wait()
+                with self._log_lock:
+                    self._log_file.flush()
+                raise JobCancelled()
         process.stdout.close()
         process.wait()
+        if self._manager.is_cancelled(self.record.id):
+            raise JobCancelled()
         if process.returncode != 0:
             raise RuntimeError(f"Command failed with exit code {process.returncode}: {display}")
         with self._log_lock:
             self._log_file.flush()
 
     def update(self, *, progress: Optional[float] = None, message: Optional[str] = None) -> None:
+        self._ensure_not_cancelled()
         self._manager.update_job(self.record.id, progress=progress, message=message)
 
     def effective_config(self, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        self._ensure_not_cancelled()
         return self._manager.prepare_runtime_config(self.record, overrides or {})
 
     def finalize(self, status: JobStatus, *, result: Optional[Dict[str, Any]] = None, error: Optional[str] = None) -> None:
@@ -172,6 +198,7 @@ class JobManager:
         self._concurrency_guard = threading.BoundedSemaphore(max_workers)
         self._jobs_root = storage_root / "jobs"
         self._jobs_root.mkdir(parents=True, exist_ok=True)
+        self._cancel_events: Dict[str, threading.Event] = {}
         self._load_existing_jobs()
 
     # ------------------------------------------------------------------
@@ -192,12 +219,14 @@ class JobManager:
             log_path=workspace / "job.log",
         )
         record.write_metadata()
+        self._cancel_events[job_id] = threading.Event()
         with self._lock:
             self._jobs[job_id] = record
             active = sum(1 for future in self._futures.values() if not future.done())
             if active >= self._queue_limit:
                 del self._jobs[job_id]
                 shutil.rmtree(workspace, ignore_errors=True)
+                del self._cancel_events[job_id]
                 raise JobQueueFull("Job queue is at capacity; try again later.")
             future = self._executor.submit(self._run_job, record, runner)
             self._futures[job_id] = future
@@ -215,6 +244,10 @@ class JobManager:
                         current = self._jobs[record.id]
                         if current.status == "running":
                             ctx.finalize("succeeded")
+                except JobCancelled:
+                    self._append_log(record, "Job cancelled by user")
+                    self.finalize_job(record.id, status="cancelled")
+                    self.update_job(record.id, message="Cancelled")
                 except Exception as exc:  # pragma: no cover - defensive
                     ctx.log(f"Job failed: {exc}")
                     ctx.finalize("failed", error=str(exc))
@@ -227,6 +260,12 @@ class JobManager:
             future = self._futures.get(job_id)
             if future and future.done():
                 del self._futures[job_id]
+
+    def _append_log(self, record: JobRecord, message: str) -> None:
+        timestamp = datetime.utcnow().isoformat()
+        record.log_path.parent.mkdir(parents=True, exist_ok=True)
+        with record.log_path.open("a", encoding="utf-8") as fh:
+            fh.write(f"[{timestamp}] {message}\n")
 
     def update_job(
         self,
@@ -263,6 +302,32 @@ class JobManager:
             record.progress = 1.0 if status == "succeeded" else record.progress
             record.updated_at = datetime.utcnow()
             record.write_metadata()
+            if status in {"succeeded", "failed", "cancelled"}:
+                self._cancel_events.pop(job_id, None)
+
+    def is_cancelled(self, job_id: str) -> bool:
+        event = self._cancel_events.get(job_id)
+        return event.is_set() if event else False
+
+    def cancel_job(self, job_id: str) -> JobRecord:
+        with self._lock:
+            if job_id not in self._jobs:
+                raise KeyError(job_id)
+            record = self._jobs[job_id]
+            if record.status in {"succeeded", "failed", "cancelled"}:
+                raise JobCancellationError(f"Job already {record.status}")
+            cancel_event = self._cancel_events.setdefault(job_id, threading.Event())
+            cancel_event.set()
+            record.message = "Cancellation requested"
+            record.updated_at = datetime.utcnow()
+            record.write_metadata()
+            self._append_log(record, "Cancellation requested by user")
+            future = self._futures.get(job_id)
+        if future and future.cancel():
+            self.finalize_job(job_id, status="cancelled")
+            self.update_job(job_id, message="Cancelled")
+            return self.get_job(job_id)
+        return self.get_job(job_id)
 
     def prepare_runtime_config(self, record: JobRecord, overrides: Dict[str, Any]) -> Dict[str, Any]:
         base = self._config_service.base_config()
@@ -311,5 +376,6 @@ class JobManager:
         for meta_path in self._jobs_root.glob("*/metadata.json"):
             record = JobRecord.from_file(meta_path)
             self._jobs[record.id] = record
+            self._cancel_events.setdefault(record.id, threading.Event())
 
 

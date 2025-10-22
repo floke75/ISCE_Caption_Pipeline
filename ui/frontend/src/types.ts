@@ -11,6 +11,7 @@ export interface JobRecord {
   params: Record<string, unknown>;
   result?: Record<string, unknown> | null;
   error?: string | null;
+  workspacePath: string;
 }
 
 export interface ConfigField {

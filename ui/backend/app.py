@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from .api.routes.files import FileBrowser, create_file_router
 from .config_service import ConfigField, ConfigService
-from .job_manager import JobManager, JobQueueFull
+from .job_manager import JobCancellationError, JobManager, JobQueueFull
 from . import pipelines
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -166,6 +166,7 @@ class JobModel(BaseModel):
     params: Dict[str, Any]
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    workspace_path: str = Field(alias="workspacePath")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -257,6 +258,7 @@ def _serialize_job(record) -> JobModel:
         params=record.params,
         result=record.result,
         error=record.error,
+        workspacePath=str(record.workspace),
     )
 
 
@@ -342,6 +344,17 @@ def stream_job_logs(job_id: str) -> StreamingResponse:
 @app.get("/api/jobs/{job_id}/log/stream")
 def stream_job_log_legacy(job_id: str) -> StreamingResponse:
     return _stream_job_log(job_id)
+
+
+@app.post("/api/jobs/{job_id}/cancel", response_model=JobModel)
+def cancel_job(job_id: str) -> JobModel:
+    try:
+        record = job_manager.cancel_job(job_id)
+    except KeyError as exc:  # pragma: no cover - defensive
+        raise HTTPException(status_code=404, detail="Job not found") from exc
+    except JobCancellationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _serialize_job(record)
 
 
 @app.post("/api/jobs/inference", response_model=JobModel, status_code=201)
