@@ -126,21 +126,60 @@ class JobContext:
             bufsize=1,
         )
         assert process.stdout is not None
-        for line in iter(process.stdout.readline, ""):
+        stdout = process.stdout
+
+        def _terminate_due_to_cancel() -> None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:  # pragma: no cover - defensive
+                process.kill()
+                process.wait()
             with self._log_lock:
-                self._log_file.write(line)
                 self._log_file.flush()
-            if self._manager.is_cancelled(self.record.id):
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:  # pragma: no cover - defensive
-                    process.kill()
-                    process.wait()
+
+        import selectors
+
+        selector = selectors.DefaultSelector()
+        selector.register(stdout, selectors.EVENT_READ)
+        try:
+            while True:
+                if self._manager.is_cancelled(self.record.id):
+                    _terminate_due_to_cancel()
+                    raise JobCancelled()
+
+                events = selector.select(timeout=0.2)
+                if not events:
+                    if process.poll() is not None:
+                        break
+                    continue
+
+                line = stdout.readline()
+                if line:
+                    with self._log_lock:
+                        self._log_file.write(line)
+                        self._log_file.flush()
+                    continue
+
+                if process.poll() is not None:
+                    break
+
+            # Drain any buffered output after the process exits.
+            while True:
+                remaining = stdout.readline()
+                if not remaining:
+                    break
                 with self._log_lock:
+                    self._log_file.write(remaining)
                     self._log_file.flush()
-                raise JobCancelled()
-        process.stdout.close()
+        finally:
+            try:
+                selector.unregister(stdout)
+            except KeyError:  # pragma: no cover - defensive
+                pass
+            selector.close()
+
+        stdout.close()
         process.wait()
         if self._manager.is_cancelled(self.record.id):
             raise JobCancelled()
