@@ -132,7 +132,10 @@ def read_pipeline_config() -> Dict[str, Any]:
 @app.put("/api/config/pipeline")
 def update_pipeline_config(update: ConfigUpdate) -> Dict[str, Any]:
     if update.yaml is not None:
-        parsed = yaml.safe_load(update.yaml) or {}
+        try:
+            parsed = yaml.safe_load(update.yaml) or {}
+        except yaml.YAMLError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}") from exc
         if not isinstance(parsed, dict):
             raise HTTPException(status_code=400, detail="Parsed YAML must be a mapping")
         pipeline_store.write(parsed)
@@ -149,7 +152,10 @@ def read_model_config() -> Dict[str, Any]:
 @app.put("/api/config/model")
 def update_model_config(update: ConfigUpdate) -> Dict[str, Any]:
     if update.yaml is not None:
-        parsed = yaml.safe_load(update.yaml) or {}
+        try:
+            parsed = yaml.safe_load(update.yaml) or {}
+        except yaml.YAMLError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid YAML: {exc}") from exc
         if not isinstance(parsed, dict):
             raise HTTPException(status_code=400, detail="Parsed YAML must be a mapping")
         model_store.write(parsed)
