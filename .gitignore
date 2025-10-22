@@ -3,14 +3,19 @@
 __pycache__/
 *.pyc
 
-# Data and Cache
+# Data and cache
 cache/
 _intermediate/
 _output/
 _processed/
+ui_data/
+
+# Frontend build artifacts
+ui/frontend/node_modules/
+ui/frontend/dist/
+ui/static/
 
 # IDE and OS files
 .vscode/
 .idea/
 *.DS_Store
-```5.  **Create `README.md`:** Create a `README.md` file to explain the project.
