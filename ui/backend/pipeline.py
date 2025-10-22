@@ -21,6 +21,8 @@ def build_inference_steps(workspace: Path, config: Dict[str, object], params: Di
     python = params.get("pythonExecutable", "python")
     project_root = Path(__file__).resolve().parents[2]
 
+    segmentation_config = project_root / "config.yaml"
+
     steps: List[JobStep] = [
         JobStep(
             name="Generate ASR reference",
@@ -64,7 +66,7 @@ def build_inference_steps(workspace: Path, config: Dict[str, object], params: Di
                 "--output",
                 str(srt_output),
                 "--config",
-                str(config_path),
+                str(segmentation_config),
             ],
             cwd=project_root,
         ),
