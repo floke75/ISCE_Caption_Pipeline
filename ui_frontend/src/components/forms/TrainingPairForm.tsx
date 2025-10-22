@@ -70,7 +70,7 @@ export function TrainingPairForm({ onCreated }: TrainingPairFormProps) {
         <textarea
           value={pipelineOverrides}
           onChange={(e) => setPipelineOverrides(e.target.value)}
-          placeholder="{\n  \"pipeline_root\": \"/tmp/ui-training\"\n}"
+          placeholder={"{\n  \"pipeline_root\": \"/tmp/ui-training\"\n}"}
         />
       </div>
       {message && <div className={`message-banner ${message.type}`}>{message.text}</div>}

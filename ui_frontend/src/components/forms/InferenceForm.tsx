@@ -74,7 +74,7 @@ export function InferenceForm({ onCreated }: InferenceFormProps) {
         <textarea
           value={pipelineOverrides}
           onChange={(e) => setPipelineOverrides(e.target.value)}
-          placeholder="{\n  \"pipeline_root\": \"/tmp/ui\"\n}"
+          placeholder={"{\n  \"pipeline_root\": \"/tmp/ui\"\n}"}
         />
       </div>
       <div className="field">
@@ -82,7 +82,7 @@ export function InferenceForm({ onCreated }: InferenceFormProps) {
         <textarea
           value={modelOverrides}
           onChange={(e) => setModelOverrides(e.target.value)}
-          placeholder="{\n  \"sliders\": { \"flow\": 1.2 }\n}"
+          placeholder={"{\n  \"sliders\": { \"flow\": 1.2 }\n}"}
         />
       </div>
       {message && <div className={`message-banner ${message.type}`}>{message.text}</div>}

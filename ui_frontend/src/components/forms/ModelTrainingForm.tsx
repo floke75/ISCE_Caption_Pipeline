@@ -94,7 +94,7 @@ export function ModelTrainingForm({ onCreated }: ModelTrainingFormProps) {
         <textarea
           value={configOverrides}
           onChange={(e) => setConfigOverrides(e.target.value)}
-          placeholder="{\n  \"sliders\": { \"balance\": 2.5 }\n}"
+          placeholder={"{\n  \"sliders\": { \"balance\": 2.5 }\n}"}
         />
       </div>
       {message && <div className={`message-banner ${message.type}`}>{message.text}</div>}
