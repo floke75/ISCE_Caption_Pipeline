@@ -141,19 +141,23 @@ def get_job_log(
 
 
 @app.get("/api/jobs/{job_id}/log/stream")
-async def stream_job_log(request: Request, job_id: str) -> StreamingResponse:
+async def stream_job_log(
+    request: Request,
+    job_id: str,
+    offset: int = Query(0, ge=0),
+) -> StreamingResponse:
     try:
         job_manager.get(job_id)
     except KeyError as exc:  # noqa: PERF203
         raise HTTPException(status_code=404, detail="Job not found") from exc
 
-    start_offset = 0
+    start_offset = offset
     last_event_id = request.headers.get("last-event-id")
     if last_event_id is not None:
         try:
-            start_offset = max(int(last_event_id), 0)
+            start_offset = max(int(last_event_id), start_offset, 0)
         except ValueError:
-            start_offset = 0
+            start_offset = offset
 
     async def event_source() -> Any:
         offset = start_offset

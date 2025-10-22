@@ -516,6 +516,12 @@ pre {
   align-items: center;
 }
 
+.log-viewer__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .log-viewer__footer {
   border-top: 1px solid var(--card-border);
   border-bottom: none;
@@ -525,6 +531,59 @@ pre {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.log-viewer__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.log-viewer__status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.2);
+}
+
+.log-viewer__status--open {
+  color: var(--success);
+  background: rgba(22, 163, 74, 0.12);
+}
+
+.log-viewer__status--open .log-viewer__status-indicator {
+  background: var(--success);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.log-viewer__status--connecting {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.log-viewer__status--connecting .log-viewer__status-indicator {
+  background: var(--warning);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.log-viewer__status--closed .log-viewer__status-indicator {
+  background: var(--muted);
+}
+
+.log-viewer__status--error {
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.12);
+}
+
+.log-viewer__status--error .log-viewer__status-indicator {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.18);
 }
 
 .toggle {
@@ -543,6 +602,10 @@ pre {
   color: #e2e8f0;
   border-top: 1px solid var(--card-border);
   border-bottom: 1px solid var(--card-border);
+}
+
+.log-viewer__hint {
+  font-size: 12px;
 }
 
 .config-grid {
