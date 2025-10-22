@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from .job_manager import JobContext
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _copy_into(source: Path, destination_dir: Path) -> Path:

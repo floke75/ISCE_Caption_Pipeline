@@ -12,7 +12,7 @@ from .config_service import ConfigField, ConfigService
 from .job_manager import JobManager
 from . import pipelines
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 STORAGE_ROOT = REPO_ROOT / "ui_data"
 
 config_service = ConfigService(REPO_ROOT, STORAGE_ROOT)
