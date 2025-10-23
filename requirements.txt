@@ -1,24 +1,30 @@
-# C:\dev\Captions_Formatter\Formatter_machine\requirements.txt
-
-# Core ISCE dependencies
+## Core pipeline
 pyyaml
 pandas
-
-# ASR & Alignment Dependencies
+numpy
+rapidfuzz
+tqdm
 pysrt
+
+## Speech recognition & alignment
 whisperx
 pyannote.audio
+torch
 ffmpeg-python
-rapidfuzz
 
-# SpaCy and its Swedish model
+## Natural language processing
 spacy
 https://github.com/explosion/spacy-models/releases/download/sv_core_news_lg-3.7.2/sv_core_news_lg-3.7.2-py3-none-any.whl
 
-# Note: Specific versions have been removed to allow pip to resolve
-# the latest compatible versions. If you encounter issues, you may need
-# to pin specific versions, e.g., pandas==2.1.4
-
-# UI backend
+## Web API backend
 fastapi
+pydantic
 uvicorn[standard]
+
+## Testing utilities
+pytest
+httpx
+
+# Note: Specific versions have been removed to allow pip to resolve the latest
+# compatible releases. If you encounter issues, pin the versions (e.g.
+# pandas==2.1.4).
