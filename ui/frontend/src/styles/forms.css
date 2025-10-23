@@ -1,0 +1,353 @@
+.form-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+label.field span {
+  font-weight: 600;
+}
+
+input[type="text"],
+input[type="number"],
+textarea, 
+select {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  color: #f8fafc;
+  font-family: inherit;
+}
+
+textarea {
+  min-height: 140px;
+}
+
+button.primary {
+  align-self: flex-start;
+  padding: 0.65rem 1.4rem;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  color: #0f172a;
+  transition: transform 0.15s ease;
+}
+
+button.primary:hover {
+  transform: translateY(-1px);
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #cbd5f5;
+  border-radius: 12px;
+  padding: 0.55rem 1.2rem;
+  cursor: pointer;
+}
+
+.config-tabs {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.config-tab {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+  border-radius: 999px;
+  padding: 0.5rem 1.2rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.config-tab:hover {
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+.config-tab.active {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(99, 102, 241, 0.35));
+  border-color: rgba(99, 102, 241, 0.6);
+  color: #f8fafc;
+}
+
+.field-help {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.section-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.override-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.override-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.override-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.override-branch {
+  border-left: 1px solid rgba(148, 163, 184, 0.25);
+  padding-left: 0.75rem;
+  color: #e2e8f0;
+}
+
+.override-branch > summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.override-branch summary::-webkit-details-marker {
+  display: none;
+}
+
+.override-branch-label::before {
+  content: '▸ ';
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+.override-branch[open] .override-branch-label::before {
+  content: '▾ ';
+}
+
+.override-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.override-leaf {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.override-leaf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.override-leaf-label {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.override-meta {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.override-error {
+  color: #f87171;
+  font-size: 0.8rem;
+}
+
+.override-preview {
+  margin: 0;
+  background: rgba(15, 23, 42, 0.85);
+  border-radius: 12px;
+  padding: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  max-height: 220px;
+  overflow: auto;
+  color: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.override-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.override-control {
+  display: flex;
+  align-items: center;
+}
+
+.file-picker {
+  gap: 0.5rem;
+}
+
+.file-picker-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.file-picker-controls select {
+  min-width: 150px;
+}
+
+.file-picker-status {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.file-picker-status.valid {
+  color: #4ade80;
+}
+
+.file-picker-status.invalid {
+  color: #f87171;
+}
+
+.file-picker-status.checking {
+  color: #38bdf8;
+}
+
+.file-picker-browser {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-browser-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.file-browser-path {
+  font-size: 0.8rem;
+  color: #cbd5f5;
+  word-break: break-all;
+}
+
+.file-browser-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.file-browser-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.file-browser-item {
+  flex: 1;
+  text-align: left;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  padding: 0.5rem 0.65rem;
+  color: #e2e8f0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-browser-item:hover {
+  border-color: rgba(148, 163, 184, 0.45);
+}
+
+.file-browser-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.file-browser-error {
+  color: #f87171;
+  font-size: 0.8rem;
+}
+
+.file-browser-empty {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.entry-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+  display: inline-block;
+}
+
+.entry-icon.dir::before {
+  content: '\1F4C1';
+}
+
+.entry-icon.file::before {
+  content: '\1F4C4';
+}
+
+label.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #e2e8f0;
+}
+
+label.toggle input[type='checkbox'] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: #22d3ee;
+}
