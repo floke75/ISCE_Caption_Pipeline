@@ -122,35 +122,60 @@ def main():
     parser.add_argument("--weights", type=str, required=True, help="Output path for model_weights.json.")
     parser.add_argument("--config", default="config.yaml", help="Path to the configuration YAML file.")
     parser.add_argument("--iterations", type=int, default=3, help="Number of reweighting iterations to perform.")
-    parser.add_argument("--error-boost-factor", type=float, default=1.0, help="Amount to ADD to the weight of misclassified samples.")
+    parser.add_argument(
+        "--error-boost-factor",
+        type=float,
+        default=1.0,
+        help="Amount to ADD to the weight of misclassified samples.",
+    )
+    parser.add_argument(
+        "--include-simulated-raw",
+        action="store_true",
+        help=(
+            "Include *.train.raw.words.json corpora when building the feature table. "
+            "Disabled by default to avoid duplicating synthetic ASR copies."
+        ),
+    )
     args = parser.parse_args()
 
-    human_paths, raw_paths = partition_corpus_paths(Path(args.corpus))
-    if not human_paths:
-        raise FileNotFoundError(
-            "No human-edited training files found. Expected files without '.raw.' in the name."
-        )
+    corpus_dir = Path(args.corpus)
+    human_paths, raw_paths = partition_corpus_paths(corpus_dir)
+    if not human_paths and not raw_paths:
+        raise FileNotFoundError(f"No .json files found in corpus directory: {args.corpus}")
 
-    print(f"Found {len(human_paths)} human-edited training files.")
-    if raw_paths:
-        print(
-            "Ignoring %d simulated ASR variants when deriving constraints and training weights."
-            % len(raw_paths)
-        )
-        print(
-            "These raw duplicates flatten punctuation and timing cues, so we exclude them to keep"
-            " statistics anchored to human formatting decisions."
+    print(f"Found {len(human_paths)} human-edited training file(s).")
+
+    if args.include_simulated_raw:
+        training_paths = human_paths + raw_paths
+        if raw_paths:
+            print(f"Including {len(raw_paths)} simulated raw training file(s).")
+    else:
+        training_paths = human_paths
+        if raw_paths:
+            print(
+                "Skipping %d simulated raw training file(s) (use --include-simulated-raw to include)."
+                % len(raw_paths)
+            )
+            print(
+                "These raw duplicates flatten punctuation and timing cues, so we exclude them to keep"
+                " statistics anchored to human formatting decisions."
+            )
+
+    if not training_paths:
+        raise FileNotFoundError(
+            "Only simulated raw training files were found. Rerun with --include-simulated-raw to train on them."
         )
 
     cfg = load_config(args.config)
 
     print("\n--- Deriving Constraints ---")
-    constraints = derive_constraints([str(p) for p in human_paths], cfg)
+    constraint_paths = human_paths if human_paths else training_paths
+    constraints = derive_constraints([str(p) for p in constraint_paths], cfg)
     with open(args.constraints, "w", encoding="utf-8") as f:
         json.dump(constraints, f, indent=2)
     print(f"Successfully saved constraints to {args.constraints}")
 
-    df, token_rows = get_full_feature_table_and_rows([str(p) for p in human_paths], cfg)
+    df, token_rows = get_full_feature_table_and_rows([str(p) for p in training_paths], cfg)
     
     if df.empty:
         print("\n[ERROR] No valid training data could be loaded. The feature table is empty. Aborting.")
