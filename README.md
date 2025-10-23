@@ -40,8 +40,9 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 *   **Python:** 3.11 or higher.
 *   **ffmpeg:** Must be installed and accessible in your system's PATH.
-*   **GPU (Recommended):** A CUDA-enabled GPU is strongly recommended for WhisperX.
-*   **Hugging Face Token:** Required for speaker diarization.
+*   **GPU (Recommended):** A CUDA-enabled GPU dramatically accelerates WhisperX; CPU-only runs are supported but slower on long-form audio.
+*   **Hugging Face Token:** Required for speaker diarization. Provide it via the `HF_TOKEN` environment variable or the `hf_token` field in `pipeline_config.yaml`.
+*   **First-Run Network Access:** Allow outbound access the first time you install or run the pipeline so WhisperX, PyAnnote, and the SpaCy Swedish model can download required assets.
 
 ### 2. Installation
 
@@ -54,7 +55,7 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 2.  **Create a Virtual Environment:**
     ```bash
     python -m venv .venv
-    source .venv/bin/activate  # On Windows, use `.venv\Scripts\activate`
+    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
     ```
 
 3.  **Install Dependencies:**
@@ -64,16 +65,9 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 ### 3. Configuration
 
-1.  **Copy and Edit Configuration Files:**
-    *   In the `configs/` directory, copy `pipeline_config.sample.yaml` to `pipeline_config.yaml`.
-    *   Copy `config.sample.yaml` to `config.yaml`.
+1.  **Update `pipeline_config.yaml`:** The file lives in the repository root. Replace placeholder paths for `project_root` and `pipeline_root` with locations on your system and set an `hf_token` (or rely on the `HF_TOKEN` environment variable).
 
-2.  **Update `pipeline_config.yaml`:**
-    *   Set `project_root` and `pipeline_root` to the absolute paths on your system.
-    *   Add your Hugging Face token to the `hf_token` field.
-
-3.  **Update `config.yaml`:**
-    *   Ensure the `paths` section points to the correct location of your trained model files within the `models/` directory.
+2.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior.
 
 ### 4. Running the Pipeline
 
@@ -93,7 +87,7 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 *   `main.py`: Worker script that runs the final segmentation to create the `.srt` file.
 *   `isce/`: The core Python package containing the main logic (scoring, beam search, etc.).
 *   `scripts/`: Standalone scripts for training and evaluation.
-*   `configs/`: Directory for user-editable YAML configuration files.
+*   `pipeline_config.yaml` / `config.yaml`: Root-level configuration files that control pipeline paths and segmentation tuning.
 *   `models/`: Directory to store your trained model artifacts (`model_weights.json`, `constraints.json`).
 
 ## Web control center
@@ -112,7 +106,7 @@ monitored safely. Configuration updates are persisted in `ui_data/config/pipelin
 Start the API with:
 
 ```bash
-uvicorn ui.backend.app:app --host 0.0.0.0 --port 8000
+uvicorn ui.backend.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Frontend SPA
@@ -134,40 +128,6 @@ npm run dev
 
 By default the frontend expects the FastAPI backend on `http://localhost:8000` and proxies API calls via the `/api` prefix.
 
-## Setup & Installation
-
-1.  **Prerequisites:**
-    *   Python 3.11 or higher.
-    *   `ffmpeg` must be installed on your system and accessible in your PATH.
-    *   A CUDA-enabled GPU is strongly recommended for WhisperX. CPU-only runs are supported but dramatically slower on long-form audio.
-    *   A Hugging Face access token with permission to download diarization models when `do_diarization: true`. Provide it in `pipeline_config.yaml` or via the `HF_TOKEN` environment variable.
-    *   Ensure outbound network access the first time you execute each stage so WhisperX, PyAnnote, and the SpaCy Swedish model can be fetched and cached.
-
-2.  **Clone the Repository:**
-    ```bash
-    git clone <your-repository-url>
-    cd ISCE_Caption_Pipeline
-    ```
-
-3.  **Create Virtual Environment:**
-    ```powershell
-    # For Windows
-    python -m venv .venv
-    .\.venv\Scripts\activate
-    ```
-
-4.  **Install Dependencies:**
-    ```powershell
-    pip install -r requirements.txt
-    ```
-
-5.  **Configure the Pipeline:**
-    *   Navigate to the `configs/` directory.
-    *   Make a copy of `pipeline_config.sample.yaml` and rename it to `pipeline_config.yaml`.
-    *   Make a copy of `config.sample.yaml` and rename it to `config.yaml`.
-    *   **Edit `pipeline_config.yaml`:** Update the `project_root` and `pipeline_root` paths to match your local system. Add your Hugging Face token to the `hf_token` field if you plan to use speaker diarization.
-    *   **Edit `config.yaml`:** Update the `paths` to point to the correct location of your trained model files within the `models/` directory.
-
 ## How It Works
 
 The ISCE pipeline is a multi-stage process designed to create high-quality subtitles.
@@ -185,7 +145,7 @@ The ISCE pipeline is a multi-stage process designed to create high-quality subti
 
 ## Configuration
 
-ISCE uses two main configuration files, both located in the `configs/` directory.
+ISCE uses two main configuration files stored in the repository root. The UI backend persists editable overrides under `ui_data/config/`.
 
 *   **`pipeline_config.yaml`:** This file controls the overall pipeline workflow and the behavior of the worker scripts. Key settings include:
     *   `project_root` and `pipeline_root`: The base directories for the project and the pipeline hot folders.
