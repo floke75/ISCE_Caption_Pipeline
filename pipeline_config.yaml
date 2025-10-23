@@ -51,8 +51,9 @@ build_pair:
   spacy_enable: true
   spacy_model: "sv_core_news_lg"
   spacy_add_dependencies: true
+  # Generate simulated .train.raw.words.json copies alongside edited training data (off by default)
   emit_asr_style_training_copy: false
-  
+
   # Text-to-ASR alignment settings (moved here from align_make)
   txt_match_close: 0.82
   txt_match_weak:  0.65

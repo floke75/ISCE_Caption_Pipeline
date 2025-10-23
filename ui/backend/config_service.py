@@ -237,7 +237,10 @@ class ConfigService:
                 section="Enrichment",
                 label="Generate simulated training copy",
                 field_type="boolean",
-                description="Generate simulated .train.raw.words.json files alongside edited training data.",
+                description=(
+                    "Generate simulated .train.raw.words.json files alongside edited training data. "
+                    "Leave disabled unless you explicitly need synthetic ASR-style copies."
+                ),
                 advanced=True,
             ),
             ConfigField(

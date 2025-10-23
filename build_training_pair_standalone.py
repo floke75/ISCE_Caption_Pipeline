@@ -763,7 +763,8 @@ def process_file(
         _save_json({"tokens": edited_tokens}, out_path_edited)
         print(f"[OK] Wrote EDITED training data to: {out_path_edited.name}")
 
-        if settings.get("emit_asr_style_training_copy", False):
+        emit_simulated_copy = bool(settings.get("emit_asr_style_training_copy", False))
+        if emit_simulated_copy:
             # 2. Create and process the simulated ASR transcript
             print("\n--- Processing SIMULATED ASR version for training ---")
             simulated_asr_tokens = json.loads(json.dumps(tokens)) # Deep copy
@@ -779,7 +780,7 @@ def process_file(
             _save_json({"tokens": final_simulated_tokens}, out_path_simulated)
             print(f"[OK] Wrote SIMULATED ASR training data to: {out_path_simulated.name}")
         else:
-            print("\n--- Skipping SIMULATED ASR copy (disabled in configuration) ---")
+            print("\n--- Skipping SIMULATED ASR copy (disabled via emit_asr_style_training_copy) ---")
 
     else: # Inference Mode
         final_tokens = _enrich_and_finalize(tokens, cues, is_training=False)
