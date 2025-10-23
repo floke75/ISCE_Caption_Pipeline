@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
-from typing import Optional, List, Dict, Any
+from typing import Tuple
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -21,6 +21,25 @@ from isce.types import TokenRow, Engineered
 # =========================================
 # REFACTORED DATA LOADING
 # =========================================
+RAW_FILENAME_MARKERS = (".raw.", ".raw_")
+
+
+def partition_corpus_paths(corpus_dir: Path) -> Tuple[list[Path], list[Path]]:
+    """Split corpus files into human-edited and simulated ASR variants."""
+
+    human_paths: list[Path] = []
+    raw_paths: list[Path] = []
+
+    for path in sorted(corpus_dir.glob("*.json")):
+        name = path.name.lower()
+        if any(marker in name for marker in RAW_FILENAME_MARKERS):
+            raw_paths.append(path)
+        else:
+            human_paths.append(path)
+
+    return human_paths, raw_paths
+
+
 def get_full_feature_table_and_rows(corpus_paths: list[str], cfg: Config) -> tuple[pd.DataFrame, list[TokenRow]]:
     """
     Loads and processes the entire training corpus into a feature DataFrame.
@@ -106,21 +125,32 @@ def main():
     parser.add_argument("--error-boost-factor", type=float, default=1.0, help="Amount to ADD to the weight of misclassified samples.")
     args = parser.parse_args()
 
-    corpus_paths = [str(p) for p in Path(args.corpus).glob("*.json")]
-    if not corpus_paths:
-        raise FileNotFoundError(f"No .json files found in corpus directory: {args.corpus}")
+    human_paths, raw_paths = partition_corpus_paths(Path(args.corpus))
+    if not human_paths:
+        raise FileNotFoundError(
+            "No human-edited training files found. Expected files without '.raw.' in the name."
+        )
 
-    print(f"Found {len(corpus_paths)} training files.")
-    
+    print(f"Found {len(human_paths)} human-edited training files.")
+    if raw_paths:
+        print(
+            "Ignoring %d simulated ASR variants when deriving constraints and training weights."
+            % len(raw_paths)
+        )
+        print(
+            "These raw duplicates flatten punctuation and timing cues, so we exclude them to keep"
+            " statistics anchored to human formatting decisions."
+        )
+
     cfg = load_config(args.config)
-    
+
     print("\n--- Deriving Constraints ---")
-    constraints = derive_constraints(corpus_paths, cfg)
+    constraints = derive_constraints([str(p) for p in human_paths], cfg)
     with open(args.constraints, "w", encoding="utf-8") as f:
         json.dump(constraints, f, indent=2)
     print(f"Successfully saved constraints to {args.constraints}")
 
-    df, token_rows = get_full_feature_table_and_rows(corpus_paths, cfg)
+    df, token_rows = get_full_feature_table_and_rows([str(p) for p in human_paths], cfg)
     
     if df.empty:
         print("\n[ERROR] No valid training data could be loaded. The feature table is empty. Aborting.")
