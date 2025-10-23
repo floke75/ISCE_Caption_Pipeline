@@ -54,7 +54,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "txt_match_close": 0.82,
         "txt_match_weak":  0.65,
         "speaker_correction_window_size": 5,
-        "emit_asr_style_training_copy": True,
+        "emit_asr_style_training_copy": False,
     }
 }
 
@@ -692,8 +692,8 @@ def process_file(
     """
     Main processing pipeline for a single file.
     Orchestrates loading, alignment, feature engineering, and saving.
-    In training mode, it augments the data by creating a simulated ASR version
-    to improve model robustness against training-serving skew.
+    In training mode, it can optionally augment the data by creating a simulated
+    ASR version to improve model robustness against training-serving skew.
     """
     if output_basename:
         base = output_basename
@@ -763,20 +763,23 @@ def process_file(
         _save_json({"tokens": edited_tokens}, out_path_edited)
         print(f"[OK] Wrote EDITED training data to: {out_path_edited.name}")
 
-        # 2. Create and process the simulated ASR transcript
-        print("\n--- Processing SIMULATED ASR version for training ---")
-        simulated_asr_tokens = json.loads(json.dumps(tokens)) # Deep copy
-        for token in simulated_asr_tokens:
-            # Normalize text to simulate raw ASR output
-            raw_w = re.sub(r'[^\w\s]', '', token.get("w", "").lower())
-            token["w"] = raw_w
-            # Mark this as a non-edited transcript
-            token["is_edited_transcript"] = False
+        if settings.get("emit_asr_style_training_copy", False):
+            # 2. Create and process the simulated ASR transcript
+            print("\n--- Processing SIMULATED ASR version for training ---")
+            simulated_asr_tokens = json.loads(json.dumps(tokens)) # Deep copy
+            for token in simulated_asr_tokens:
+                # Normalize text to simulate raw ASR output
+                raw_w = re.sub(r'[^\w\s]', '', token.get("w", "").lower())
+                token["w"] = raw_w
+                # Mark this as a non-edited transcript
+                token["is_edited_transcript"] = False
 
-        final_simulated_tokens = _enrich_and_finalize(simulated_asr_tokens, cues, is_training=True)
-        out_path_simulated = paths["out_training_dir"] / f"{base}.train.raw.words.json"
-        _save_json({"tokens": final_simulated_tokens}, out_path_simulated)
-        print(f"[OK] Wrote SIMULATED ASR training data to: {out_path_simulated.name}")
+            final_simulated_tokens = _enrich_and_finalize(simulated_asr_tokens, cues, is_training=True)
+            out_path_simulated = paths["out_training_dir"] / f"{base}.train.raw.words.json"
+            _save_json({"tokens": final_simulated_tokens}, out_path_simulated)
+            print(f"[OK] Wrote SIMULATED ASR training data to: {out_path_simulated.name}")
+        else:
+            print("\n--- Skipping SIMULATED ASR copy (disabled in configuration) ---")
 
     else: # Inference Mode
         final_tokens = _enrich_and_finalize(tokens, cues, is_training=False)

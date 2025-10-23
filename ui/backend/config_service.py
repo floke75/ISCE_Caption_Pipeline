@@ -235,8 +235,9 @@ class ConfigService:
             ConfigField(
                 path=["build_pair", "emit_asr_style_training_copy"],
                 section="Enrichment",
-                label="Emit ASR-style training copy",
+                label="Generate simulated training copy",
                 field_type="boolean",
+                description="Generate simulated .train.raw.words.json files alongside edited training data.",
                 advanced=True,
             ),
             ConfigField(
