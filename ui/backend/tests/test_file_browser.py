@@ -88,3 +88,14 @@ def test_validate_endpoint_reports_state(file_browser_app: Tuple[TestClient, Pat
     assert outside_response.status_code == 200
     outside_data = outside_response.json()
     assert outside_data["allowed"] is False
+
+
+def test_validate_nonexistent_directory(file_browser_app: Tuple[TestClient, Path, Path]) -> None:
+    """Verify that a non-existent path inside an allowlist root is considered allowed."""
+    client, root_a, _nested = file_browser_app
+    non_existent_dir = root_a / "new_folder"
+    response = client.get("/api/files/validate", params={"path": str(non_existent_dir)})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["exists"] is False
+    assert data["allowed"] is True
