@@ -103,12 +103,36 @@ def main():
     parser.add_argument("--weights", type=str, required=True, help="Output path for model_weights.json.")
     parser.add_argument("--config", default="config.yaml", help="Path to the configuration YAML file.")
     parser.add_argument("--iterations", type=int, default=3, help="Number of reweighting iterations to perform.")
-    parser.add_argument("--error-boost-factor", type=float, default=1.0, help="Amount to ADD to the weight of misclassified samples.")
+    parser.add_argument(
+        "--error-boost-factor",
+        type=float,
+        default=1.0,
+        help="Amount to ADD to the weight of misclassified samples.",
+    )
+    parser.add_argument(
+        "--include-simulated-raw",
+        action="store_true",
+        help=(
+            "Include *.train.raw.words.json corpora when building the feature table. "
+            "Disabled by default to avoid duplicating synthetic ASR copies."
+        ),
+    )
     args = parser.parse_args()
 
     corpus_paths = [str(p) for p in Path(args.corpus).glob("*.json")]
     if not corpus_paths:
         raise FileNotFoundError(f"No .json files found in corpus directory: {args.corpus}")
+
+    if not args.include_simulated_raw:
+        filtered_paths = [p for p in corpus_paths if not Path(p).name.endswith(".train.raw.words.json")]
+        skipped = len(corpus_paths) - len(filtered_paths)
+        if skipped:
+            print(f"Skipping {skipped} simulated raw training file(s) (use --include-simulated-raw to include).")
+        corpus_paths = filtered_paths
+        if not corpus_paths:
+            raise FileNotFoundError(
+                "Only simulated raw training files were found. Rerun with --include-simulated-raw to train on them."
+            )
 
     print(f"Found {len(corpus_paths)} training files.")
 
