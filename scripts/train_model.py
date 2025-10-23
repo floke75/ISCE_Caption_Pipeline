@@ -111,11 +111,15 @@ def main():
         raise FileNotFoundError(f"No .json files found in corpus directory: {args.corpus}")
 
     print(f"Found {len(corpus_paths)} training files.")
-    
+
     cfg = load_config(args.config)
-    
+
     print("\n--- Deriving Constraints ---")
-    constraints = derive_constraints(corpus_paths, cfg)
+    edited_paths = [p for p in corpus_paths if not Path(p).name.endswith(".train.raw.words.json")]
+    if not edited_paths:
+        edited_paths = corpus_paths
+
+    constraints = derive_constraints(edited_paths, cfg)
     with open(args.constraints, "w", encoding="utf-8") as f:
         json.dump(constraints, f, indent=2)
     print(f"Successfully saved constraints to {args.constraints}")

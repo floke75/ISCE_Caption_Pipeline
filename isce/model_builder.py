@@ -97,6 +97,10 @@ def derive_constraints(corpus_paths: List[str], fallback_cfg: Config) -> Dict[st
                 block_tokens = tokens[start_idx : end_idx + 1]
                 if not block_tokens: continue
 
+                edited_flags = [tok.get("is_edited_transcript") for tok in block_tokens]
+                if edited_flags and all(flag is False for flag in edited_flags):
+                    continue
+
                 gross_duration = max(1e-6, block_tokens[-1].get("end", 0.0) - block_tokens[0].get("start", 0.0))
                 block_durs.append(gross_duration)
                 
