@@ -33,6 +33,17 @@ interface ConfigEditorProps {
   yamlMutation: ReturnType<typeof useUpdateConfigYaml>;
 }
 
+/**
+ * A generic component for editing a configuration snapshot.
+ *
+ * This component provides a dual interface for configuration editing:
+ * 1. A structured form with type-specific inputs for common settings.
+ * 2. A raw YAML editor for advanced users and full override control.
+ * It is driven by a `ConfigSnapshot` and uses mutation hooks to save changes.
+ *
+ * @param {ConfigEditorProps} props The props for the component.
+ * @returns {JSX.Element} The rendered configuration editor.
+ */
 function ConfigEditor({
   label,
   summary,
@@ -252,6 +263,16 @@ type ConfigTabState = {
   yaml: ReturnType<typeof useUpdateConfigYaml>;
 };
 
+/**
+ * The main panel for managing both pipeline and segmentation configurations.
+ *
+ * This component acts as a container that renders a tabbed navigation to switch
+ * between editing the 'pipeline' configuration and the 'segmentation' model
+ * configuration. It fetches the necessary data and provides the appropriate
+ * `ConfigEditor` instance for the active tab.
+ *
+ * @returns {JSX.Element} The rendered configuration panel with tabs.
+ */
 export function ConfigPanel() {
   const [activeTab, setActiveTab] = useState<ConfigTab>('pipeline');
 

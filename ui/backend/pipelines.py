@@ -1,4 +1,24 @@
-"""Pipeline runners invoked by the :mod:`job_manager`."""
+"""Job runner functions for executing core pipeline operations.
+
+This module provides the concrete implementations for the different types of
+background jobs that can be executed by the `JobManager`. Each public function
+in this module (e.g., `run_inference`, `run_model_training`) corresponds to a
+specific job type and is designed to be called by the `JobManager`'s thread
+pool.
+
+These functions are responsible for:
+1.  **Workspace Preparation**: Setting up a dedicated directory for the job,
+    copying input files, and preparing runtime configurations.
+2.  **Orchestrating CLI Scripts**: Invoking the underlying Python scripts
+    (e.g., `align_make.py`, `main.py`) in the correct sequence using the
+    `JobContext` to stream their output.
+3.  **Reporting Progress**: Using the `JobContext` to send status and progress
+    updates back to the `JobManager`.
+4.  **Handling Artifacts**: Moving final output files to a designated
+    `artifacts` directory within the job's workspace.
+5.  **Finalizing the Job**: Reporting the final status (success or failure)
+    and any result data back to the `JobManager`.
+"""
 from __future__ import annotations
 
 import shutil
@@ -35,6 +55,21 @@ def _record_result(ctx: JobContext, result: Dict[str, Any]) -> None:
 
 
 def run_inference(ctx: JobContext) -> None:
+    """Executes the end-to-end inference pipeline.
+
+    This function orchestrates the full subtitle generation process, which
+    involves running `align_make.py`, `build_training_pair_standalone.py`,
+    and `main.py` in sequence. It handles file I/O, workspace setup, and
+    progress reporting for an inference job.
+
+    Args:
+        ctx: The `JobContext` for this job run, used for logging, status
+             updates, and configuration management.
+
+    Raises:
+        FileNotFoundError: If any of the required input files are not found,
+                           or if a script fails to produce an expected output file.
+    """
     params = ctx.record.params
     media_path = Path(params["media_path"]).expanduser()
     transcript_path = params.get("transcript_path")
@@ -155,6 +190,19 @@ def run_inference(ctx: JobContext) -> None:
 
 
 def run_training_pair(ctx: JobContext) -> None:
+    """Executes the training pair generation pipeline.
+
+    This function orchestrates the process of creating a labeled training
+    sample from a media file and a ground-truth SRT file. It runs
+    `align_make.py` to get a timed ASR reference and then runs
+    `build_training_pair_standalone.py` to align the SRT and generate features.
+
+    Args:
+        ctx: The `JobContext` for this job run.
+
+    Raises:
+        FileNotFoundError: If inputs are missing or outputs are not created.
+    """
     params = ctx.record.params
     media_path = Path(params["media_path"]).expanduser()
     srt_path = Path(params["srt_path"]).expanduser()
@@ -239,6 +287,19 @@ def run_training_pair(ctx: JobContext) -> None:
 
 
 def run_model_training(ctx: JobContext) -> None:
+    """Executes the model training pipeline.
+
+    This function orchestrates the process of training a new segmentation model
+    by running the `scripts/train_model.py` script. It handles workspace
+    setup and copies the final trained model artifacts (`constraints.json` and
+    `model_weights.json`) into the job's artifact directory.
+
+    Args:
+        ctx: The `JobContext` for this job run.
+
+    Raises:
+        FileNotFoundError: If the corpus directory does not exist.
+    """
     params = ctx.record.params
     corpus_dir = Path(params["corpus_dir"]).expanduser()
     overrides = params.get("config_overrides") or {}

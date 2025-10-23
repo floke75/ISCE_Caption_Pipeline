@@ -1,5 +1,21 @@
 # C:\dev\Captions_Formatter\Formatter_machine\scripts\evaluate_model.py
+"""Command-line script for evaluating the performance of a trained model.
 
+This script serves as a key tool for model validation and diagnostics. It
+compares the output of the segmentation model against a ground-truth, human-
+labeled reference file. The evaluation is multifaceted, providing both
+comparison metrics and intrinsic quality scores.
+
+The primary functions are:
+-   **Comparison Metrics**: Calculates precision, recall, and F1-score for each
+    break type (`SB`, `LB`, `O`) by comparing the model's decisions to the
+    reference labels. It can also generate a detailed CSV report of every
+    point of disagreement, which is invaluable for error analysis.
+-   **Intrinsic Readability Metrics**: Assesses the quality of the model's
+    output on its own, without a reference. It checks for violations of
+    learned constraints (e.g., block duration, characters-per-second) to
+    produce a single "readability score."
+"""
 import argparse
 import json
 import sys

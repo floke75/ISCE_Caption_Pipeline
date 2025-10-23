@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-run_pipeline.py - Master Orchestration Script for the ISCE Pipeline.
-This is the refactored version with a clean separation between the
-audio processing (align_make) and text processing (build_training_pair) steps.
+"""Master orchestration script for the ISCE Pipeline.
+
+This script monitors a set of "hot folders" for new media files and triggers
+the appropriate processing pipeline (either inference or training data
+preparation). It orchestrates the execution of several worker scripts in
+sequence to perform tasks like audio extraction, speech recognition, text
+alignment, and final subtitle segmentation.
+
+The pipeline is designed to be robust, with error handling and file management
+to ensure that processed files are archived and failed jobs are isolated.
 """
 
 import time

@@ -16,6 +16,15 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
+/**
+ * The main application component for the ISCE Pipeline UI.
+ *
+ * This component serves as the root of the application, managing the main layout
+ * and the primary navigation between different functional tabs. It renders the
+ * header, the tabbed workbench area, and the persistent `JobBoard` sidebar.
+ *
+ * @returns {JSX.Element} The rendered application shell.
+ */
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('inference');
   const queryClient = useQueryClient();

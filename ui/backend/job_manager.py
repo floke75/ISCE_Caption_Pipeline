@@ -1,4 +1,25 @@
-"""Background job orchestration for the UI backend."""
+"""Service for managing and executing long-running background jobs.
+
+This module provides the `JobManager`, a service responsible for the entire
+lifecycle of background tasks, such as running inference or training a model.
+It is designed to be thread-safe and robust, handling job creation, queuing,
+execution, cancellation, and state persistence.
+
+Key components:
+-   **JobManager**: The main class that orchestrates all jobs. It uses a
+    `ThreadPoolExecutor` to run jobs concurrently and a semaphore to limit
+    the number of active workers. It persists job metadata to disk, allowing
+    the state to be recovered after a server restart.
+-   **JobRecord**: A dataclass that represents the state of a single job,
+    including its ID, status, parameters, and results. This object is
+    serialized to a `metadata.json` file in the job's dedicated workspace.
+-   **JobContext**: An object passed to each job runner function. It provides a
+    safe and controlled interface for the running job to communicate back to
+    the manager, allowing it to log messages, update its progress, check for
+    cancellation requests, and access runtime configuration.
+-   **Exceptions**: Custom exceptions like `JobCancelled` and `JobQueueFull`
+    are defined to handle specific flow control and error conditions.
+"""
 from __future__ import annotations
 
 import json
@@ -219,7 +240,26 @@ class JobQueueFull(Exception):
 
 
 class JobManager:
-    """Coordinates background pipeline jobs."""
+    """Coordinates the lifecycle of background pipeline jobs.
+
+    This thread-safe class is the central component for managing jobs. It handles
+    queuing, execution via a thread pool, state tracking, and persistence.
+    It ensures that the number of concurrent jobs does not exceed a defined
+    limit and manages a queue for pending jobs.
+
+    Attributes:
+        _storage_root: The root directory for all persistent job data.
+        _config_service: The main `ConfigService` instance.
+        _segmentation_service: The `ConfigService` for the segmentation model.
+        _jobs: An in-memory dictionary of all known `JobRecord` objects.
+        _futures: A dictionary mapping job IDs to `Future` objects from the executor.
+        _lock: A re-entrant lock to protect shared state (`_jobs`, `_futures`).
+        _executor: A `ThreadPoolExecutor` for running jobs in the background.
+        _queue_limit: The maximum number of jobs allowed to be queued.
+        _concurrency_guard: A semaphore to limit the number of active workers.
+        _jobs_root: The specific directory where job workspaces are created.
+        _cancel_events: A dictionary mapping job IDs to cancellation `Event` objects.
+    """
 
     def __init__(
         self,
@@ -250,6 +290,24 @@ class JobManager:
     # Job lifecycle
     # ------------------------------------------------------------------
     def create_job(self, job_type: str, params: Dict[str, Any], runner) -> JobRecord:
+        """Creates, persists, and queues a new job for execution.
+
+        This method handles the initial creation of a job. It generates a unique
+        ID, creates a dedicated workspace on disk, writes the initial metadata,
+        and submits the job to the thread pool for execution.
+
+        Args:
+            job_type: A string identifying the type of job (e.g., "inference").
+            params: A dictionary of parameters for the job.
+            runner: The function that will be executed to run the job.
+
+        Returns:
+            The newly created `JobRecord`.
+
+        Raises:
+            JobQueueFull: If the number of currently queued jobs has reached
+                          the configured limit.
+        """
         job_id = uuid.uuid4().hex[:12]
         workspace = self._jobs_root / job_id
         workspace.mkdir(parents=True, exist_ok=True)
@@ -320,6 +378,18 @@ class JobManager:
         progress: Optional[float] = None,
         message: Optional[str] = None,
     ) -> None:
+        """Updates the state of a running job.
+
+        This method is called by a `JobContext` to report progress back to the
+        manager. It updates the in-memory `JobRecord` and writes the new state
+        to disk.
+
+        Args:
+            job_id: The ID of the job to update.
+            status: The new status of the job.
+            progress: The new progress value (0.0 to 1.0).
+            message: The new status message.
+        """
         with self._lock:
             record = self._jobs[job_id]
             if status is not None:
@@ -339,6 +409,17 @@ class JobManager:
         result: Optional[Dict[str, Any]] = None,
         error: Optional[str] = None,
     ) -> None:
+        """Marks a job as complete, setting its final state.
+
+        This is called by the `JobContext` when a job finishes, either by
+        succeeding, failing, or being cancelled.
+
+        Args:
+            job_id: The ID of the job to finalize.
+            status: The final status ('succeeded', 'failed', 'cancelled').
+            result: A dictionary of final results, if successful.
+            error: An error message, if failed.
+        """
         with self._lock:
             record = self._jobs[job_id]
             record.status = status
@@ -351,10 +432,33 @@ class JobManager:
                 self._cancel_events.pop(job_id, None)
 
     def is_cancelled(self, job_id: str) -> bool:
+        """Checks if a cancellation has been requested for a job.
+
+        Args:
+            job_id: The ID of the job to check.
+
+        Returns:
+            True if cancellation has been requested, False otherwise.
+        """
         event = self._cancel_events.get(job_id)
         return event.is_set() if event else False
 
     def cancel_job(self, job_id: str) -> JobRecord:
+        """Requests the cancellation of a job.
+
+        This sets a cancellation event for the specified job, which the running
+        job can check via its `JobContext`.
+
+        Args:
+            job_id: The ID of the job to cancel.
+
+        Returns:
+            The job record with an updated "Cancellation requested" message.
+
+        Raises:
+            KeyError: If the job ID does not exist.
+            JobCancellationError: If the job has already completed.
+        """
         with self._lock:
             if job_id not in self._jobs:
                 raise KeyError(job_id)
@@ -375,6 +479,20 @@ class JobManager:
         return self.get_job(job_id)
 
     def prepare_runtime_config(self, record: JobRecord, overrides: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepares the effective `pipeline_config.yaml` for a specific job run.
+
+        This critical method constructs a job-specific configuration by layering
+        global overrides, job-specific overrides, and injecting dynamic paths
+        (like the job's workspace) into the configuration. The resulting config
+        is written to the job's workspace and returned as a dictionary.
+
+        Args:
+            record: The `JobRecord` for the current job.
+            overrides: A dictionary of overrides specific to this job run.
+
+        Returns:
+            The fully resolved, job-specific runtime configuration dictionary.
+        """
         base = self._config_service.base_config()
         stored_overrides = self._config_service.stored_overrides()
         merged = _recursive_update(base, stored_overrides)
@@ -405,6 +523,22 @@ class JobManager:
     def prepare_segmentation_config(
         self, record: JobRecord, overrides: Optional[Dict[str, Any]] = None
     ) -> Path:
+        """Prepares the effective `config.yaml` for a specific job run.
+
+        Similar to `prepare_runtime_config`, but for the segmentation model's
+        configuration. It writes a job-specific `segmentation_config.runtime.yaml`
+        to the job's workspace.
+
+        Args:
+            record: The `JobRecord` for the current job.
+            overrides: A dictionary of job-specific segmentation config overrides.
+
+        Returns:
+            The `Path` to the generated runtime segmentation config file.
+
+        Raises:
+            RuntimeError: If the segmentation config service is not configured.
+        """
         if self._segmentation_service is None:
             raise RuntimeError("Segmentation config service is not configured")
 
@@ -423,14 +557,39 @@ class JobManager:
     # Query APIs
     # ------------------------------------------------------------------
     def list_jobs(self) -> List[JobRecord]:
+        """Returns a list of all known jobs, sorted by creation date.
+
+        Returns:
+            A list of `JobRecord` objects.
+        """
         with self._lock:
             return sorted(self._jobs.values(), key=lambda job: job.created_at, reverse=True)
 
     def get_job(self, job_id: str) -> JobRecord:
+        """Retrieves a single job by its ID.
+
+        Args:
+            job_id: The ID of the job to retrieve.
+
+        Returns:
+            The corresponding `JobRecord`.
+
+        Raises:
+            KeyError: If no job with that ID is found.
+        """
         with self._lock:
             return self._jobs[job_id]
 
     def get_log_tail(self, job_id: str, limit: int = 4000) -> str:
+        """Reads the last N characters of a job's log file.
+
+        Args:
+            job_id: The ID of the job whose log to read.
+            limit: The maximum number of characters to read from the end.
+
+        Returns:
+            The tail of the log file as a string.
+        """
         record = self.get_job(job_id)
         if not record.log_path.exists():
             return ""

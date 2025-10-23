@@ -1,5 +1,27 @@
 # C:\dev\Captions_Formatter\Formatter_machine\scripts\train_model.py
+"""Command-line script for training the statistical segmentation model.
 
+This script orchestrates the entire model training workflow. It takes a corpus
+of labeled training data (enriched JSON files) and produces two key artifacts:
+`constraints.json` and `model_weights.json`.
+
+The training process involves several stages:
+1.  **Constraint Derivation**: It first analyzes the corpus to learn the
+    statistical properties of human-made subtitles, saving these as hard and
+    soft constraints for the segmentation algorithm.
+2.  **Feature Engineering**: It processes the entire corpus, transforming the
+    rich token data into a discrete feature set suitable for a statistical model.
+3.  **Iterative Reweighting (Hard Example Mining)**: The core of the training
+    process. It runs in a loop where:
+    a. A model is trained on the current data.
+    b. The model is used to predict on the training set itself.
+    c. The examples that the model gets wrong ("hard examples") are identified.
+    d. The sample weight of these hard examples is increased.
+    This forces the model in the next iteration to pay more attention to the
+    examples it previously failed on, leading to a more robust final model.
+4.  **Final Model Saving**: After the final iteration, the script saves the
+    fully trained model weights.
+"""
 import argparse
 import json
 import sys

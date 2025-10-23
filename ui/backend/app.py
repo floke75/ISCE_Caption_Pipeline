@@ -1,4 +1,28 @@
-"""FastAPI application providing the UI backend."""
+"""Main FastAPI application for the ISCE pipeline UI backend.
+
+This application serves as the central API gateway for the web-based user
+interface. It is responsible for handling all client requests related to:
+
+-   **Health Checks**: A simple endpoint to confirm the server is running.
+-   **Configuration Management**: Endpoints for reading, updating, and validating
+    both the main pipeline configuration (`pipeline_config.yaml`) and the
+    segmentation model configuration (`config.yaml`). It supports both
+    structured patch updates and raw YAML editing.
+-   **Job Management**: A full suite of endpoints for creating, listing,
+    retrieving, and canceling long-running pipeline jobs (e.g., inference,
+    training pair generation, model training).
+-   **Log Streaming**: Real-time log streaming for active jobs using Server-Sent
+    Events (SSE), allowing the frontend to display live progress.
+-   **File System Browsing**: A secure API for browsing the host file system
+    within a predefined set of allowed root directories, enabling users to
+    select input and output paths safely.
+
+The application is structured to use several key services:
+-   `ConfigService`: Manages loading, validation, and persistence of configuration.
+-   `JobManager`: Handles the lifecycle of background processing jobs, including
+    queuing, execution, and state management.
+-   `FileBrowser`: Enforces security for file system access.
+"""
 from __future__ import annotations
 
 import os
@@ -220,16 +244,42 @@ class ModelTrainingRequest(BaseModel):
 
 @app.get("/api/health")
 def healthcheck() -> Dict[str, str]:
+    """Provides a simple health check endpoint.
+
+    Returns:
+        A dictionary with a single key "status" set to "ok".
+    """
     return {"status": "ok"}
 
 
 @app.get("/api/config/pipeline", response_model=ConfigSnapshot)
 def get_pipeline_config() -> ConfigSnapshot:
+    """Retrieves the current state of the main pipeline configuration.
+
+    This endpoint returns a comprehensive snapshot of the `pipeline_config.yaml`
+    settings, including the effective (merged) configuration, the stored
+    overrides, and a detailed schema of all available fields for UI rendering.
+
+    Returns:
+        A `ConfigSnapshot` object containing the full configuration details.
+    """
     return _snapshot_for(pipeline_config_service)
 
 
 @app.put("/api/config/pipeline", response_model=ConfigSnapshot)
 def update_pipeline_config(payload: ConfigPatch) -> ConfigSnapshot:
+    """Applies a partial update to the pipeline configuration overrides.
+
+    This endpoint accepts a dictionary of dot-separated keys and values,
+    allowing the frontend to update specific, nested configuration fields
+    without needing to send the entire configuration object.
+
+    Args:
+        payload: A `ConfigPatch` object containing the updates.
+
+    Returns:
+        The new, updated `ConfigSnapshot`.
+    """
     patch = pipeline_config_service.build_patch(payload.updates)
     pipeline_config_service.apply_patch(patch)
     return get_pipeline_config()
@@ -237,12 +287,25 @@ def update_pipeline_config(payload: ConfigPatch) -> ConfigSnapshot:
 
 @app.put("/api/config/pipeline/replace", response_model=ConfigSnapshot)
 def replace_pipeline_config(payload: ConfigReplace) -> ConfigSnapshot:
+    """Replaces the entire pipeline configuration override file.
+
+    Args:
+        payload: A `ConfigReplace` object with the new override dictionary.
+
+    Returns:
+        The new `ConfigSnapshot`.
+    """
     pipeline_config_service.save_overrides(payload.overrides)
     return get_pipeline_config()
 
 
 @app.get("/api/config/pipeline/raw")
 def get_pipeline_config_yaml() -> Dict[str, str]:
+    """Retrieves the raw YAML content of the pipeline configuration overrides.
+
+    Returns:
+        A dictionary containing the YAML content as a string.
+    """
     import yaml
 
     overrides = pipeline_config_service.stored_overrides()
@@ -251,6 +314,21 @@ def get_pipeline_config_yaml() -> Dict[str, str]:
 
 @app.put("/api/config/pipeline/raw", response_model=ConfigSnapshot)
 def update_pipeline_config_yaml(payload: ConfigYamlUpdate) -> ConfigSnapshot:
+    """Updates the pipeline configuration from a raw YAML string.
+
+    This endpoint is used by the raw YAML editor in the UI. It parses the
+    provided YAML string and, if valid, saves it as the new override file.
+
+    Args:
+        payload: A `ConfigYamlUpdate` object containing the new YAML string.
+
+    Raises:
+        HTTPException: If the provided string is not valid YAML or does not
+                       represent a dictionary.
+
+    Returns:
+        The new `ConfigSnapshot` after the update.
+    """
     import yaml
 
     try:
@@ -267,11 +345,28 @@ def update_pipeline_config_yaml(payload: ConfigYamlUpdate) -> ConfigSnapshot:
 
 @app.get("/api/config/segmentation", response_model=ConfigSnapshot)
 def get_segmentation_config() -> ConfigSnapshot:
+    """Retrieves the current state of the segmentation model configuration.
+
+    This endpoint returns a comprehensive snapshot of the `config.yaml`
+    settings, including the effective (merged) configuration, the stored
+    overrides, and a detailed schema for UI rendering.
+
+    Returns:
+        A `ConfigSnapshot` object containing the full configuration details.
+    """
     return _snapshot_for(segmentation_config_service)
 
 
 @app.put("/api/config/segmentation", response_model=ConfigSnapshot)
 def update_segmentation_config(payload: ConfigPatch) -> ConfigSnapshot:
+    """Applies a partial update to the segmentation configuration overrides.
+
+    Args:
+        payload: A `ConfigPatch` object containing the updates.
+
+    Returns:
+        The new, updated `ConfigSnapshot`.
+    """
     patch = segmentation_config_service.build_patch(payload.updates)
     segmentation_config_service.apply_patch(patch)
     return get_segmentation_config()
@@ -279,12 +374,25 @@ def update_segmentation_config(payload: ConfigPatch) -> ConfigSnapshot:
 
 @app.put("/api/config/segmentation/replace", response_model=ConfigSnapshot)
 def replace_segmentation_config(payload: ConfigReplace) -> ConfigSnapshot:
+    """Replaces the entire segmentation configuration override file.
+
+    Args:
+        payload: A `ConfigReplace` object with the new override dictionary.
+
+    Returns:
+        The new `ConfigSnapshot`.
+    """
     segmentation_config_service.save_overrides(payload.overrides)
     return get_segmentation_config()
 
 
 @app.get("/api/config/segmentation/raw")
 def get_segmentation_config_yaml() -> Dict[str, str]:
+    """Retrieves the raw YAML content of the segmentation configuration overrides.
+
+    Returns:
+        A dictionary containing the YAML content as a string.
+    """
     import yaml
 
     overrides = segmentation_config_service.stored_overrides()
@@ -293,6 +401,18 @@ def get_segmentation_config_yaml() -> Dict[str, str]:
 
 @app.put("/api/config/segmentation/raw", response_model=ConfigSnapshot)
 def update_segmentation_config_yaml(payload: ConfigYamlUpdate) -> ConfigSnapshot:
+    """Updates the segmentation configuration from a raw YAML string.
+
+    Args:
+        payload: A `ConfigYamlUpdate` object containing the new YAML string.
+
+    Raises:
+        HTTPException: If the provided string is not valid YAML or does not
+                       represent a dictionary.
+
+    Returns:
+        The new `ConfigSnapshot` after the update.
+    """
     import yaml
 
     try:
@@ -325,11 +445,27 @@ def _serialize_job(record) -> JobModel:
 
 @app.get("/api/jobs", response_model=List[JobModel])
 def list_jobs() -> List[JobModel]:
+    """Lists all known jobs, including pending, active, and completed.
+
+    Returns:
+        A list of `JobModel` objects, sorted from most to least recent.
+    """
     return [_serialize_job(job) for job in job_manager.list_jobs()]
 
 
 @app.get("/api/jobs/{job_id}", response_model=JobModel)
 def get_job(job_id: str) -> JobModel:
+    """Retrieves the details of a single job by its ID.
+
+    Args:
+        job_id: The unique identifier of the job.
+
+    Raises:
+        HTTPException: If no job with the specified ID is found.
+
+    Returns:
+        The `JobModel` object for the requested job.
+    """
     try:
         record = job_manager.get_job(job_id)
     except KeyError as exc:  # pragma: no cover - defensive
@@ -347,11 +483,29 @@ def _job_log_payload(job_id: str, tail: int) -> Dict[str, Any]:
 
 @app.get("/api/jobs/{job_id}/log")
 def get_job_log(job_id: str, tail: int = Query(4000, ge=100, le=20000)) -> Dict[str, Any]:
+    """Retrieves the tail of a job's log file.
+
+    Args:
+        job_id: The ID of the job.
+        tail: The number of characters to retrieve from the end of the log.
+
+    Returns:
+        A dictionary containing the log content.
+    """
     return _job_log_payload(job_id, tail)
 
 
 @app.get("/api/jobs/{job_id}/logs")
 def get_job_logs(job_id: str, tail: int = Query(4000, ge=100, le=20000)) -> Dict[str, Any]:
+    """Retrieves the tail of a job's log file (alias for /log).
+
+    Args:
+        job_id: The ID of the job.
+        tail: The number of characters to retrieve from the end of the log.
+
+    Returns:
+        A dictionary containing the log content.
+    """
     return _job_log_payload(job_id, tail)
 
 
@@ -399,16 +553,41 @@ def _stream_job_log(job_id: str) -> StreamingResponse:
 
 @app.get("/api/jobs/{job_id}/logs/stream")
 def stream_job_logs(job_id: str) -> StreamingResponse:
+    """Streams the log of a running job in real-time using SSE.
+
+    This endpoint establishes a long-lived connection with the client, sending
+    new log entries as they are written. It also sends a completion event
+    when the job finishes.
+
+    Args:
+        job_id: The ID of the job to monitor.
+
+    Returns:
+        A `StreamingResponse` that sends `text/event-stream` data.
+    """
     return _stream_job_log(job_id)
 
 
 @app.get("/api/jobs/{job_id}/log/stream")
 def stream_job_log_legacy(job_id: str) -> StreamingResponse:
+    """Legacy alias for the log streaming endpoint."""
     return _stream_job_log(job_id)
 
 
 @app.post("/api/jobs/{job_id}/cancel", response_model=JobModel)
 def cancel_job(job_id: str) -> JobModel:
+    """Requests cancellation of a pending or active job.
+
+    Args:
+        job_id: The ID of the job to cancel.
+
+    Raises:
+        HTTPException: If the job is not found or is already completed and
+                       cannot be cancelled.
+
+    Returns:
+        The updated `JobModel` with a 'cancelled' status.
+    """
     try:
         record = job_manager.cancel_job(job_id)
     except KeyError as exc:  # pragma: no cover - defensive
@@ -420,6 +599,17 @@ def cancel_job(job_id: str) -> JobModel:
 
 @app.post("/api/jobs/inference", response_model=JobModel, status_code=201)
 def create_inference_job(payload: InferenceJobRequest) -> JobModel:
+    """Creates and queues a new inference job.
+
+    Args:
+        payload: An `InferenceJobRequest` with the job parameters.
+
+    Raises:
+        HTTPException: If the job queue is full.
+
+    Returns:
+        The newly created `JobModel`.
+    """
     try:
         record = job_manager.create_job(
             "inference",
@@ -433,6 +623,17 @@ def create_inference_job(payload: InferenceJobRequest) -> JobModel:
 
 @app.post("/api/jobs/training-pair", response_model=JobModel, status_code=201)
 def create_training_pair_job(payload: TrainingPairRequest) -> JobModel:
+    """Creates and queues a new training pair generation job.
+
+    Args:
+        payload: A `TrainingPairRequest` with the job parameters.
+
+    Raises:
+        HTTPException: If the job queue is full.
+
+    Returns:
+        The newly created `JobModel`.
+    """
     try:
         record = job_manager.create_job(
             "training_pair",
@@ -446,6 +647,17 @@ def create_training_pair_job(payload: TrainingPairRequest) -> JobModel:
 
 @app.post("/api/jobs/model-training", response_model=JobModel, status_code=201)
 def create_model_training_job(payload: ModelTrainingRequest) -> JobModel:
+    """Creates and queues a new model training job.
+
+    Args:
+        payload: A `ModelTrainingRequest` with the job parameters.
+
+    Raises:
+        HTTPException: If the job queue is full.
+
+    Returns:
+        The newly created `JobModel`.
+    """
     try:
         record = job_manager.create_job(
             "model_training",

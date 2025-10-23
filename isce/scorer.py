@@ -1,5 +1,19 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\scorer.py
+"""Provides the Scorer class for evaluating segmentation decisions.
 
+This module is central to the beam search process. The `Scorer` class takes
+the trained model weights, derived corpus constraints, and user-configurable
+"sliders" to evaluate the quality of potential break decisions.
+
+The scoring is divided into two main components:
+1.  **Transition Scoring**: `score_transition` evaluates the quality of placing
+    a break (`O`, `LB`, `SB`) *between* two tokens. This score is based on
+    local linguistic and prosodic features.
+2.  **Block Scoring**: `score_block` evaluates the quality of a *completed*
+    subtitle block. This score is based on holistic properties like
+    characters-per-second (CPS), line balance, and total duration, ensuring
+    the final output is readable and well-formed.
+"""
 from __future__ import annotations
 from typing import Dict, List
 
