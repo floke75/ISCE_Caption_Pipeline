@@ -126,6 +126,7 @@ class ConfigFieldModel(BaseModel):
     description: Optional[str] = None
     options: Optional[List[Any]] = None
     advanced: bool = False
+    read_only: bool = Field(default=False, alias="readOnly")
 
     @classmethod
     def from_field(cls, field: ConfigField) -> "ConfigFieldModel":
@@ -137,6 +138,7 @@ class ConfigFieldModel(BaseModel):
             description=field.description,
             options=field.options,
             advanced=field.advanced,
+            readOnly=field.read_only,
         )
 
     model_config = ConfigDict(populate_by_name=True)

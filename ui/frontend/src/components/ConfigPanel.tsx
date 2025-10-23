@@ -152,6 +152,13 @@ function ConfigEditor({
                 {visible.map((field) => {
                   const dotted = field.path.join('.');
                   const value = formValues[dotted];
+                  const isReadOnly = field.readOnly ?? false;
+                  const helpText = [
+                    field.description,
+                    isReadOnly ? 'Managed automatically for UI-launched jobs.' : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
                   return (
                     <label key={dotted} className="field">
                       <span>{field.label}</span>
@@ -160,6 +167,7 @@ function ConfigEditor({
                           type="checkbox"
                           checked={Boolean(value)}
                           onChange={(event) => handleFieldChange(field, event.target.checked)}
+                          disabled={isReadOnly}
                         />
                       ) : field.fieldType === 'number' ? (
                         <input
@@ -172,15 +180,21 @@ function ConfigEditor({
                               : ''
                           }
                           onChange={(event) => handleFieldChange(field, event.target.value)}
+                          disabled={isReadOnly}
                         />
                       ) : field.fieldType === 'list' ? (
                         <input
                           type="text"
                           value={Array.isArray(value) ? value.join(', ') : ''}
                           onChange={(event) => handleFieldChange(field, event.target.value)}
+                          disabled={isReadOnly}
                         />
                       ) : field.fieldType === 'select' && field.options ? (
-                        <select value={(value as string) ?? ''} onChange={(event) => handleFieldChange(field, event.target.value)}>
+                        <select
+                          value={(value as string) ?? ''}
+                          onChange={(event) => handleFieldChange(field, event.target.value)}
+                          disabled={isReadOnly}
+                        >
                           {field.options.map((option) => (
                             <option key={option} value={option}>
                               {option}
@@ -192,9 +206,10 @@ function ConfigEditor({
                           type="text"
                           value={(value as string) ?? ''}
                           onChange={(event) => handleFieldChange(field, event.target.value)}
+                          disabled={isReadOnly}
                         />
                       )}
-                      {field.description ? <span className="field-help">{field.description}</span> : null}
+                      {helpText ? <span className="field-help">{helpText}</span> : null}
                     </label>
                   );
                 })}
