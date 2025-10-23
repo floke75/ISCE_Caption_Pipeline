@@ -8,90 +8,60 @@ The primary goal of this project is to provide a robust, non-black-box, and high
 
 **Core Task:** Transform a time-stamped transcript into a perfectly segmented `.srt` file.
 
-## 2. Key Architectural Principles
+## 2. Architecture Snapshot
 
-1.  **Separation of Concerns:** The pipeline is split into distinct, logical stages. Audio processing is handled separately from text processing.
-2.  **Single Source of Truth:** All feature engineering logic is consolidated into a single script (`build_training_pair_standalone.py`) to ensure perfect consistency between training and inference.
-3.  **Orchestration:** A master script (`run_pipeline.py`) manages the execution flow using a "hot folder" system. Worker scripts are called as independent subprocesses.
-4.  **Data Flow:** The primary data format passed between steps is a JSON file containing a list of word-level token dictionaries.
+### 2.1 Orchestrator and Worker Scripts
 
-## 3. Component Map & Agent Instructions
+- **`run_pipeline.py`** — Watches configured hot folders, launches `align_make.py`, `build_training_pair_standalone.py`, and `main.py` in sequence, and moves processed assets into archival locations to complete an inference run. Start here to understand the end-to-end workflow, especially the `process_inference_file` and `process_training_file` functions.
+- **`align_make.py`** — Extracts audio, runs WhisperX plus diarization, and writes timestamped ASR JSON without touching text assets. Focus on `process_file` for the WhisperX workflow.
+- **`build_training_pair_standalone.py`** — Aligns human text or SRT captions to ASR words, engineers linguistic features, and emits enriched JSON suitable for either inference or training. Examine `align_text_to_asr` for alignment logic and `engineer_features` for feature updates.
+- **`main.py`** — Loads enriched tokens, statistical weights, and constraints before running the ISCE beam search and formatting SRT output. The heavy lifting occurs in `isce/beam_search.py` and `isce/scorer.py`.
 
-### 3.1. The Orchestrator (Entry Point)
+### 2.2 Core ISCE Library (`isce/`)
 
-*   **File:** `run_pipeline.py`
-*   **Role:** The **Project Manager**. This is the main entry point for all automated workflows.
-*   **Agent Instructions:**
-    *   To understand the full end-to-end process, start your analysis here.
-    *   Pay close attention to the `process_inference_file` and `process_training_file` functions. They define the sequence of script calls and the file paths passed between them.
-    *   This script is responsible for detecting files in the "hot folders" and launching the appropriate worker scripts.
+Implements the segmentation engine:
+- `beam_search.py` performs the constrained beam search over break decisions.
+- `scorer.py` scores both local transitions and completed blocks using learned weights, rule-based boosts, and user “slider” settings.
+- Supporting modules cover typed token structures, IO helpers, constraint derivation, and model building.
 
-### 3.2. The Audio Specialist
+### 2.3 Model Training Utilities (`scripts/`)
 
-*   **File:** `align_make.py`
-*   **Role:** A pure **Audio-to-Timed-ASR Engine**.
-*   **Inputs:** A raw media file (e.g., `.mp4`).
-*   **Process:**
-    1.  Uses `ffmpeg` to extract and convert audio.
-    2.  Runs the full WhisperX pipeline:
-        *   Transcription (`KBLab/kb-whisper-large`) to get words.
-        *   Alignment (`KBLab/wav2vec2-large-voxrex-swedish`) to get accurate word-level timestamps.
-        *   Diarization (`pyannote.audio`) to get speaker labels.
-    3.  Manages GPU memory by explicitly loading and unloading each model.
-*   **Output:** A single JSON file (`...asr.visual.words.diar.json`) containing a list of word tokens with precise timestamps and speaker labels. This file serves as the "timing reference" or "bridge" for the next step.
-*   **Agent Instructions:** This script is highly specialized. Focus on the `process_file` function to understand the WhisperX workflow. Note that it has no knowledge of `.txt` or `.srt` files.
+- **`scripts/train_model.py`** — Aggregates enriched training corpora, derives fallback constraints, and performs iterative re-weighting to produce `model_weights.json` and `constraints.json`. Relies heavily on helpers in `isce/model_builder.py`.
 
-### 3.3. The Data Specialist (Core Logic)
+### 2.4 UI Backend (`ui/backend/`)
 
-*   **File:** `build_training_pair_standalone.py`
-*   **Role:** The **Heart of the Pipeline**. A monolithic "Text-to-Enriched-Data Engine."
-*   **Inputs:**
-    1.  `--primary-input`: A text file (`.txt` for inference, `.srt` for training).
-    2.  `--asr-reference`: The JSON file produced by `align_make.py`.
-*   **Process:**
-    1.  **Text-to-ASR Alignment:** Calls `align_text_to_asr` to transfer the precise timestamps from the ASR reference onto the words from the primary input file. This is the core alignment logic.
-    2.  **Speaker Correction:** Runs the `correct_speaker_labels` "Sole Winner" algorithm to clean up diarization errors at the sentence level.
-    3.  **Feature Engineering:** Calls the consolidated `engineer_features` function to add all linguistic and heuristic features (SpaCy, pauses, speaker change guardrails, LLM hints, sentence boundaries, etc.).
-    4.  **Label Generation (Training Mode Only):** If the primary input is an `.srt` file, it calls `generate_labels_from_cues` to create the ground-truth `break_type` labels.
-*   **Output:** A single, fully prepared JSON file (`.enriched.json` for inference, `.train.words.json` for training).
-*   **Agent Instructions:** This is the most important script for understanding the project's unique logic. To modify any feature, start your analysis in the `engineer_features` function. To modify the text alignment, analyze `align_text_to_asr`.
+- `app.py` exposes FastAPI routes for health checks, configuration management, job lifecycle, log streaming, and cancellation, serializing job metadata for the SPA.
+- `pipelines.py` stages inputs in per-job workspaces, invokes the legacy CLI scripts, and records artifacts and results.
+- `JobManager` persists job state, streams subprocess output, and materializes runtime configs via `ConfigService`, which also describes editable fields and configuration trees.
+- `api/routes/files.py` powers the filesystem allowlist API used for safe browsing and validation of host paths.
 
-### 3.4. The Segmentation Engine
+### 2.5 Frontend SPA (`ui/frontend/`)
 
-*   **File:** `main.py`
-*   **Role:** The **Decision Maker**.
-*   **Input:** An `.enriched.json` file.
-*   **Process:**
-    1.  Loads the enriched tokens into typed `Token` objects (defined in `isce/types.py`).
-    2.  Loads the trained statistical model (`model_weights.json`) and constraints (`constraints.json`).
-    3.  Initializes the `Scorer` (from `isce/scorer.py`).
-    4.  Calls the `segment` function (from `isce/beam_search.py`), which runs the beam search algorithm to find the optimal sequence of `SB` and `LB` breaks.
-    5.  Uses `isce/srt_writer.py` to format the final output.
-*   **Output:** A final `.srt` file.
-*   **Agent Instructions:** To understand the final decision-making process, analyze `isce/beam_search.py`. To understand how decisions are scored, analyze `isce/scorer.py`.
+- Vite/React app rendering tabbed workflows (inference, training pair, model training, configuration) and a live job monitor.
+- Forms post to the job endpoints, manage per-run overrides via `OverrideEditor`, and use `FilePathPicker` for validated path entry.
+- `ConfigPanel` hydrates structured field metadata plus raw YAML overrides; `JobBoard` consumes `/api/jobs`, streams logs over SSE, and renders job details.
+- `OverrideEditor` walks the configuration tree to coerce typed overrides, and `FilePathPicker` unifies root discovery, directory browsing, and debounced server-side validation for paths.
 
-### 3.5. The Training Utilities
+### 2.6 Frontend–Backend Integration Highlights
 
-*   **File:** `scripts/train_model.py`
-*   **Role:** The **Model Trainer**. This is a standalone script run manually by the user.
-*   **Input:** A directory of `.train.words.json` files.
-*   **Process:**
-    1.  Loads all training data.
-    2.  Calls `derive_constraints` (from `isce/model_builder.py`) to analyze the corpus.
-    3.  Runs an iterative reweighting loop:
-        *   Calls `build_weights` (from `isce/model_builder.py`) to learn the statistical patterns.
-        *   Uses the `Scorer` to find hard examples and adjust their weights for the next iteration.
-*   **Output:** The two core model files: `model_weights.json` and `constraints.json`.
-*   **Agent Instructions:** To understand how the statistical model is created, analyze this script and its primary dependency, `isce/model_builder.py`.
+- **REST + SSE surface.** React hooks hit `/api/jobs`, `/api/jobs/{id}/logs`, and `/api/jobs/{id}/logs/stream`, aligning with FastAPI routes returning job metadata, tail logs, and server-sent events (including completion markers).
+- **Configuration editing.** The SPA relies on `ConfigSnapshot` responses to populate structured forms and override editors, mapping field catalogs and schema trees generated by `ConfigService` on the backend.
+- **Filesystem allowlist.** `FilePathPicker` consumes `/api/files/roots`, `/api/files/list`, and `/api/files/validate`, implemented by the backend’s `FileBrowser` to enforce path safety and surface breadcrumbs plus validation metadata.
+- **Pipeline invocation.** Job creation endpoints accept payloads emitted by the forms (media/transcript paths, optional output overrides, per-run config patches) and hand them to `pipelines.py`, which mirrors the original CLI flow before recording outputs for the UI.
 
-## 4. Data Flow Summary (Inference)
+### 2.7 Known Alignment Gaps
 
-1.  `MyVideo.mp4` + `MyVideo.txt` are placed in hot folders.
-2.  `run_pipeline.py` calls `align_make.py` with `MyVideo.mp4`.
-3.  `align_make.py` -> `MyVideo.asr.visual.words.diar.json`.
-4.  `run_pipeline.py` calls `build_training_pair_standalone.py` with `MyVideo.txt` and the ASR JSON.
-5.  `build_training_pair_standalone.py` -> `MyVideo.enriched.json`.
-6.  `run_pipeline.py` calls `main.py` with `MyVideo.enriched.json`.
-7.  `main.py` -> `MyVideo.srt`.
+- The inference form currently rejects output directories that do not already exist, while the backend happily creates missing directories. Consider relaxing the frontend validation to align with backend capabilities.
+- Editable `project_root` and `pipeline_root` fields in the UI have no runtime effect because the backend overrides them. Update the UI to communicate this or adjust backend behavior if user overrides should be honored.
+
+## 3. Data Flow Summary (Inference)
+
+1. `MyVideo.mp4` + `MyVideo.txt` are placed in hot folders.
+2. `run_pipeline.py` calls `align_make.py` with `MyVideo.mp4`.
+3. `align_make.py` → `MyVideo.asr.visual.words.diar.json`.
+4. `run_pipeline.py` calls `build_training_pair_standalone.py` with `MyVideo.txt` and the ASR JSON.
+5. `build_training_pair_standalone.py` → `MyVideo.enriched.json`.
+6. `run_pipeline.py` calls `main.py` with `MyVideo.enriched.json`.
+7. `main.py` → `MyVideo.srt`.
 
 This guide should provide a comprehensive starting point for any LLM agent tasked with analyzing or modifying this repository.
