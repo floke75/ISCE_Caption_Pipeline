@@ -10,6 +10,17 @@ type Props = {
   onJobCreated: () => void;
 };
 
+/**
+ * A form for submitting new inference jobs.
+ *
+ * This component provides input fields for all the parameters required to
+ * start an inference run, including media/transcript paths and optional
+ * configuration overrides. It uses the `FilePathPicker` for safe path
+ * selection and includes an `OverrideEditor` for advanced configuration.
+ *
+ * @param {Props} props The props for the component.
+ * @returns {JSX.Element} The rendered inference form.
+ */
 export function InferenceForm({ onJobCreated }: Props) {
   const [mediaPath, setMediaPath] = useState('');
   const [transcriptPath, setTranscriptPath] = useState('');

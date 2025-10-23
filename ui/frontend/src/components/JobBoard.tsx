@@ -186,6 +186,15 @@ function DetailList({
   );
 }
 
+/**
+ * A comprehensive component for monitoring and inspecting pipeline jobs.
+ *
+ * This component renders a list of all jobs on the left and a detailed view
+ * of the selected job on the right. The detailed view includes parameters,
+ * results, and a live-streaming log viewer that uses Server-Sent Events (SSE).
+ *
+ * @returns {JSX.Element} The rendered job board.
+ */
 export function JobBoard() {
   const jobsQuery = useJobs();
   const jobs = jobsQuery.data ?? [];

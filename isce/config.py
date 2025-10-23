@@ -1,5 +1,12 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\config.py
+"""Manages the loading and validation of application configuration.
 
+This module defines the `Config` dataclass, which serves as a centralized,
+type-safe container for all pipeline settings. It also provides the
+`load_config` function, which is responsible for reading settings from the main
+`config.yaml` file and intelligently merging them with learned constraints from
+a `constraints.json` file generated during model training.
+"""
 from __future__ import annotations
 from dataclasses import dataclass
 import yaml

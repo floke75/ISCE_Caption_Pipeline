@@ -1,10 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-build_training_pair_standalone.py — Self-contained data alignment and enrichment.
-This is the refactored, consolidated version. Its mission is to take a
-time-stamped ASR reference and a primary text file (TXT or SRT) and produce
-a single, fully enriched JSON file for training or inference.
+"""Self-contained data alignment, feature engineering, and labeling pipeline.
+
+This script serves as the second major stage of the ISCE pipeline. Its primary
+responsibility is to take a time-stamped ASR (Automatic Speech Recognition)
+JSON file and a corresponding primary text source (either a clean `.txt` file,
+a ground-truth `.srt` file, or the ASR file itself) and produce a single,
+fully-enriched JSON data structure.
+
+Key operations include:
+1.  **Text-to-ASR Alignment**: Uses a global sequence alignment algorithm to
+    accurately map words from the primary text source to the ASR's timed
+    words, transferring timestamps and speaker labels.
+2.  **Speaker Correction**: Applies a sliding-window algorithm to correct
+    potential speaker label errors from the ASR.
+3.  **Feature Engineering**: Enriches each word token with a wide array of
+    linguistic and prosodic features using spaCy and other heuristics.
+4.  **Label Generation (Training Mode)**: When provided with an SRT file, it
+    generates ground-truth break labels (`SB`, `LB`, `O`) for each token
+    based on the cue structure.
+5.  **Training-Serving Skew Mitigation**: Can optionally generate two versions
+    of training data from a single SRT—one from the clean text and another
+    from a simulated, normalized ASR-style text—to improve model robustness.
+
+The output is a JSON file containing a list of enriched tokens, ready for
+either model training or inference by the final segmentation engine.
 """
 
 import os

@@ -119,6 +119,16 @@ interface TreeItemProps {
   onClear: (node: ConfigNode) => void;
 }
 
+/**
+ * A recursive component to render a single node in the configuration tree.
+ *
+ * This component can render either a branch (a collapsible section for a nested
+ * object) or a leaf (an input control for a primitive value). It displays the
+ * current and default values and allows the user to set an override.
+ *
+ * @param {TreeItemProps} props The props for the component.
+ * @returns {JSX.Element | null} The rendered tree item, or null if it's a hidden advanced field.
+ */
 function OverrideTreeItem({
   node,
   depth,
@@ -292,6 +302,17 @@ function OverrideTreeItem({
   );
 }
 
+/**
+ * A tree-based editor for creating per-run configuration overrides.
+ *
+ * This component fetches the hierarchical configuration schema and renders an
+ * interactive tree that allows users to override any configurable value for a
+ * single job run. It performs type coercion and validation, and outputs a
+ * nested "patch" object that can be sent to the backend.
+ *
+ * @param {OverrideEditorProps} props The props for the component.
+ * @returns {JSX.Element} The rendered override editor.
+ */
 export function OverrideEditor({ onChange }: OverrideEditorProps) {
   const { data, isLoading, isError } = usePipelineConfig();
   const [showAdvanced, setShowAdvanced] = useState(false);

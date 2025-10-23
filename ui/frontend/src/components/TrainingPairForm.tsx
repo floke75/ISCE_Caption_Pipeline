@@ -10,6 +10,15 @@ type Props = {
   onJobCreated: () => void;
 };
 
+/**
+ * A form for submitting new training pair generation jobs.
+ *
+ * This component provides input fields for the media file and ground-truth
+ * SRT file required to generate a labeled and enriched training sample.
+ *
+ * @param {Props} props The props for the component.
+ * @returns {JSX.Element} The rendered training pair form.
+ */
 export function TrainingPairForm({ onJobCreated }: Props) {
   const [mediaPath, setMediaPath] = useState('');
   const [srtPath, setSrtPath] = useState('');

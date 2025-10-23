@@ -10,6 +10,16 @@ type Props = {
   onJobCreated: () => void;
 };
 
+/**
+ * A form for submitting new model training jobs.
+ *
+ * This component provides input fields for the parameters required to start a
+ * model training run, such as the corpus directory and the number of
+ * reweighting iterations.
+ *
+ * @param {Props} props The props for the component.
+ * @returns {JSX.Element} The rendered model training form.
+ */
 export function ModelTrainingForm({ onJobCreated }: Props) {
   const [corpusDir, setCorpusDir] = useState('');
   const [iterations, setIterations] = useState<number | ''>('');

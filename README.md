@@ -4,6 +4,20 @@ ISCE is a complete, end-to-end pipeline for transforming raw audio/video and a c
 
 This pipeline is intended to replace the inefficient and error-prone step of using a generic LLM for subtitle block formatting.
 
+## Table of Contents
+
+- [Features](#features)
+- [Architecture Overview](#architecture-overview)
+- [Getting Started](#getting-started)
+- [Web Control Center](#web-control-center)
+- [How It Works](#how-it-works)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Command-Line Entry Points](#command-line-entry-points)
+- [How to Train a New Model](#how-to-train-a-new-model)
+- [Intermediate Artifacts](#intermediate-artifacts--data-contracts)
+- [Operational Tips](#operational-tips)
+
 ## Features
 
 *   **Hybrid Model:** Combines a statistical model trained on human captioning patterns with robust, rule-based guardrails.
@@ -12,12 +26,13 @@ This pipeline is intended to replace the inefficient and error-prone step of usi
 *   **Robust Speaker Correction:** Implements a two-stage strategy ("Sole Winner" + "Guardrail") to correct and handle common speaker diarization errors from the ASR.
 *   **LLM Hint Integration:** Recognizes newlines in the input text file as a strong hint from an upstream LLM to insert a structural break.
 *   **Automated Workflow:** A master orchestrator script (`run_pipeline.py`) manages the entire process using a "hot folder" system.
+*   **Web UI:** A full-stack control center for running jobs, managing configuration, and monitoring progress.
 
 ## Architecture Overview
 
-The pipeline is a linear, multi-stage process managed by the orchestrator. For a standard inference run, the data flows as follows:
+The pipeline is a linear, multi-stage process. For a standard inference run, the data flows as follows:
 
-
+```
 [Media File] + [TXT File]
 |
 v
@@ -31,6 +46,7 @@ v
 |
 v
 [Final .srt File]
+```
 
 ## Getting Started
 
@@ -40,6 +56,7 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 *   **Python:** 3.11 or higher.
 *   **ffmpeg:** Must be installed and accessible in your system's PATH.
+*   **Node.js and npm:** Required for the web UI.
 *   **GPU (Recommended):** A CUDA-enabled GPU dramatically accelerates WhisperX; CPU-only runs are supported but slower on long-form audio.
 *   **Hugging Face Token:** Required for speaker diarization. Provide it via the `HF_TOKEN` environment variable or the `hf_token` field in `pipeline_config.yaml`.
 *   **First-Run Network Access:** Allow outbound access the first time you install or run the pipeline so WhisperX, PyAnnote, and the SpaCy Swedish model can download required assets.
@@ -65,32 +82,11 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 ### 3. Configuration
 
-1.  **Update `pipeline_config.yaml`:** The file lives in the repository root. Replace placeholder paths for `project_root` and `pipeline_root` with locations on your system and set an `hf_token` (or rely on the `HF_TOKEN` environment variable).
+1.  **Update `pipeline_config.yaml`:** This file lives in the repository root. Replace placeholder paths for `project_root` and `pipeline_root` with locations on your system and set an `hf_token` (or rely on the `HF_TOKEN` environment variable).
 
 2.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior.
 
-### 4. Running the Pipeline
-
-1.  **Start the Orchestrator:**
-    ```bash
-    python run_pipeline.py
-    ```
-
-2.  **Process Files:**
-    *   Drop your media and text files into the appropriate "hot folders" as defined in `pipeline_config.yaml`.
-
-## Folder Structure
-
-*   `run_pipeline.py`: The main orchestrator script that watches hot folders.
-*   `align_make.py`: Worker script for audio processing (ASR, alignment, diarization).
-*   `build_training_pair_standalone.py`: Worker script for text alignment and feature enrichment.
-*   `main.py`: Worker script that runs the final segmentation to create the `.srt` file.
-*   `isce/`: The core Python package containing the main logic (scoring, beam search, etc.).
-*   `scripts/`: Standalone scripts for training and evaluation.
-*   `pipeline_config.yaml` / `config.yaml`: Root-level configuration files that control pipeline paths and segmentation tuning.
-*   `models/`: Directory to store your trained model artifacts (`model_weights.json`, `constraints.json`).
-
-## Web control center
+## Web Control Center
 
 In addition to the CLI orchestrator, the repository now ships with a full-stack control surface that exposes the most common
 operations (inference, training data generation, model training, and configuration management) through a browser-based
@@ -257,5 +253,3 @@ Structurally identical to the enriched tokens, but `break_type` is pre-populated
 * The orchestrator enforces a short "settle" delay before reading new files. Increase `file_settle_delay_seconds` in `pipeline_config.yaml` if you routinely upload large files that take longer to finish copying.
 * Set `skip_if_asr_exists: true` in the `align_make` section when re-running downstream stages on previously aligned audio. This keeps debugging iterations fast by reusing cached ASR output.
 * The SpaCy Swedish model wheel is referenced directly in `requirements.txt`. For offline installations, download the wheel ahead of time and point `pip` to the saved file.
-
-

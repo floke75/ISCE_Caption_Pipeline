@@ -1,5 +1,22 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\model_builder.py
+"""Core logic for training the statistical segmentation model.
 
+This module provides the functions necessary to train the ISCE model from a
+corpus of labeled data. The process involves several key steps:
+
+1.  **Constraint Derivation**: The `derive_constraints` function analyzes the
+    training corpus to learn statistical properties about human-made subtitles,
+    such as typical block durations and line lengths. These become the guiding
+    constraints for the segmentation algorithm.
+2.  **Feature Extraction**: The `create_feature_row` function transforms the
+    rich, continuous data from the enriched tokens into a set of discrete,
+    categorical features suitable for a statistical model. This includes
+    binning continuous values and creating interaction features.
+3.  **Weight Building**: The `build_weights` function takes the featurized data
+    and calculates the conditional probability of each break type (`O`, `LB`,
+    `SB`) given each feature. These probabilities are converted to log-odds to
+    form the final `model_weights.json` file.
+"""
 from __future__ import annotations
 import json
 import math

@@ -1,5 +1,13 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\data_validation.py
+"""Provides functions for validating the integrity of segmented token data.
 
+This module contains tools to perform post-segmentation sanity checks on the
+output of the beam search algorithm. The `validate` function checks for logical
+and temporal inconsistencies, such as negative durations, incorrect time
+ordering, and structural errors within subtitle blocks (e.g., too many line
+breaks). This helps ensure that the final SRT output is well-formed and free
+of common errors before it is written to a file.
+"""
 from __future__ import annotations
 from typing import List, Iterator, Dict, Any, Tuple
 from .types import Token

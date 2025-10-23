@@ -1,5 +1,12 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\beam_search.py
+"""Implements the core beam search algorithm for text segmentation.
 
+This module contains the `Segmenter` class, which performs the beam search
+to find the optimal sequence of break decisions (`O`, `LB`, `SB`) for a given
+list of tokens. It maintains a beam of the most promising hypotheses (paths)
+at each step, using a `Scorer` to evaluate the quality of each potential
+decision based on a statistical model and heuristic rules.
+"""
 from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import List

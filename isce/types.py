@@ -1,5 +1,11 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\types.py
+"""Defines the core data structures and type aliases for the ISCE pipeline.
 
+This module centralizes the key data structures used throughout the application,
+most notably the `Token` dataclass. By defining these types in one place, we
+ensure a consistent and predictable data model across different stages of the
+pipeline, from data enrichment to scoring and final SRT generation.
+"""
 from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any, Literal, Optional

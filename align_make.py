@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-align_make.py — Self-contained Audio-to-ASR Engine.
-This is the refactored, simplified version. Its sole mission is to take a
-raw audio/video file and produce a single, high-quality, time-stamped, and
-speaker-diarized ASR JSON file. It no longer handles TXT or SRT files.
+"""Self-contained audio processing and speech recognition engine.
+
+This script is responsible for the first major stage of the ISCE pipeline.
+It takes a single audio or video file as input and performs the following
+steps:
+1.  Extracts the audio stream and converts it to a standardized format
+    (16kHz mono WAV) required by the speech recognition models.
+2.  Uses a WhisperX model to transcribe the audio into text.
+3.  Performs forced alignment to obtain precise word-level timestamps.
+4.  Applies speaker diarization to identify and label different speakers.
+
+The final output is a single JSON file containing a flat list of words,
+each with its start time, end time, and assigned speaker label. This file
+serves as the foundational timing reference for all subsequent steps in the
+main ISCE pipeline.
 """
 
 import os

@@ -36,6 +36,17 @@ async function validatePath(path: string): Promise<FileValidation> {
   return data;
 }
 
+/**
+ * A composite form control for selecting file or directory paths.
+ *
+ * This component provides a text input for manual path entry, along with a
+ * "Browse" button that opens a modal file browser. It performs debounced,
+ * real-time validation of the entered path against the backend API to ensure
+ * the path is accessible and of the correct type (file or directory).
+ *
+ * @param {Props} props The props for the component.
+ * @returns {JSX.Element} The rendered file path picker.
+ */
 export function FilePathPicker({
   label,
   value,

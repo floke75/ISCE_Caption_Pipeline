@@ -1,5 +1,13 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\io_utils.py
+"""Provides utility functions for loading and saving token data.
 
+This module contains helper functions dedicated to the serialization and
+deserialization of `Token` objects. It defines a standardized JSON structure
+where the token list is stored under a "tokens" key. The `load_tokens` function
+is designed to be robust against extra, unknown fields in the input JSON,
+while the `save_tokens` function ensures a consistent and human-readable
+output format.
+"""
 import json
 from typing import List
 from .types import Token

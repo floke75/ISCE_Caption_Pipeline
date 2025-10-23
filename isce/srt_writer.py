@@ -1,5 +1,13 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\srt_writer.py
+"""Provides functions for formatting and writing SRT subtitle files.
 
+This module contains the logic to convert the final, segmented list of `Token`
+objects into the standard SubRip (SRT) file format. The `tokens_to_srt`
+function is the main entry point, which groups tokens into subtitle blocks
+based on the `SB` and `LB` break types assigned during segmentation. It also
+includes a helper function, `format_time`, to correctly format timestamps
+as required by the SRT specification.
+"""
 from __future__ import annotations
 from typing import List
 from .types import Token
