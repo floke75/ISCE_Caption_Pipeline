@@ -13,4 +13,6 @@ _processed/
 .vscode/
 .idea/
 *.DS_Store
-```5.  **Create `README.md`:** Create a `README.md` file to explain the project.
+
+# Node
+ui/frontend/node_modules

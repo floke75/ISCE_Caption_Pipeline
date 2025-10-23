@@ -163,13 +163,20 @@ export function FilePathPicker({
         let message = result.detail ?? '';
         if (!result.allowed) {
           message = result.detail ?? 'Path is outside the allowed directories';
+        } else if (type === 'directory') {
+          // Directories are valid if they exist and are dirs, or if they don't exist yet.
+          if (result.exists && !result.isDir) {
+            valid = false;
+            message = 'Expected a directory path';
+          } else if (!message) {
+            message = 'Path is valid';
+          }
         } else if (!result.exists) {
+          // Files must exist.
           valid = false;
           message = result.detail ?? 'Path does not exist';
-        } else if (type === 'directory' && !result.isDir) {
-          valid = false;
-          message = 'Expected a directory path';
-        } else if (type === 'file' && !result.isFile) {
+        } else if (!result.isFile) {
+          // And they must be files.
           valid = false;
           message = 'Expected a file path';
         } else if (!message) {
