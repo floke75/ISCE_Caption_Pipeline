@@ -585,14 +585,16 @@ def engineer_features(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
     # Pass 3: Heuristic, Sentence Boundary, and Guardrail Features
     num_re = re.compile(settings.get("num_regex", r"\d+[.,]?\d*"))
     unit_vocab = set(settings.get("unit_vocab", []))
+    dangling_pause_limit = int(settings.get("dangling_eos_max_pause_ms", 250))
     for i in range(len(tokens)):
         token = tokens[i]
         prv = tokens[i - 1] if i > 0 else None
         nxt = tokens[i + 1] if i + 1 < len(tokens) else None
-        
+
+        token["is_dangling_eos"] = False
         is_raw_speaker_change = bool(nxt and token.get("speaker") != nxt.get("speaker"))
         if is_raw_speaker_change:
-            pause_is_significant = token.get("pause_after_ms", 0) > 150 
+            pause_is_significant = token.get("pause_after_ms", 0) > 150
             ends_sentence = token.get("w", "").strip().endswith((".", "?", "!"))
             token["speaker_change"] = True if pause_is_significant or ends_sentence else False
         else:
@@ -613,6 +615,73 @@ def engineer_features(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
             next_is_cap = nxt.get("w", "") and nxt.get("w")[0].isupper()
             next_word_is_sentence_initial = ends_with_punctuation and next_is_cap
         token["is_sentence_final"] = ends_with_punctuation and (nxt is None or next_word_is_sentence_initial)
+
+        short_pause = token.get("pause_after_ms", 0) <= dangling_pause_limit
+        token["is_dangling_eos"] = bool(
+            ends_with_punctuation and nxt and not next_word_is_sentence_initial and short_pause
+        )
+
+    # Pass 4: Sentence-relative features
+    sentences: List[List[int]] = []
+    current_sentence: List[int] = []
+    for idx, token in enumerate(tokens):
+        if token.get("is_sentence_initial", False) or not current_sentence:
+            if current_sentence:
+                sentences.append(current_sentence)
+            current_sentence = [idx]
+        else:
+            current_sentence.append(idx)
+
+        if token.get("is_sentence_final", False):
+            sentences.append(current_sentence)
+            current_sentence = []
+
+    if current_sentence:
+        sentences.append(current_sentence)
+
+    for sentence in sentences:
+        if len(sentence) == 1:
+            tokens[sentence[0]]["relative_position"] = 0.0
+            continue
+
+        span = len(sentence) - 1
+        for offset, token_idx in enumerate(sentence):
+            tokens[token_idx]["relative_position"] = offset / span
+
+    for token in tokens:
+        token.setdefault("relative_position", 0.0)
+
+
+def serialize_token(token: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Create the public JSON representation for a token."""
+
+    round_digits = settings.get("round_seconds", 3)
+    return {
+        "w": token.get("w", ""),
+        "start": round(token.get("start", 0.0), round_digits),
+        "end": round(token.get("end", 0.0), round_digits),
+        "speaker": token.get("speaker"),
+        "cue_id": token.get("cue_id"),
+        "is_sentence_initial": token.get("is_sentence_initial", False),
+        "is_sentence_final": token.get("is_sentence_final", False),
+        "pause_after_ms": token.get("pause_after_ms", 0),
+        "pause_before_ms": token.get("pause_before_ms", 0),
+        "pause_z": token.get("pause_z", 0.0),
+        "pos": token.get("pos"),
+        "lemma": token.get("lemma"),
+        "tag": token.get("tag"),
+        "morph": token.get("morph"),
+        "dep": token.get("dep"),
+        "head_idx": token.get("head_idx"),
+        "break_type": token.get("break_type"),
+        "starts_with_dialogue_dash": token.get("starts_with_dialogue_dash", False),
+        "speaker_change": token.get("speaker_change", False),
+        "num_unit_glue": token.get("num_unit_glue", False),
+        "is_llm_structural_break": token.get("is_llm_structural_break", False),
+        "is_edited_transcript": token.get("is_edited_transcript", False),
+        "relative_position": token.get("relative_position", 0.0),
+        "is_dangling_eos": token.get("is_dangling_eos", False),
+    }
 
 
 # =========================
@@ -737,22 +806,7 @@ def process_file(
             generate_labels_from_cues(token_list, cue_list, settings)
         engineer_features(token_list, settings)
 
-        final_tokens = []
-        for t in token_list:
-            final_tokens.append({
-                "w": t.get("w", ""), "start": round(t.get("start", 0.0), settings.get("round_seconds", 3)),
-                "end": round(t.get("end", 0.0), settings.get("round_seconds", 3)), "speaker": t.get("speaker"),
-                "cue_id": t.get("cue_id"), "is_sentence_initial": t.get("is_sentence_initial", False),
-                "is_sentence_final": t.get("is_sentence_final", False), "pause_after_ms": t.get("pause_after_ms", 0),
-                "pause_before_ms": t.get("pause_before_ms", 0), "pause_z": t.get("pause_z", 0.0),
-                "pos": t.get("pos"), "lemma": t.get("lemma"), "tag": t.get("tag"), "morph": t.get("morph"),
-                "dep": t.get("dep"), "head_idx": t.get("head_idx"), "break_type": t.get("break_type"),
-                "starts_with_dialogue_dash": t.get("starts_with_dialogue_dash", False),
-                "speaker_change": t.get("speaker_change", False), "num_unit_glue": t.get("num_unit_glue", False),
-                "is_llm_structural_break": t.get("is_llm_structural_break", False),
-                "is_edited_transcript": t.get("is_edited_transcript", False)
-            })
-        return final_tokens
+        return [serialize_token(t, settings) for t in token_list]
 
     # --- Output Generation ---
     if is_training_mode:
