@@ -20,6 +20,7 @@ class ConfigField:
     section: str = "General"
     options: Optional[List[Any]] = None
     advanced: bool = False
+    read_only: bool = False
 
     @property
     def dotted_path(self) -> str:
@@ -157,14 +158,24 @@ class ConfigService:
                 section="Core paths",
                 label="Project root",
                 field_type="path",
-                description="Root of the repository containing all scripts and assets.",
+                description=(
+                    "Root of the repository containing all scripts and assets. "
+                    "For UI-launched jobs this value is managed automatically and "
+                    "cannot be overridden."
+                ),
+                read_only=True,
             ),
             ConfigField(
                 path=["pipeline_root"],
                 section="Core paths",
                 label="Pipeline root",
                 field_type="path",
-                description="Base directory where drop folders, intermediates, and outputs are created.",
+                description=(
+                    "Base directory where drop folders, intermediates, and outputs "
+                    "are created. UI jobs always use a per-run workspace and ignore "
+                    "manual overrides."
+                ),
+                read_only=True,
             ),
             ConfigField(
                 path=["align_make", "whisper_model_id"],

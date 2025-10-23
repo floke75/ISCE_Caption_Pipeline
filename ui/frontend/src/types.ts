@@ -22,6 +22,7 @@ export interface ConfigField {
   description?: string;
   options?: string[];
   advanced?: boolean;
+  readOnly?: boolean;
 }
 
 export interface ConfigNode {
