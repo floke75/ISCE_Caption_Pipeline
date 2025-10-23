@@ -53,7 +53,18 @@ def run_inference(ctx: JobContext) -> None:
     txt_dir = Path(runtime.get("txt_placement_folder", pipeline_root / "txt"))
 
     repo_root = Path(runtime.get("project_root", REPO_ROOT))
-    model_config_path = Path(params.get("model_config_path", repo_root / "config.yaml"))
+    model_config_override = params.get("model_config_path")
+    if model_config_override:
+        model_config_path = Path(model_config_override).expanduser()
+    else:
+        default_model_config = runtime.get("segmentation_config_path")
+        if default_model_config:
+            model_config_path = Path(default_model_config)
+        else:  # pragma: no cover - defensive fallback
+            try:
+                model_config_path = ctx.segmentation_config()
+            except RuntimeError:
+                model_config_path = repo_root / "config.yaml"
 
     inputs_dir = ctx.record.workspace / "inputs"
     media_copy = _copy_into(media_path, inputs_dir / "media")

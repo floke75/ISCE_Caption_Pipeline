@@ -37,6 +37,7 @@ segmentation_config_service = ConfigService(
 job_manager = JobManager(
     STORAGE_ROOT,
     pipeline_config_service,
+    segmentation_config_service=segmentation_config_service,
     max_workers=max_workers,
     queue_limit=queue_limit,
 )

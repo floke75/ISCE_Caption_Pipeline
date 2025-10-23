@@ -196,6 +196,10 @@ class JobContext:
         self._ensure_not_cancelled()
         return self._manager.prepare_runtime_config(self.record, overrides or {})
 
+    def segmentation_config(self, overrides: Optional[Dict[str, Any]] = None) -> Path:
+        self._ensure_not_cancelled()
+        return self._manager.prepare_segmentation_config(self.record, overrides or {})
+
     def finalize(self, status: JobStatus, *, result: Optional[Dict[str, Any]] = None, error: Optional[str] = None) -> None:
         self._manager.finalize_job(self.record.id, status=status, result=result, error=error)
 
@@ -222,11 +226,13 @@ class JobManager:
         storage_root: Path,
         config_service: ConfigService,
         *,
+        segmentation_config_service: Optional[ConfigService] = None,
         max_workers: int = 3,
         queue_limit: Optional[int] = None,
     ) -> None:
         self._storage_root = storage_root
         self._config_service = config_service
+        self._segmentation_service = segmentation_config_service
         self._jobs: Dict[str, JobRecord] = {}
         self._futures: Dict[str, Future[Any]] = {}
         self._lock = threading.RLock()
@@ -371,21 +377,47 @@ class JobManager:
     def prepare_runtime_config(self, record: JobRecord, overrides: Dict[str, Any]) -> Dict[str, Any]:
         base = self._config_service.base_config()
         stored_overrides = self._config_service.stored_overrides()
-        config = _recursive_update(base, stored_overrides)
-        config["project_root"] = str(self._storage_root.parent)
+        merged = _recursive_update(base, stored_overrides)
+        resolved = self._config_service.resolve_paths(merged)
+
+        resolved["project_root"] = str(self._storage_root.parent)
         pipeline_root = record.workspace / "pipeline"
-        config["pipeline_root"] = str(pipeline_root)
-        runtime = _recursive_update(config, overrides)
+        resolved["pipeline_root"] = str(pipeline_root)
+
+        runtime = _recursive_update(resolved, overrides)
         runtime = self._config_service.resolve_paths(runtime)
+
         pipeline_root.mkdir(parents=True, exist_ok=True)
         self._write_runtime_config(record.workspace, runtime)
         runtime["__path__"] = str(record.workspace / "pipeline_config.runtime.yaml")
+
+        if self._segmentation_service is not None:
+            segmentation_path = self.prepare_segmentation_config(record)
+            runtime["segmentation_config_path"] = str(segmentation_path)
+
         return runtime
 
     def _write_runtime_config(self, workspace: Path, config: Dict[str, Any]) -> None:
         config_path = workspace / "pipeline_config.runtime.yaml"
         with config_path.open("w", encoding="utf-8") as fh:
             yaml.safe_dump(config, fh, allow_unicode=True, sort_keys=False)
+
+    def prepare_segmentation_config(
+        self, record: JobRecord, overrides: Optional[Dict[str, Any]] = None
+    ) -> Path:
+        if self._segmentation_service is None:
+            raise RuntimeError("Segmentation config service is not configured")
+
+        base = self._segmentation_service.base_config()
+        stored_overrides = self._segmentation_service.stored_overrides()
+        merged = _recursive_update(base, stored_overrides)
+        runtime = _recursive_update(merged, overrides or {})
+        runtime = self._segmentation_service.resolve_paths(runtime)
+
+        config_path = record.workspace / "segmentation_config.runtime.yaml"
+        with config_path.open("w", encoding="utf-8") as fh:
+            yaml.safe_dump(runtime, fh, allow_unicode=True, sort_keys=False)
+        return config_path
 
     # ------------------------------------------------------------------
     # Query APIs
