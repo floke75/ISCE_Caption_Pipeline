@@ -14,7 +14,6 @@ ffmpeg-python
 
 ## Natural language processing
 spacy
-https://github.com/explosion/spacy-models/releases/download/sv_core_news_lg-3.7.2/sv_core_news_lg-3.7.2-py3-none-any.whl
 
 ## Web API backend
 fastapi
