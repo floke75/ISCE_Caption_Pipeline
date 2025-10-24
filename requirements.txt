@@ -14,7 +14,6 @@ ffmpeg-python
 
 ## Natural language processing
 spacy
-https://github.com/explosion/spacy-models/releases/download/sv_core_news_lg-3.7.2/sv_core_news_lg-3.7.2-py3-none-any.whl
 
 ## Web API backend
 fastapi
@@ -27,4 +26,5 @@ httpx
 
 # Note: Specific versions have been removed to allow pip to resolve the latest
 # compatible releases. If you encounter issues, pin the versions (e.g.
-# pandas==2.1.4).
+# pandas==2.1.4). The Swedish SpaCy model is installed automatically by
+# `scripts/install.py`.
