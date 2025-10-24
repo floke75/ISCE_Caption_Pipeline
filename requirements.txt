@@ -13,8 +13,8 @@ torch
 ffmpeg-python
 
 ## Natural language processing
-spacy
-https://github.com/explosion/spacy-models/releases/download/sv_core_news_lg-3.7.2/sv_core_news_lg-3.7.2-py3-none-any.whl
+# The installer dynamically selects the appropriate spaCy build and downloads
+# the Swedish language model, so we keep only auxiliary libraries here.
 
 ## Web API backend
 fastapi
