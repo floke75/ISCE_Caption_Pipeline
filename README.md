@@ -69,16 +69,25 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
     cd ISCE_Caption_Pipeline
     ```
 
-2.  **Create a Virtual Environment:**
+2.  **Run the Installer:** The repository ships with a first-run helper that
+    creates a virtual environment, installs the latest dependencies, and
+    downloads the Swedish SpaCy model.
+
     ```bash
-    python -m venv .venv
-    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+    python install.py
     ```
 
-3.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+    The installer supports optional flags:
+
+    * ``--spacy-accelerator cuda12x`` — install SpaCy with NVIDIA CUDA 12.x
+      support (Windows/Linux).
+    * ``--venv-path <path>`` — change where the virtual environment is created
+      (defaults to ``.venv``).
+    * ``--recreate`` — delete and rebuild an existing environment.
+
+    After the script finishes, activate the environment using the hint printed
+    in the terminal (``.venv\Scripts\activate`` on Windows or
+    ``source .venv/bin/activate`` on macOS/Linux).
 
 ### 3. Configuration
 
