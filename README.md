@@ -69,16 +69,22 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
     cd ISCE_Caption_Pipeline
     ```
 
-2.  **Create a Virtual Environment:**
+2.  **Run the Guided Installer:**
     ```bash
-    python -m venv .venv
-    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+    python install.py
     ```
 
-3.  **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+    The installer will:
+
+    * create (or reuse) a virtual environment under `.venv`,
+    * upgrade `pip`, `setuptools`, and `wheel`,
+    * install all runtime dependencies from `requirements.txt`,
+    * optionally install development extras via `--include-dev`,
+    * install the preferred spaCy backend (CPU by default, CUDA/ROCm backends on request), and
+    * download the `sv_core_news_lg` Swedish language model.
+
+    Use `python install.py --help` to see advanced options such as `--venv` to choose a different
+    environment path or `--gpu-backend cuda12x` for accelerated spaCy builds on Windows GPUs.
 
 ### 3. Configuration
 
