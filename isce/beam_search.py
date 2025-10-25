@@ -1,4 +1,12 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\beam_search.py
+"""Beam search segmentation with lookahead-aware heuristics.
+
+This module hosts the core implementation of ISCE's beam search.  The logic
+has accumulated a number of heuristics over the years, so we keep the code
+heavily documented to make the data flow and motivations explicit.  In
+particular, the scorer now receives a transition context describing the
+partially written block in order to penalize prospective line breaks that
+would leave unreasonably short orphan lines.
+"""
 
 from __future__ import annotations
 from dataclasses import dataclass, replace
@@ -22,21 +30,29 @@ class PathState:
     breaks: tuple[BreakType, ...]
 
 class Segmenter:
-    """
-    Manages the beam search segmentation process.
+    """Stateful helper that manages the beam search segmentation process.
 
-    This stateful class encapsulates the logic for the beam search algorithm,
-    iterating through tokens and maintaining a beam of the most likely
-    segmentation hypotheses (`PathState` objects). It uses a `Scorer` to
-    evaluate the quality of different break decisions at each step.
+    The segmenter walks token-by-token through the transcript.  At each
+    position it expands the active hypotheses (represented by :class:`PathState`
+    instances), calls into :class:`~isce.scorer.Scorer` to evaluate potential
+    break transitions, and then prunes the hypotheses back down to the
+    configured beam width.  The docstring deliberately calls out the tuning
+    knobs that shape the heuristics so that future changes remain grounded in
+    the original intent.
 
     Attributes:
-        tokens: The list of `Token` objects to be segmented.
-        scorer: The `Scorer` instance used to score potential breaks.
-        cfg: The main configuration object.
-        beam: The list of current best `PathState` hypotheses.
-        line_len_leniency: A factor to adjust penalties for long lines.
-        orphan_leniency: A factor to adjust penalties for single-word lines.
+        tokens: Sequence of :class:`~isce.types.Token` objects awaiting
+            segmentation.
+        scorer: The :class:`~isce.scorer.Scorer` instance providing transition
+            and block level scores.
+        cfg: Parsed :class:`~isce.config.Config` containing algorithm settings.
+        beam: Current top-N :class:`PathState` hypotheses under consideration.
+        line_len_leniency: Scalar that softens penalties for exceeding the
+            preferred line length.
+        orphan_leniency: Scalar that scales the penalty for producing a short
+            second line after a line break.
+        fallback_sb_penalty: Manual penalty applied when the search must emit a
+            forced block break to satisfy hard constraints.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -76,7 +92,23 @@ class Segmenter:
         return True
 
     def _estimate_second_line(self, current_idx: int) -> tuple[int, int]:
-        """Estimate characters and words available for the prospective second line."""
+        """Estimate room available for a hypothetical second line.
+
+        When the current path is still on the first line of a block we ask the
+        scorer to evaluate what a line break would look like.  That requires a
+        rough idea of how many characters and words could fit on the second
+        line before encountering a natural stopping point such as punctuation,
+        a speaker change, or the soft length target.  The heuristic is simple
+        and intentionally deterministic so that unit tests can reason about its
+        behaviour.
+
+        Args:
+            current_idx: Index of the token currently being evaluated.
+
+        Returns:
+            A ``(characters, words)`` tuple estimating the second line content.
+            ``(0, 0)`` indicates that no additional words are available.
+        """
         if current_idx + 1 >= len(self.tokens):
             return 0, 0
 
@@ -101,7 +133,14 @@ class Segmenter:
         return length, words
 
     def _build_transition_context(self, state: PathState, current_idx: int) -> TransitionContext:
-        """Construct the lookahead context passed into the scorer."""
+        """Construct the lookahead context passed into the scorer.
+
+        The :class:`~isce.scorer.Scorer` only works with serialisable
+        dictionaries, so we project the dataclass tokens into dictionaries and
+        package the relevant line metrics.  ``projected_second_line_*`` is
+        provided only when the current path is still mid-first-line; otherwise
+        the scorer can infer that the transition stays within the same line.
+        """
 
         pending_tokens = tuple(dict(t.__dict__) for t in self.tokens[state.block_start_idx : current_idx + 1])
         projected_chars: int | None = None
@@ -149,7 +188,7 @@ class Segmenter:
             scorer_row = TokenRow(
                 token=token_dict,
                 nxt=nxt_dict,
-                feats=None # feats object is no longer used by the scorer
+                feats=None,  # feats object is no longer used by the scorer
             )
             for state in self.beam:
                 context = self._build_transition_context(state, i)
@@ -188,6 +227,12 @@ class Segmenter:
                     candidates.append(PathState(score=score, line_num=1, line_len=next_word_len, block_start_idx=i + 1, breaks=state.breaks + ("SB",)))
 
             if not candidates and self.beam:
+                # The hard constraints may occasionally paint the search into a
+                # corner (for example when the minimum block duration has not
+                # yet been satisfied).  Rather than crashing we emit a forced
+                # block break from the best surviving hypothesis and assess a
+                # manual penalty so that the search only uses this escape hatch
+                # when no feasible alternative exists.
                 fallback_state = self.beam[0]
                 fallback_context = self._build_transition_context(fallback_state, i)
                 fallback_scores = self.scorer.score_transition(scorer_row, fallback_context)
