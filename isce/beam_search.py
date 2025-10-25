@@ -206,9 +206,8 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     if n == 0:
         return []
     mapped: List[BreakType] = ["O"] * n
-    for i in range(n - 1):
-        mapped[i] = reversed_breaks[n - 2 - i]
-    mapped[-1] = "SB"
+    for i in range(n):
+        mapped[i] = reversed_breaks[n - 1 - i]
     return mapped
 
 
