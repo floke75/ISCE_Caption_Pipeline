@@ -814,16 +814,18 @@ def process_file(
         print("[WARN] Alignment produced no tokens. Skipping.")
         return
 
+    # --- Generate Labels (if training) BEFORE any modification ---
+    if is_training_mode:
+        print("\n--- Generating ground-truth labels from SRT cues ---")
+        generate_labels_from_cues(tokens, cues, settings)
+
+
     # --- Main Processing Block ---
     def _enrich_and_finalize(
-        token_list: List[Dict[str, Any]],
-        cue_list: List[Dict[str, Any]],
-        is_training: bool
+        token_list: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Applies speaker correction, labeling, and feature engineering."""
+        """Applies speaker correction and feature engineering."""
         correct_speaker_labels(token_list, settings)
-        if is_training:
-            generate_labels_from_cues(token_list, cue_list, settings)
         engineer_features(token_list, settings)
 
         return [serialize_token(t, settings) for t in token_list]
@@ -832,7 +834,9 @@ def process_file(
     if is_training_mode:
         # 1. Process the original, edited transcript
         print("\n--- Processing EDITED version for training ---")
-        edited_tokens = _enrich_and_finalize(tokens, cues, is_training=True)
+        # Use a deep copy to avoid side effects from in-place modifications
+        edited_tokens_to_process = copy.deepcopy(tokens)
+        edited_tokens = _enrich_and_finalize(edited_tokens_to_process)
         out_path_edited = paths["out_training_dir"] / f"{base}.train.words.json"
         _save_json({"tokens": edited_tokens}, out_path_edited)
         print(f"[OK] Wrote EDITED training data to: {out_path_edited.name}")
@@ -841,7 +845,8 @@ def process_file(
         emit_simulated_copy = bool(settings.get("emit_asr_style_training_copy", False))
         if emit_simulated_copy:
             print("\n--- Processing SIMULATED ASR version for training ---")
-            simulated_asr_tokens = json.loads(json.dumps(tokens)) # Deep copy
+            # The original `tokens` list already has the correct labels, so deepcopy it.
+            simulated_asr_tokens = copy.deepcopy(tokens)
             for token in simulated_asr_tokens:
                 # Normalize text to simulate raw ASR output
                 raw_w = re.sub(r'[^\w\s]', '', token.get("w", "").lower())
@@ -849,7 +854,7 @@ def process_file(
                 # Mark this as a non-edited transcript
                 token["is_edited_transcript"] = False
 
-            final_simulated_tokens = _enrich_and_finalize(simulated_asr_tokens, cues, is_training=True)
+            final_simulated_tokens = _enrich_and_finalize(simulated_asr_tokens)
             out_path_simulated = paths["out_training_dir"] / f"{base}.train.raw.words.json"
             _save_json({"tokens": final_simulated_tokens}, out_path_simulated)
             print(f"[OK] Wrote SIMULATED ASR training data to: {out_path_simulated.name}")
@@ -857,7 +862,7 @@ def process_file(
             print("\n--- Skipping SIMULATED ASR copy (disabled via emit_asr_style_training_copy) ---")
 
     else: # Inference Mode
-        final_tokens = _enrich_and_finalize(tokens, cues, is_training=False)
+        final_tokens = _enrich_and_finalize(tokens)
         out_path = paths["out_inference_dir"] / f"{base}.enriched.json"
         _save_json({"tokens": final_tokens}, out_path)
         print(f"[OK] Wrote INFERENCE data to: {out_path.name}")
