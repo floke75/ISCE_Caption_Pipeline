@@ -159,6 +159,12 @@ function ConfigEditor({
           return (
             <div key={section} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <h3 className="section-title">{section}</h3>
+              {section === 'Core paths' && (
+                <p className="field-help" style={{ margin: 0 }}>
+                  UI-launched jobs always inject their own <code>project_root</code> and <code>pipeline_root</code> values. Edits
+                  here only affect standalone CLI runs.
+                </p>
+              )}
               <div className="form-grid">
                 {visible.map((field) => {
                   const dotted = field.path.join('.');
