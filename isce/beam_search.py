@@ -48,6 +48,9 @@ class Segmenter:
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
+        # Cache the best path score from the most recent run so that downstream
+        # refinement helpers can compare alternative segmentations using the
+        # exact same scoring logic applied by the beam search.
         self.last_path_score: float | None = None
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
@@ -180,12 +183,27 @@ class Segmenter:
 
 
 def _count_chars(token_slice: List[Token]) -> int:
+    """Return the number of printable characters in a slice of tokens.
+
+    The helper mirrors the formatter's line length accounting by including the
+    number of inter-word spaces in addition to the raw token lengths so that the
+    refinement heuristics evaluate potential cues using the same metric.
+    """
+
     if not token_slice:
         return 0
     return sum(len(t.w) for t in token_slice) + max(0, len(token_slice) - 1)
 
 
 def _block_balance(block_tokens: List[Token], block_breaks: List[BreakType]) -> float:
+    """Compute the ratio between the longer and shorter lines in a cue.
+
+    A perfectly balanced two-line cue will have a ratio close to 1.0, while an
+    imbalanced cue (for example a single-word second line) yields a much larger
+    ratio.  We rely on this signal to decide whether the refinement pass should
+    revisit the break placement.
+    """
+
     try:
         lb_idx = block_breaks.index("LB")
     except ValueError:
@@ -202,6 +220,15 @@ def _block_balance(block_tokens: List[Token], block_breaks: List[BreakType]) -> 
 
 
 def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config) -> float:
+    """Re-score a fixed segmentation path using the canonical scorer.
+
+    The refinement helpers occasionally explore localized windows using a wider
+    beam.  In order to determine whether those alternates actually improve the
+    subtitle quality, we need a deterministic way to score the original
+    segmentation with the same heuristics the beam search relies on.  This
+    function rebuilds that computation without mutating global state.
+    """
+
     if not tokens:
         return 0.0
 
@@ -253,6 +280,18 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
 
 
 def _should_refine(block_tokens: List[Token], block_breaks: List[BreakType], block_score: float) -> bool:
+    """Decide whether a cue is low quality enough to warrant refinement.
+
+    The heuristic favors re-scoring blocks that:
+
+    * Collapse to a single word (classic orphan cue).
+    * Receive a negative structural score from the model.
+    * Display highly imbalanced line lengths.
+
+    Returning ``True`` signals to ``refine_blocks`` that it should run a local
+    beam search window to hunt for a better segmentation.
+    """
+
     if not block_tokens:
         return False
     if len(block_tokens) == 1:
@@ -266,12 +305,26 @@ def _should_refine(block_tokens: List[Token], block_breaks: List[BreakType], blo
 
 
 def refine_blocks(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config) -> List[BreakType]:
+    """Run a localized refinement pass over low quality cues.
+
+    The initial beam search sometimes emits harsh cues—usually a one-word block
+    or a severely unbalanced two-line cue—because the constrained search space
+    cannot justify a better alternative given the global beam width.  When the
+    configuration enables it, this helper scans each block, identifies those
+    that are suspect via ``_should_refine``, and then re-runs the beam search on
+    a limited token window with a wider beam.  If the refined segmentation
+    scores higher than the original by a tiny margin, we splice the alternate
+    decisions back into the final break sequence.
+    """
+
     if not tokens or not breaks:
         return breaks
 
     refined_breaks = list(breaks)
 
     block_boundaries: List[tuple[int, int]] = []
+    # Identify the (start, end) index for every cue in the current segmentation
+    # so that we can reason about the surrounding context when re-scoring.
     start_idx = 0
     for i, br in enumerate(refined_breaks):
         if br == "SB":

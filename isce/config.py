@@ -27,6 +27,9 @@ class Config:
                  behavior of the scoring model.
         paths: A dictionary containing the relative paths to model files like weights
                and constraints.
+        enable_refinement_pass: Whether to run a localized follow-up search that
+                                re-scores low quality cues after the main beam
+                                search finishes.
     """
     beam_width: int
     min_block_duration_s: float
