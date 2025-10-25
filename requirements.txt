@@ -13,7 +13,7 @@ torch
 ffmpeg-python
 
 ## Natural language processing
-spacy
+spacy>=3.7,<4.0
 
 ## Web API backend
 fastapi
