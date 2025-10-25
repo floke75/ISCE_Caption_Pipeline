@@ -4,6 +4,9 @@ from isce.scorer import Scorer
 from isce.config import Config
 from isce.types import TokenRow
 
+def approx_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
+    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
 
 def _make_cfg() -> Config:
     return Config(
@@ -17,6 +20,16 @@ def _make_cfg() -> Config:
         min_chars_for_single_word_block=10,
         sliders={},
         paths={},
+        enable_bidirectional_pass=False,
+        lookahead_width=0,
+        enable_reflow=False,
+        min_line_length_for_break=1,
+        min_last_word_len_for_break=1,
+        single_word_line_penalty=0.0,
+        extreme_balance_penalty=0.0,
+        enable_refinement_pass=False,
+        min_block_length_char=1,
+        min_line_length_char=1,
     )
 
 
@@ -72,9 +85,9 @@ def test_score_transition_applies_weights_and_structure_boost():
 
     scores = scorer.score_transition(TokenRow(token=token, nxt=nxt))
 
-    assert scores["O"] == pytest.approx(-7.1)
-    assert scores["LB"] == pytest.approx(1.7)
-    assert scores["SB"] == pytest.approx(12.05)
+    assert approx_equal(scores["O"], -7.1)
+    assert approx_equal(scores["LB"], 1.7)
+    assert approx_equal(scores["SB"], 12.05)
 
 
 def test_score_block_balances_density_and_duration():
@@ -97,4 +110,4 @@ def test_score_block_balances_density_and_duration():
 
     score = scorer.score_block(block_tokens, block_breaks)
 
-    assert score == pytest.approx(0.5)
+    assert approx_equal(score, 0.5)

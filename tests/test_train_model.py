@@ -3,6 +3,10 @@ from pathlib import Path
 import sys
 
 import pytest
+import numpy as np
+
+def approx_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
+    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -26,6 +30,16 @@ def _fallback_config() -> Config:
         min_chars_for_single_word_block=4,
         sliders={},
         paths={},
+        enable_bidirectional_pass=False,
+        lookahead_width=0,
+        enable_reflow=False,
+        min_line_length_for_break=1,
+        min_last_word_len_for_break=1,
+        single_word_line_penalty=0.0,
+        extreme_balance_penalty=0.0,
+        enable_refinement_pass=False,
+        min_block_length_char=1,
+        min_line_length_char=1,
     )
 
 
@@ -72,8 +86,8 @@ def test_constraints_ignore_raw_duplicates(tmp_path: Path) -> None:
     assert raw_paths, "Raw duplicate should be detected for regression coverage."
 
     filtered_constraints = derive_constraints([str(p) for p in human_paths], cfg)
-    assert filtered_constraints["ideal_cps_median"] == pytest.approx(expected["ideal_cps_median"])
-    assert filtered_constraints["min_block_duration_s"] == pytest.approx(expected["min_block_duration_s"])
+    assert approx_equal(filtered_constraints["ideal_cps_median"], expected["ideal_cps_median"])
+    assert approx_equal(filtered_constraints["min_block_duration_s"], expected["min_block_duration_s"])
 
     polluted_constraints = derive_constraints([str(p) for p in human_paths + raw_paths], cfg)
-    assert polluted_constraints["ideal_cps_median"] != pytest.approx(expected["ideal_cps_median"])
+    assert not approx_equal(polluted_constraints["ideal_cps_median"], expected["ideal_cps_median"])

@@ -109,6 +109,12 @@ class TokenRow:
     token: dict[str, Any]
     nxt: Optional[dict[str, Any]]
     feats: Any = None
+    lookahead: Optional[list[dict[str, Any]]] = None
+
+    @property
+    def has_lookahead(self) -> bool:
+        """Returns True if the row has lookahead context."""
+        return self.lookahead is not None and len(self.lookahead) > 0
 
 
 @dataclass(frozen=True)

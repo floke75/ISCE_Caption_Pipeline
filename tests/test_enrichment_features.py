@@ -9,6 +9,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from build_training_pair_standalone import engineer_features, serialize_token
 
+def approx_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
+    return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
 
 def make_token(word: str, start: float, end: float) -> dict:
     return {"w": word, "start": start, "end": end, "speaker": "A"}
@@ -29,14 +32,14 @@ def test_engineer_features_sets_relative_position_and_dangling_flags():
     engineer_features(tokens, settings)
 
     relative_positions = [tokens[i]["relative_position"] for i in range(len(tokens))]
-    assert relative_positions[0] == pytest.approx(0.0)
-    assert relative_positions[1] == pytest.approx(1.0)
-    assert relative_positions[3] == pytest.approx(0.5)
-    assert relative_positions[6] == pytest.approx(1.0)
+    assert approx_equal(relative_positions[0], 0.0)
+    assert approx_equal(relative_positions[1], 1.0)
+    assert approx_equal(relative_positions[3], 0.5)
+    assert approx_equal(relative_positions[6], 1.0)
 
     assert tokens[1]["is_dangling_eos"] is False
     assert tokens[5]["is_dangling_eos"] is True
 
     serialized = [serialize_token(t, settings) for t in tokens]
-    assert serialized[3]["relative_position"] == pytest.approx(0.5)
+    assert approx_equal(serialized[3]["relative_position"], 0.5)
     assert serialized[5]["is_dangling_eos"] is True

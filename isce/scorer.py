@@ -49,6 +49,7 @@ class Scorer:
         self.sl = {"flow": 1.0, "density": 1.0, "balance": 1.0, "structure": 1.0}
         self.sl.update(sliders)
         self.structure_boost = self.sl.get("structure_boost", 15.0)
+        self.cfg = cfg
 
     def _get_weight(self, group: str, key: str, outcome: str) -> float:
         """
@@ -148,6 +149,9 @@ class Scorer:
             scores["SB"] += self.structure_boost
             scores["O"] -= self.structure_boost
 
+        if row.has_lookahead:
+            self._apply_lookahead_heuristics(scores, row)
+
         return scores
 
     def score_block(self, block_tokens: List[dict], block_breaks: List[BreakType]) -> float:
@@ -218,4 +222,43 @@ class Scorer:
         if gross_duration < self.c.get("min_block_duration_s", 1.0): score -= 10.0
         if gross_duration > self.c.get("max_block_duration_s", 8.0): score -= 2.0
 
+        if len(block_tokens) == 1 and len(block_tokens[0]['w']) < self.cfg.min_chars_for_single_word_block:
+            score -= self.cfg.single_word_line_penalty
+
+        if lb_idx != -1:
+            len1 = count_chars(block_tokens[:lb_idx + 1])
+            len2 = count_chars(block_tokens[lb_idx + 1:])
+            if len1 > 0 and len2 > 0:
+                ratio = max(len1, len2) / min(len1, len2)
+                if ratio > 3.0:
+                    score -= self.cfg.extreme_balance_penalty
+
+        if total_chars < self.cfg.min_block_length_char:
+            score -= (self.cfg.min_block_length_char - total_chars) * 0.5
+        if lb_idx != -1:
+            len1 = count_chars(block_tokens[:lb_idx + 1])
+            len2 = count_chars(block_tokens[lb_idx + 1:])
+            if len1 < self.cfg.min_line_length_char:
+                score -= (self.cfg.min_line_length_char - len1) * 0.5
+            if len2 < self.cfg.min_line_length_char:
+                score -= (self.cfg.min_line_length_char - len2) * 0.5
+
+
         return score
+
+    def _apply_lookahead_heuristics(self, scores: Dict[str, float], row: TokenRow) -> None:
+        """
+        Applies heuristic penalties based on future token context.
+        """
+        if not row.lookahead:
+            return
+
+        # Penalize breaks that would create a very short next line
+        if len(row.lookahead) > 0:
+            next_line_len = sum(len(t['w']) for t in row.lookahead) + len(row.lookahead) - 1
+            if next_line_len < self.cfg.min_line_length_for_break:
+                scores["LB"] -= 5.0
+
+        # Penalize breaks where the last word of the line is very short
+        if len(row.token['w']) < self.cfg.min_last_word_len_for_break:
+            scores["LB"] -= 5.0
