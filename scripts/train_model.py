@@ -54,6 +54,17 @@ def partition_corpus_paths(corpus_dir: Path) -> Tuple[list[Path], list[Path]]:
 
     for path in sorted(corpus_dir.glob("*.json")):
         name = path.name.lower()
+
+        # Skip JSON sidecar files that do not contain training token data.
+        # Only `*.train.words.json` (and their simulated `*.train.raw.words.json`
+        # counterparts) should participate in constraint derivation.  The test
+        # corpus fixtures also include miscellaneous metadata files (for example
+        # `notes.json`) which previously slipped into the human file list.  That
+        # polluted the training set and caused the filtering logic in
+        # `derive_constraints` to run against empty or malformed payloads.
+        if ".train." not in name or not name.endswith(".words.json"):
+            continue
+
         if any(marker in name for marker in RAW_FILENAME_MARKERS):
             raw_paths.append(path)
         else:
