@@ -31,7 +31,7 @@ class Config:
     beam_width: int
     min_block_duration_s: float
     max_block_duration_s: float
-    line_length_constraints: dict[str, dict[str, int]]
+    line_length_constraints: dict[str, dict[str, float]]
     min_chars_for_single_word_block: int
     sliders: dict[str, float]
     paths: dict[str, str]
@@ -72,6 +72,11 @@ def load_config(path: str = "config.yaml") -> Config:
     constraints_yaml = y.get("constraints", {})
     line1_soft = int(constraints_yaml.get("line_length_soft_target", 37))
     line1_hard = int(constraints_yaml.get("line_length_hard_limit", 42))
+    line_soft_min = int(constraints_yaml.get("line_length_soft_min", max(0, line1_soft - 16)))
+    over_scale = float(constraints_yaml.get("line_length_overflow_scale", 0.1))
+    under_scale = float(constraints_yaml.get("line_length_underflow_scale", 0.05))
+    block_min_chars = int(constraints_yaml.get("min_total_chars_per_block", 0))
+    min_last_line_chars = int(constraints_yaml.get("min_last_line_chars", 0))
     
     # Attempt to load the learned constraints.json file
     constraints_json = {}
@@ -84,14 +89,31 @@ def load_config(path: str = "config.yaml") -> Config:
         else:
             print(f"Warning: Could not load constraints file from {full_constraints_path}. Using fallbacks from config.yaml.")
 
+    line1_defaults = {
+        "soft_target": line1_soft,
+        "hard_limit": line1_hard,
+        "soft_min": line_soft_min,
+        "soft_over_penalty_scale": over_scale,
+        "soft_under_penalty_scale": under_scale,
+    }
+    line2_defaults = dict(line1_defaults)
+
+    block_defaults = {
+        "min_total_chars": block_min_chars,
+        "min_last_line_chars": min_last_line_chars,
+    }
+
+    line_constraints = {
+        "line1": {**line1_defaults, **constraints_json.get("line1", {})},
+        "line2": {**line2_defaults, **constraints_json.get("line2", {})},
+        "block": {**block_defaults, **constraints_json.get("block", {})},
+    }
+
     return Config(
       beam_width=int(y.get("beam_width", 7)),
       min_block_duration_s=float(constraints_json.get("min_block_duration_s", constraints_yaml.get("min_block_duration_s", 1.0))),
       max_block_duration_s=float(constraints_json.get("max_block_duration_s", constraints_yaml.get("max_block_duration_s", 8.0))),
-      line_length_constraints={
-          "line1": constraints_json.get("line1", {"soft_target": line1_soft, "hard_limit": line1_hard}),
-          "line2": constraints_json.get("line2", {"soft_target": line1_soft, "hard_limit": line1_hard})
-      },
+      line_length_constraints=line_constraints,
       min_chars_for_single_word_block=int(constraints_yaml.get("min_chars_for_single_word_block", 10)),
       sliders=dict(y.get("sliders", {})),
       paths=dict(y.get("paths", {})),

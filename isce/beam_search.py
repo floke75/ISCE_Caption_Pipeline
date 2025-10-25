@@ -117,11 +117,18 @@ class Segmenter:
                     if self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
                         new_line_len = state.line_len + 1 + len(nxt.w)
                         limit_key = f"line{state.line_num}"
-                        soft_target = self.cfg.line_length_constraints.get(limit_key, {}).get("soft_target", 37)
+                        constraints = self.cfg.line_length_constraints.get(limit_key, {})
+                        soft_target = constraints.get("soft_target", 37)
+                        soft_min = constraints.get("soft_min", 0)
+                        over_scale = constraints.get("soft_over_penalty_scale", 0.1)
+                        under_scale = constraints.get("soft_under_penalty_scale", 0.05)
                         line_len_penalty = 0.0
                         if new_line_len > soft_target:
                             overage = new_line_len - soft_target
-                            line_len_penalty = ((overage ** 2) * 0.1) / self.line_len_leniency
+                            line_len_penalty += ((overage ** 2) * over_scale) / self.line_len_leniency
+                        if soft_min and new_line_len < soft_min:
+                            shortfall = soft_min - new_line_len
+                            line_len_penalty += ((shortfall ** 2) * under_scale) / self.line_len_leniency
                         score = state.score + transition_scores["O"] - line_len_penalty
                         candidates.append(PathState(score=score, line_num=state.line_num, line_len=new_line_len, block_start_idx=state.block_start_idx, breaks=state.breaks + ("O",)))
 

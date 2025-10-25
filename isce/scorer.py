@@ -35,6 +35,7 @@ class Scorer:
         self.sl = {"flow": 1.0, "density": 1.0, "balance": 1.0, "structure": 1.0}
         self.sl.update(sliders)
         self.structure_boost = self.sl.get("structure_boost", 15.0)
+        self.cfg = cfg
 
     def _get_weight(self, group: str, key: str, outcome: str) -> float:
         """
@@ -175,6 +176,7 @@ class Scorer:
         else:
             total_chars = count_chars(block_tokens)
             balance = 1.0
+            len2 = total_chars
 
         gross_duration = max(1e-6, block_tokens[-1].get("end", 0.0) - block_tokens[0].get("start", 0.0))
         LONG_PAUSE_THRESHOLD_MS = 500
@@ -201,6 +203,20 @@ class Scorer:
             else:
                 score -= self.sl.get("balance", 1.0) * 0.5
         
+        block_constraints = self.cfg.line_length_constraints.get("block", {})
+        min_total_chars = block_constraints.get("min_total_chars", 0)
+        min_last_line_chars = block_constraints.get("min_last_line_chars", 0)
+        is_sentence_final = bool(block_tokens[-1].get("is_sentence_final"))
+        if not is_sentence_final:
+            short_block_penalty = self.sl.get("short_block_penalty", 1.0)
+            if min_total_chars and total_chars < min_total_chars:
+                deficit = min_total_chars - total_chars
+                score -= short_block_penalty * deficit
+            last_line_len = len2 if lb_idx != -1 else total_chars
+            if min_last_line_chars and last_line_len < min_last_line_chars:
+                deficit = min_last_line_chars - last_line_len
+                score -= self.sl.get("short_line_penalty", short_block_penalty) * deficit
+
         if gross_duration < self.c.get("min_block_duration_s", 1.0): score -= 10.0
         if gross_duration > self.c.get("max_block_duration_s", 8.0): score -= 2.0
 
