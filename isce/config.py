@@ -27,6 +27,8 @@ class Config:
                  behavior of the scoring model.
         paths: A dictionary containing the relative paths to model files like weights
                and constraints.
+        lookahead_width: The number of future tokens to expose to the transition
+                          scorer. A value of 0 disables the lookahead pass.
     """
     beam_width: int
     min_block_duration_s: float
@@ -35,6 +37,7 @@ class Config:
     min_chars_for_single_word_block: int
     sliders: dict[str, float]
     paths: dict[str, str]
+    lookahead_width: int = 0
 
 def load_config(path: str = "config.yaml") -> Config:
     """
@@ -95,4 +98,6 @@ def load_config(path: str = "config.yaml") -> Config:
       min_chars_for_single_word_block=int(constraints_yaml.get("min_chars_for_single_word_block", 10)),
       sliders=dict(y.get("sliders", {})),
       paths=dict(y.get("paths", {})),
+      lookahead_width=int(y.get("lookahead_width", 0)),
     )
+

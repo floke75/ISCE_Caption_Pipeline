@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from isce.beam_search import segment
 from isce.config import Config
+from isce.scorer import Scorer
 from isce.types import Token
 
 
@@ -25,8 +26,10 @@ class DummyScorer:
         return 0.0
 
 
-def make_token(word: str, start: float) -> Token:
-    return Token(w=word, start=start, end=start + 0.2, speaker="A")
+def make_token(word: str, start: float, **overrides) -> Token:
+    defaults = dict(w=word, start=start, end=start + 0.2, speaker="A")
+    defaults.update(overrides)
+    return Token(**defaults)
 
 
 class TestBeamSearch(unittest.TestCase):
@@ -49,12 +52,81 @@ class TestBeamSearch(unittest.TestCase):
             min_chars_for_single_word_block=1,
             sliders={},
             paths={},
+            lookahead_width=0,
         )
 
         segmented = segment(tokens, DummyScorer(), cfg)
         breaks = [token.break_type for token in segmented]
 
         self.assertEqual(breaks, ["LB", "SB", "LB", "SB"])
+
+    def test_lookahead_prefers_break_before_rapid_turn(self):
+        def make_tokens() -> list[Token]:
+            return [
+                make_token("Hello", 0.0, pause_after_ms=40, speaker="A"),
+                make_token("there,", 0.2, pause_after_ms=60, speaker="A", speaker_change=True),
+                make_token(
+                    "Yeah.",
+                    0.4,
+                    pause_after_ms=800,
+                    speaker="B",
+                    is_sentence_initial=True,
+                    is_sentence_final=True,
+                ),
+            ]
+
+        constraints = {
+            "ideal_cps_iqr": [10.0, 18.0],
+            "ideal_cps_median": 14.0,
+            "ideal_balance_iqr": [0.7, 1.4],
+        }
+
+        sliders = {
+            "flow": 1.0,
+            "density": 0.0,
+            "balance": 0.0,
+            "structure": 1.0,
+            "structure_boost": 12.0,
+            "line_length_leniency": 1.0,
+            "orphan_leniency": 1.0,
+        }
+
+        base_cfg = Config(
+            beam_width=5,
+            min_block_duration_s=0.05,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 42, "hard_limit": 50},
+                "line2": {"soft_target": 42, "hard_limit": 50},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+        )
+        lookahead_cfg = Config(
+            beam_width=5,
+            min_block_duration_s=0.05,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 42, "hard_limit": 50},
+                "line2": {"soft_target": 42, "hard_limit": 50},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=2,
+        )
+
+        base_scorer = Scorer({}, constraints, sliders, base_cfg)
+        lookahead_scorer = Scorer({}, constraints, sliders, lookahead_cfg)
+
+        base_breaks = [token.break_type for token in segment(make_tokens(), base_scorer, base_cfg)]
+        lookahead_breaks = [token.break_type for token in segment(make_tokens(), lookahead_scorer, lookahead_cfg)]
+
+        self.assertEqual(base_breaks[0], "O")
+        self.assertIn(lookahead_breaks[0], {"LB", "SB"})
+        self.assertNotEqual(base_breaks, lookahead_breaks)
 
 if __name__ == "__main__":
     unittest.main()

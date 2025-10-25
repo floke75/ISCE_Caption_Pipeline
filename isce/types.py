@@ -103,6 +103,7 @@ class TokenRow:
     token: dict[str, Any]
     nxt: Optional[dict[str, Any]]
     feats: Any = None
+    lookahead: Optional[tuple[dict[str, Any], ...]] = None
 
 
 @dataclass(frozen=True)

@@ -77,6 +77,7 @@ class Scorer:
         scores: Dict[str, float] = {"O": 0.0, "LB": 0.0, "SB": 0.0}
         token = row.token
         nxt = row.nxt if row.nxt else {}
+        lookahead = list(row.lookahead) if row.lookahead else []
 
         # --- Feature Discretization from pre-engineered data ---
         pz_bin = bin_pause_z(token.get("pause_z"))
@@ -133,6 +134,36 @@ class Scorer:
         if token.get("is_llm_structural_break"):
             scores["SB"] += self.structure_boost
             scores["O"] -= self.structure_boost
+
+        # --- Step 3: Optional lookahead heuristics ---
+        if lookahead:
+            speaker_idx = next((idx for idx, future in enumerate(lookahead) if future.get("speaker_change")), None)
+            if speaker_idx is not None:
+                distance = speaker_idx + 1
+                structural_bonus = self.structure_boost / max(1, (distance + 1))
+                scores["SB"] += structural_bonus
+                scores["LB"] += structural_bonus * 0.5
+                scores["O"] -= structural_bonus
+
+            comma_idx = next((idx for idx, future in enumerate(lookahead) if punct_class(future) == "p:comma"), None)
+            if comma_idx is not None:
+                closeness = comma_idx + 1
+                flow_bonus = self.sl.get("flow", 1.0) * (0.6 / closeness)
+                scores["LB"] += flow_bonus
+                scores["O"] -= flow_bonus * 0.5
+
+            final_idx = next((idx for idx, future in enumerate(lookahead) if punct_class(future) == "p:final"), None)
+            if final_idx is not None:
+                closeness = final_idx + 1
+                flow_bonus = self.sl.get("flow", 1.0) * (0.8 / closeness)
+                scores["SB"] += flow_bonus
+                scores["O"] -= flow_bonus * 0.5
+
+            upcoming_pause = max((future.get("pause_before_ms") or future.get("pause_after_ms") or 0) for future in lookahead)
+            if upcoming_pause >= 500:
+                pause_bonus = self.sl.get("flow", 1.0) * 0.5
+                scores["SB"] += pause_bonus
+                scores["LB"] += pause_bonus * 0.5
 
         return scores
 
