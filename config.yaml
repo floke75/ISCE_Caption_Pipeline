@@ -3,6 +3,11 @@
 
 # --- Algorithm Parameters ---
 beam_width: 14
+# Number of future tokens each boundary can peek when scoring transitions.
+# Set to 0 to disable lookahead heuristics.
+lookahead_width: 0
+enable_bidirectional_pass: false
+enable_reflow: false
 
 # --- Fallback Constraints ---
 # These are used by the trainer if the learned constraints.json cannot be found.
@@ -12,6 +17,11 @@ constraints:
   line_length_soft_target: 37
   line_length_hard_limit: 42
   min_chars_for_single_word_block: 10
+
+# --- Exceptions ---
+allowed_single_word_proper_nouns:
+  - "NASA"
+  - "YouTube"
 
 # --- Stylistic Sliders & Boosts ---
 sliders:
@@ -23,6 +33,9 @@ sliders:
   # Leniency controls for dynamic penalties
   line_length_leniency: 1.0 # >1.0 allows longer lines to avoid bad breaks.
   orphan_leniency: 2.0      # >1.0 makes the penalty for orphans stronger.
+  single_word_line_penalty: 12.0   # Strong penalty for orphaned or sub-minimal lines.
+  extreme_balance_penalty: 6.0     # Penalty when one line dwarfs the other in character count.
+  extreme_balance_threshold: 2.2   # Character ratio threshold before extreme balance penalty applies.
 
   # Additive boost for structural breaks (speaker changes, dashes, LLM hints)
   structure_boost: 18.0

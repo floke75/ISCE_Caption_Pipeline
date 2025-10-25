@@ -49,6 +49,7 @@ class ConfigField:
 
 
 def _recursive_update(base: MutableMapping[str, Any], update: Dict[str, Any]) -> MutableMapping[str, Any]:
+    """Merge ``update`` into ``base`` without mutating nested mappings in place."""
     for key, value in update.items():
         if isinstance(value, dict):
             child = base.get(key)
@@ -61,6 +62,7 @@ def _recursive_update(base: MutableMapping[str, Any], update: Dict[str, Any]) ->
 
 
 def _resolve_placeholders(config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively substitute ``str.format`` placeholders using ``context``."""
     for key, value in list(config.items()):
         if isinstance(value, dict):
             config[key] = _resolve_placeholders(value, context)
@@ -73,6 +75,7 @@ def _resolve_placeholders(config: Dict[str, Any], context: Dict[str, Any]) -> Di
 
 
 def _prune_nulls(data: Any) -> Any:
+    """Remove ``None`` entries from nested lists and dictionaries."""
     if isinstance(data, dict):
         cleaned: Dict[str, Any] = {}
         for key, value in data.items():
@@ -87,6 +90,7 @@ def _prune_nulls(data: Any) -> Any:
 
 
 def _ensure_parent(path: Path) -> None:
+    """Create the parent directory for ``path`` if it does not already exist."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -234,6 +238,7 @@ class ConfigService:
     # Helpers
     # ------------------------------------------------------------------
     def _load_yaml(self, path: Path) -> Dict[str, Any]:
+        """Load a YAML mapping from ``path`` returning an empty dict if missing."""
         if not path.exists():
             return {}
         with path.open("r", encoding="utf-8") as fh:
@@ -243,6 +248,7 @@ class ConfigService:
         return data
 
     def _build_field_catalog(self) -> List[ConfigField]:
+        """Return the default catalog of configuration fields for the UI."""
         return [
             ConfigField(
                 path=["project_root"],
@@ -402,6 +408,7 @@ class ConfigService:
     def _determine_value_type(
         self, field: Optional[ConfigField], default_value: Any, current_value: Any
     ) -> str:
+        """Infer a UI-friendly type label for the provided value pair."""
         if field:
             mapping = {
                 "string": "string",
@@ -425,12 +432,14 @@ class ConfigService:
         return "string"
 
     def _humanize_label(self, key: str) -> str:
+        """Convert a dictionary key into a display label."""
         cleaned = key.replace("_", " ").strip()
         if not cleaned:
             return key
         return cleaned[:1].upper() + cleaned[1:]
 
     def _has_override(self, overrides: Dict[str, Any], path: List[str]) -> bool:
+        """Return ``True`` when the nested ``path`` exists in ``overrides``."""
         target: Any = overrides
         for segment in path:
             if not isinstance(target, dict) or segment not in target:
@@ -439,6 +448,7 @@ class ConfigService:
         return True
 
     def _value_at(self, source: Dict[str, Any], path: List[str]) -> Any:
+        """Retrieve a nested value from ``source`` while tolerating missing keys."""
         target: Any = source
         for segment in path:
             if not isinstance(target, dict) or segment not in target:
@@ -514,6 +524,14 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             description="Shortest caption length allowed when a block contains only one word.",
         ),
         ConfigField(
+            path=["allowed_single_word_proper_nouns"],
+            section="Constraints",
+            label="Allowed single-word proper nouns",
+            field_type="list",
+            description="Proper nouns permitted as standalone captions without triggering orphan penalties.",
+            advanced=True,
+        ),
+        ConfigField(
             path=["sliders", "flow"],
             section="Stylistic sliders",
             label="Flow weight",
@@ -545,6 +563,27 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             label="Orphan leniency",
             field_type="number",
             description=">1.0 strengthens penalties for orphan words.",
+        ),
+        ConfigField(
+            path=["sliders", "single_word_line_penalty"],
+            section="Stylistic sliders",
+            label="Single-word line penalty",
+            field_type="number",
+            description="Penalty applied when a cue would end with a single word or sub-minimal line.",
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_penalty"],
+            section="Stylistic sliders",
+            label="Extreme balance penalty",
+            field_type="number",
+            description="Penalty applied when line character counts are dramatically imbalanced.",
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_threshold"],
+            section="Stylistic sliders",
+            label="Extreme balance threshold",
+            field_type="number",
+            description="Character ratio beyond which the extreme balance penalty activates.",
         ),
         ConfigField(
             path=["sliders", "structure_boost"],

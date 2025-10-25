@@ -26,6 +26,8 @@ def _fallback_config() -> Config:
         min_chars_for_single_word_block=4,
         sliders={},
         paths={},
+        lookahead_width=0,
+        allowed_single_word_proper_nouns=(),
     )
 
 
