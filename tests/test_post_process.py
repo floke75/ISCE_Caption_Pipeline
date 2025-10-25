@@ -1,7 +1,20 @@
+"""Unit tests for the ``isce.post_process`` helpers.
+
+The tests in this module deliberately use tiny fake scorer implementations.  By
+hand-rolling the scorers we can precisely target the behavior under test (block
+merging and line-break shuffling) without depending on the full statistical
+model.
+"""
+
+from __future__ import annotations
+
+import sys
 import unittest
 from pathlib import Path
-import sys
+from typing import Sequence
 
+# Add the repository root to ``sys.path`` so the tests can import local modules
+# when executed directly via ``python tests/test_post_process.py``.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from isce.config import Config
@@ -10,7 +23,14 @@ from isce.types import Token
 
 
 class MergeFriendlyScorer:
-    def score_block(self, block_tokens, block_breaks):
+    """Score toy blocks to prefer merging the first two cues.
+
+    The scorer penalizes single-word blocks, mildly rewards two-word blocks, and
+    strongly prefers the case where the first three tokens stay on one line.  It
+    mirrors the situations the merge heuristic should catch.
+    """
+
+    def score_block(self, block_tokens: Sequence[dict], block_breaks: Sequence[str]) -> float:
         length = len(block_tokens)
         if length == 1:
             return -5.0
@@ -23,7 +43,9 @@ class MergeFriendlyScorer:
 
 
 class BalanceScorer:
-    def score_block(self, block_tokens, block_breaks):
+    """Score toy blocks to prefer shifting the line break to the right."""
+
+    def score_block(self, block_tokens: Sequence[dict], block_breaks: Sequence[str]) -> float:
         if len(block_tokens) != 3:
             return 0.0
         if block_breaks[0] == "LB":
@@ -34,6 +56,8 @@ class BalanceScorer:
 
 
 def _make_config() -> Config:
+    """Return a minimal :class:`~isce.config.Config` for the tests."""
+
     return Config(
         beam_width=1,
         min_block_duration_s=1.0,
@@ -50,7 +74,11 @@ def _make_config() -> Config:
 
 
 class TestReflowTokens(unittest.TestCase):
-    def test_merges_short_block_with_following_block(self):
+    """Regression tests for the ``reflow_tokens`` helper."""
+
+    def test_merges_short_block_with_following_block(self) -> None:
+        """Short, low-score cues should be merged into the following block."""
+
         tokens = [
             Token(w="Hi", start=0.0, end=0.4, speaker="A", break_type="SB"),
             Token(w="there", start=0.4, end=0.8, speaker="A", break_type="O"),
@@ -63,7 +91,9 @@ class TestReflowTokens(unittest.TestCase):
 
         self.assertEqual(breaks, ["O", "O", "SB"])
 
-    def test_shifts_line_break_to_balance_lines(self):
+    def test_shifts_line_break_to_balance_lines(self) -> None:
+        """A lopsided block should shift the manual line break rightward."""
+
         tokens = [
             Token(w="Tiny", start=0.0, end=0.4, speaker="A", break_type="LB"),
             Token(w="sentence", start=0.4, end=0.9, speaker="A", break_type="O"),

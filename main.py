@@ -87,7 +87,10 @@ def main():
         print("Segmenting tokens...")
         segmented_tokens = segment(tokens, scorer, cfg)
 
-        # 6. Optionally refine segmentation with local post-processing
+        # 6. Optionally refine segmentation with local post-processing.  The
+        #    reflow pass is intentionally conservative and only tweaks the
+        #    boundaries within a single block, making it safe to enable for most
+        #    deployments once it has been calibrated on real data.
         if getattr(cfg, "enable_reflow", False):
             print("Reflowing segmented tokens...")
             segmented_tokens = reflow_tokens(segmented_tokens, scorer, cfg)

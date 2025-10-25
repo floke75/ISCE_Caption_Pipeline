@@ -1,4 +1,15 @@
-"""Post-processing helpers for refining segmentation output."""
+"""Post-processing helpers for refining segmentation output.
+
+The functions in this module implement inexpensive, local heuristics that can be
+applied after the primary beam-search segmentation has produced block
+boundaries.  They avoid re-running expensive search passes while still letting
+us clean up artifacts such as very short cues or lopsided multi-line blocks.
+
+At the time of writing, :func:`reflow_tokens` is intentionally conservative: it
+only ever merges with the immediate next block or shuffles an existing line
+break within a block.  These changes are designed to be reversible and
+interpretable, making them safe to run as an optional post-processing step.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +24,12 @@ __all__ = ["reflow_tokens"]
 
 
 def _count_chars(tokens: Sequence[Token]) -> int:
-    """Approximate the number of visible characters for a token span."""
+    """Approximate the number of visible characters for a token span.
+
+    The heuristic mirrors how subtitles are rendered in most captioning tools:
+    characters in a token count at face value and we pay a space penalty between
+    tokens to estimate total line width.
+    """
     if not tokens:
         return 0
     # Include a space between tokens when estimating the rendered width.
@@ -21,7 +37,12 @@ def _count_chars(tokens: Sequence[Token]) -> int:
 
 
 def _find_block_end(tokens: Sequence[Token], start: int) -> int:
-    """Return the index of the final token in the block that starts at ``start``."""
+    """Return the index of the final token in the block that starts at ``start``.
+
+    Blocks always end on an ``"SB"`` (sentence break).  If we encounter a token
+    without an explicit break type we conservatively treat it as ``"O"`` and
+    continue scanning until we reach the end of the list or a real block break.
+    """
     end = start
     while end < len(tokens) - 1 and tokens[end].break_type != "SB":
         end += 1
@@ -29,17 +50,31 @@ def _find_block_end(tokens: Sequence[Token], start: int) -> int:
 
 
 def _block_breaks(tokens: Sequence[Token]) -> List[BreakType]:
-    """Return the break types for the provided tokens, defaulting missing values."""
+    """Return the break types for the provided tokens, defaulting missing values.
+
+    Legacy data sometimes omits ``break_type`` for intra-block tokens.  Treating
+    those as ``"O"`` lets us call into :class:`~isce.scorer.Scorer` without
+    needing additional normalization logic in the hot path.
+    """
     return [(token.break_type or "O") for token in tokens]
 
 
 def _tokens_to_dicts(tokens: Iterable[Token]) -> List[dict]:
-    """Convert dataclass tokens into dictionaries understood by ``Scorer``."""
+    """Convert dataclass tokens into dictionaries understood by ``Scorer``.
+
+    The scorer expects the JSON-compatible payloads produced by the training
+    pipeline.  Each token dataclass exposes the same fields, so a shallow
+    ``dict()`` conversion is sufficient.
+    """
     return [dict(token.__dict__) for token in tokens]
 
 
 def _make_breaks_with_lb(length: int, lb_index: int | None) -> List[BreakType]:
-    """Construct a break sequence with an optional line break at ``lb_index``."""
+    """Construct a break sequence with an optional line break at ``lb_index``.
+
+    We always force the last token to be an ``"SB"`` so that the scorer treats
+    the sequence as a complete block.
+    """
     breaks: List[BreakType] = ["O"] * length
     breaks[-1] = "SB"
     if lb_index is not None and 0 <= lb_index < length - 1:
@@ -48,11 +83,39 @@ def _make_breaks_with_lb(length: int, lb_index: int | None) -> List[BreakType]:
 
 
 def reflow_tokens(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[Token]:
-    """Apply lightweight refinements to segmented tokens."""
+    """Apply lightweight refinements to segmented tokens.
+
+    The routine scans each block in order and evaluates two adjustments:
+
+    * **Merge short blocks.**  When a block is unusually short (few tokens,
+      characters, or seconds of duration) we evaluate whether gluing it to the
+      following block increases the scorer's block-level score.  If so, we
+      rewrite the break type at the boundary to ``"O"`` or ``"LB"``.
+    * **Rebalance line breaks.**  If a block already contains a manual line
+      break, we probe nearby positions to see whether moving the break yields a
+      higher score—especially helpful when one line is lopsidedly short.
+
+    Parameters
+    ----------
+    tokens:
+        Segmented tokens emitted by the beam search.
+    scorer:
+        A ``Scorer`` instance that provides block-level preferences.
+    cfg:
+        The loaded :class:`~isce.config.Config`.  We use ``min_block_duration_s``
+        to detect suspiciously short cues.
+
+    Returns
+    -------
+    list[Token]
+        A defensive copy of ``tokens`` with any accepted refinements applied.
+    """
     if not tokens:
         return []
 
     refined: List[Token] = list(tokens)
+    # ``Scorer`` is deterministic, but we allow a tiny epsilon to avoid churn
+    # from floating point rounding differences between individual passes.
     epsilon = 1e-4
     start = 0
 
@@ -64,6 +127,8 @@ def reflow_tokens(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[
 
         block_breaks = _block_breaks(block_tokens)
         block_dicts = _tokens_to_dicts(block_tokens)
+        # Baseline score for the unmodified block; all candidates must beat this
+        # by at least ``epsilon`` before we accept a change.
         block_score = scorer.score_block(block_dicts, block_breaks)
 
         total_chars = _count_chars(block_tokens)
