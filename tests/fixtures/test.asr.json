@@ -1,0 +1,66 @@
+{
+  "text": "det här är ett test. det är bara ett test.",
+  "words": [
+    {
+      "w": "det",
+      "start": 0.5,
+      "end": 0.7,
+      "speaker": "A"
+    },
+    {
+      "w": "här",
+      "start": 0.7,
+      "end": 0.9,
+      "speaker": "A"
+    },
+    {
+      "w": "är",
+      "start": 0.9,
+      "end": 1.1,
+      "speaker": "A"
+    },
+    {
+      "w": "ett",
+      "start": 1.1,
+      "end": 1.3,
+      "speaker": "A"
+    },
+    {
+      "w": "test.",
+      "start": 1.3,
+      "end": 1.8,
+      "speaker": "A"
+    },
+    {
+      "w": "det",
+      "start": 2.5,
+      "end": 2.7,
+      "speaker": "B"
+    },
+    {
+      "w": "är",
+      "start": 2.7,
+      "end": 2.9,
+      "speaker": "B"
+    },
+    {
+      "w": "bara",
+      "start": 2.9,
+      "end": 3.2,
+      "speaker": "B"
+    },
+    {
+      "w": "ett",
+      "start": 3.2,
+      "end": 3.4,
+      "speaker": "B"
+    },
+    {
+      "w": "test.",
+      "start": 3.4,
+      "end": 3.9,
+      "speaker": "B"
+    }
+  ],
+  "language": "sv"
+}
