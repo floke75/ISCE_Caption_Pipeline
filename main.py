@@ -51,16 +51,32 @@ def main():
         help="Path to the configuration YAML file."
     )
     parser.add_argument(
-        "--save-labeled-json", 
-        action="store_true", 
+        "--save-labeled-json",
+        action="store_true",
         help="In addition to the SRT, save the output as a labeled JSON file."
     )
+    parser.add_argument(
+        "--refine-blocks",
+        dest="refine_blocks",
+        action="store_true",
+        help="Enable the localized refinement pass to re-score low quality cues.",
+    )
+    parser.add_argument(
+        "--no-refine-blocks",
+        dest="refine_blocks",
+        action="store_false",
+        help="Disable the localized refinement pass regardless of config settings.",
+    )
+    parser.set_defaults(refine_blocks=None)
     args = parser.parse_args()
 
     try:
         # 1. Load configurations
         print(f"Loading configuration from {args.config}...")
         cfg = load_config(args.config)
+
+        if args.refine_blocks is not None:
+            cfg.enable_refinement_pass = args.refine_blocks
 
         # 2. Load input data
         print(f"Loading tokens from {args.input}...")
