@@ -22,21 +22,41 @@ class PathState:
     breaks: tuple[BreakType, ...]
 
 class Segmenter:
-    """
-    Manages the beam search segmentation process.
+    """Stateful orchestrator for the beam search segmentation process.
 
-    This stateful class encapsulates the logic for the beam search algorithm,
-    iterating through tokens and maintaining a beam of the most likely
-    segmentation hypotheses (`PathState` objects). It uses a `Scorer` to
-    evaluate the quality of different break decisions at each step.
+    The :class:`Segmenter` encapsulates the outer loop of the captioning beam
+    search.  It iterates through tokens, expands each hypothesis with the three
+    allowed break types (``O``, ``LB``, ``SB``), and relies on
+    :class:`~isce.scorer.Scorer` for the actual scoring mechanics.  The class
+    also carries a handful of pre-computed settings derived from the active
+    configuration so that the tight inner loops stay lean.
 
-    Attributes:
-        tokens: The list of `Token` objects to be segmented.
-        scorer: The `Scorer` instance used to score potential breaks.
-        cfg: The main configuration object.
-        beam: The list of current best `PathState` hypotheses.
-        line_len_leniency: A factor to adjust penalties for long lines.
-        orphan_leniency: A factor to adjust penalties for single-word lines.
+    Attributes
+    ----------
+    tokens:
+        Ordered list of :class:`~isce.types.Token` objects to be segmented.
+    scorer:
+        Instance responsible for scoring transition and block level decisions.
+    cfg:
+        The loaded :class:`~isce.config.Config` describing constraints.
+    beam:
+        Mutable collection of the best :class:`PathState` hypotheses explored
+        so far.
+    line_len_leniency:
+        Multiplier used to scale soft penalties once a line exceeds its target
+        character count.
+    orphan_leniency:
+        Multiplier for discouraging line breaks that would leave sentence-final
+        orphans (``LB`` followed by punctuation).
+    fallback_sb_penalty:
+        Penalty applied when we are forced to emit an ``SB`` because every
+        other decision violates a hard constraint.
+    short_line_penalty:
+        Optional override letting the scorer fine-tune penalties for sub-minimal
+        or single-word lines.
+    allowed_proper_nouns:
+        Normalised set of proper nouns that may appear as single-word captions
+        without being considered violations.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -67,17 +87,29 @@ class Segmenter:
         return "LB" not in recent_breaks
 
     def _count_chars(self, line_tokens: List[Token]) -> int:
+        """Return the visual character count for ``line_tokens``.
+
+        Spaces between words are counted so that the total mirrors the value the
+        human captioner would perceive when judging line length.
+        """
         if not line_tokens:
             return 0
         return sum(len(token.w) for token in line_tokens) + (len(line_tokens) - 1)
 
     def _is_allowed_single_word(self, token: Token) -> bool:
+        """Check whether ``token`` is whitelisted for single-word captions."""
         if token.pos != "PROPN":
             return False
         stripped = token.w.rstrip(".,!?;:\"")
         return stripped.lower() in self.allowed_proper_nouns
 
     def _block_profiles(self, state: PathState, block_start_idx: int, end_idx: int) -> tuple[List[Token], List[BreakType], List[List[Token]]]:
+        """Slice the active block and pre-compute its structural metadata.
+
+        The helpers downstream frequently need access to the tokens in the
+        active block, their break decisions, and a line-by-line view.  Building
+        the representation once keeps the scoring path tidy.
+        """
         block_tokens = self.tokens[block_start_idx : end_idx + 1]
         block_breaks = list(state.breaks[block_start_idx:end_idx]) + ["SB"]
         lines: List[List[Token]] = []
@@ -92,6 +124,13 @@ class Segmenter:
         return block_tokens, block_breaks, lines
 
     def _line_violations(self, lines: List[List[Token]]) -> List[str]:
+        """Identify hard violations produced by a candidate block.
+
+        The fallback path shares logic with :meth:`_is_hard_ok_SB` and needs to
+        understand whether a block produced only a single word, or a line that
+        falls below the minimum character count.  Returning the violation type
+        strings makes it easy to translate the findings into penalties.
+        """
         violations: List[str] = []
         min_chars = self.cfg.min_chars_for_single_word_block
         for line_tokens in lines:
@@ -189,6 +228,10 @@ class Segmenter:
                     candidates.append(PathState(score=score, line_num=1, line_len=next_word_len, block_start_idx=i + 1, breaks=state.breaks + ("SB",)))
 
             if not candidates and self.beam:
+                # All futures violate hard constraints.  Fall back to forcing an
+                # ``SB`` on the best active path while recording the reason as a
+                # score penalty so that the search prefers cleaner options later
+                # in the sequence.
                 fallback_state = self.beam[0]
                 block_tokens, block_breaks, lines = self._block_profiles(fallback_state, fallback_state.block_start_idx, i)
                 block_token_dicts = [dict(t.__dict__) for t in block_tokens]

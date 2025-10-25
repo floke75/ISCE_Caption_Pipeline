@@ -161,7 +161,9 @@ class Scorer:
             or too short a time.
 
         Scores are calculated by comparing these metrics against ideal ranges
-        defined in the corpus constraints.
+        defined in the corpus constraints.  Several UI sliders modulate the
+        penalties so that operators can tune single-word tolerance and the
+        severity of extremely unbalanced lines without retraining the model.
 
         Args:
             block_tokens: A list of token dictionaries within the completed block.
@@ -246,6 +248,8 @@ class Scorer:
                 if char_count < min_chars and not allowed_single:
                     penalty_lines += 1
             if penalty_lines:
+                # Penalise each offending line so that both the main search and
+                # the fallback path agree on how costly sub-minimal captions are.
                 score -= single_word_penalty * penalty_lines
 
         extreme_balance_penalty = float(self.sl.get("extreme_balance_penalty", 0.0))
@@ -263,9 +267,13 @@ class Scorer:
                 else:
                     severity = (ratio - extreme_threshold) / extreme_threshold
             if severity is not None:
+                # Give increasingly large penalties as the ratio drifts farther
+                # from the configured balance threshold.
                 score -= extreme_balance_penalty * (1.0 + max(0.0, severity))
 
-        if gross_duration < self.c.get("min_block_duration_s", 1.0): score -= 10.0
-        if gross_duration > self.c.get("max_block_duration_s", 8.0): score -= 2.0
+        if gross_duration < self.c.get("min_block_duration_s", 1.0):
+            score -= 10.0
+        if gross_duration > self.c.get("max_block_duration_s", 8.0):
+            score -= 2.0
 
         return score
