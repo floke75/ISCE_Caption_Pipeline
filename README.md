@@ -92,7 +92,7 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 1.  **Update `pipeline_config.yaml`:** This file lives in the repository root. Replace placeholder paths for `project_root` and `pipeline_root` with locations on your system and set an `hf_token` (or rely on the `HF_TOKEN` environment variable).
 
-2.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior.
+2.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior. Set `enable_reflow: true` if you want the pipeline to run an additional post-processing pass that reflows short or imbalanced cues after the beam search.
 
 ## Web Control Center
 
@@ -160,6 +160,9 @@ ISCE uses two main configuration files stored in the repository root. The UI bac
     *   `beam_width`: The width of the beam search algorithm. A larger number may yield better results but will be slower.
     *   `sliders`: User-adjustable weights to fine-tune the importance of different features in the scoring model.
     *   `paths`: The paths to your trained `model_weights.json` and `constraints.json` files.
+    *   `lookahead_width`: (New) Enables a forward-looking pass in the segmenter so the transition scorer can see upcoming
+        pauses, punctuation, or speaker changes. Set this to `0` to preserve legacy behavior or increase it (e.g., `2`) to
+        allow the beam search to anticipate rapid clause endings and speaker turns.
 
 ## Usage
 

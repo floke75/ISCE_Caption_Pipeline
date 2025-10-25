@@ -22,10 +22,29 @@ def _fallback_config() -> Config:
         beam_width=7,
         min_block_duration_s=0.5,
         max_block_duration_s=10.0,
-        line_length_constraints={"line1": {"soft_target": 37, "hard_limit": 42}, "line2": {"soft_target": 37, "hard_limit": 42}},
+        line_length_constraints={
+            "line1": {
+                "soft_target": 37,
+                "hard_limit": 42,
+                "soft_min": 16,
+                "soft_over_penalty_scale": 0.1,
+                "soft_under_penalty_scale": 0.05,
+            },
+            "line2": {
+                "soft_target": 37,
+                "hard_limit": 42,
+                "soft_min": 16,
+                "soft_over_penalty_scale": 0.1,
+                "soft_under_penalty_scale": 0.05,
+            },
+            "block": {"min_total_chars": 14, "min_last_line_chars": 8},
+        },
         min_chars_for_single_word_block=4,
         sliders={},
         paths={},
+        lookahead_width=0,
+        enable_refinement_pass=False,
+        allowed_single_word_proper_nouns=(),
     )
 
 
