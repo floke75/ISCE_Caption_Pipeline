@@ -13,13 +13,21 @@ class DummyScorer:
     def __init__(self):
         self.sl = {"line_length_leniency": 1.0, "orphan_leniency": 1.0}
 
-    def score_transition(self, row):
+    def score_transition(self, row, ctx=None):
         word = row.token.get("w", "")
         if word.endswith("0"):
-            return {"O": -5.0, "LB": 5.0, "SB": -5.0}
+            scores = {"O": -5.0, "LB": 5.0, "SB": -5.0}
         if word.endswith("2"):
-            return {"O": -5.0, "LB": 10.0, "SB": -1.0}
-        return {"O": -5.0, "LB": -5.0, "SB": -5.0}
+            scores = {"O": -5.0, "LB": 10.0, "SB": -1.0}
+        else:
+            scores = {"O": -5.0, "LB": -5.0, "SB": -5.0}
+
+        if ctx and getattr(ctx, "projected_second_line_words", None) == 1:
+            projected_chars = ctx.projected_second_line_chars or 0
+            if projected_chars < 5:
+                scores["LB"] -= 20.0
+
+        return scores
 
     def score_block(self, block_tokens, block_breaks):
         return 0.0
@@ -55,6 +63,39 @@ class TestBeamSearch(unittest.TestCase):
         breaks = [token.break_type for token in segmented]
 
         self.assertEqual(breaks, ["LB", "SB", "LB", "SB"])
+
+    def test_lookahead_discourages_orphan_second_line(self):
+        tokens = [
+            make_token("AAAAA0", 0.0),
+            make_token("I", 0.2),
+            make_token("BBBBB3", 0.4),
+        ]
+        tokens[1] = Token(
+            w="I",
+            start=0.2,
+            end=0.4,
+            speaker="A",
+            is_sentence_final=True,
+        )
+
+        cfg = Config(
+            beam_width=2,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 15, "hard_limit": 20},
+                "line2": {"soft_target": 15, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+        )
+
+        segmented = segment(tokens, DummyScorer(), cfg)
+        breaks = [token.break_type for token in segmented]
+
+        self.assertEqual(breaks[0], "O")
+        self.assertNotIn("LB", breaks[:2])
 
 if __name__ == "__main__":
     unittest.main()

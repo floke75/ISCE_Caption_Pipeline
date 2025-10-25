@@ -6,7 +6,7 @@ from typing import List
 from heapq import nlargest
 from tqdm import tqdm
 
-from .types import Token, BreakType, TokenRow
+from .types import Token, BreakType, TokenRow, TransitionContext
 from .scorer import Scorer
 from .config import Config
 
@@ -75,6 +75,48 @@ class Segmenter:
                 return False
         return True
 
+    def _estimate_second_line(self, current_idx: int) -> tuple[int, int]:
+        """Estimate characters and words available for the prospective second line."""
+        if current_idx + 1 >= len(self.tokens):
+            return 0, 0
+
+        length = 0
+        words = 0
+        soft_target = self.cfg.line_length_constraints.get("line2", {}).get("soft_target", 37)
+
+        for j in range(current_idx + 1, len(self.tokens)):
+            token = self.tokens[j]
+            if words > 0:
+                length += 1  # account for the space preceding the token
+            length += len(token.w)
+            words += 1
+
+            if words >= 2:
+                break
+            if token.is_sentence_final or token.speaker_change or token.starts_with_dialogue_dash:
+                break
+            if length >= soft_target:
+                break
+
+        return length, words
+
+    def _build_transition_context(self, state: PathState, current_idx: int) -> TransitionContext:
+        """Construct the lookahead context passed into the scorer."""
+
+        pending_tokens = tuple(dict(t.__dict__) for t in self.tokens[state.block_start_idx : current_idx + 1])
+        projected_chars: int | None = None
+        projected_words: int | None = None
+        if state.line_num == 1 and current_idx + 1 < len(self.tokens):
+            projected_chars, projected_words = self._estimate_second_line(current_idx)
+
+        return TransitionContext(
+            pending_tokens=pending_tokens,
+            current_line_num=state.line_num,
+            current_line_len=state.line_len,
+            projected_second_line_chars=projected_chars,
+            projected_second_line_words=projected_words,
+        )
+
     def run(self) -> List[BreakType]:
         """
         Executes the main beam search algorithm.
@@ -109,9 +151,10 @@ class Segmenter:
                 nxt=nxt_dict,
                 feats=None # feats object is no longer used by the scorer
             )
-            transition_scores = self.scorer.score_transition(scorer_row)
-
             for state in self.beam:
+                context = self._build_transition_context(state, i)
+                transition_scores = self.scorer.score_transition(scorer_row, context)
+
                 # Candidate: 'O' (No Break)
                 if nxt:
                     if self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
@@ -146,12 +189,14 @@ class Segmenter:
 
             if not candidates and self.beam:
                 fallback_state = self.beam[0]
+                fallback_context = self._build_transition_context(fallback_state, i)
+                fallback_scores = self.scorer.score_transition(scorer_row, fallback_context)
                 block_tokens = [dict(t.__dict__) for t in self.tokens[fallback_state.block_start_idx : i + 1]]
                 block_breaks = list(fallback_state.breaks[fallback_state.block_start_idx:]) + ["SB"]
                 block_score = self.scorer.score_block(block_tokens, block_breaks) if block_tokens else 0.0
                 next_word_len = len(nxt.w) if nxt else 0
                 fallback_candidate = PathState(
-                    score=fallback_state.score + transition_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
+                    score=fallback_state.score + fallback_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
                     line_num=1,
                     line_len=next_word_len,
                     block_start_idx=i + 1,
