@@ -32,6 +32,8 @@ def partition_corpus_paths(corpus_dir: Path) -> Tuple[list[Path], list[Path]]:
 
     for path in sorted(corpus_dir.glob("*.json")):
         name = path.name.lower()
+        if ".words.json" not in name:
+            continue
         if any(marker in name for marker in RAW_FILENAME_MARKERS):
             raw_paths.append(path)
         else:
