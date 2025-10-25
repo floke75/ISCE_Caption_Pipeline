@@ -27,6 +27,8 @@ class Config:
                  behavior of the scoring model.
         paths: A dictionary containing the relative paths to model files like weights
                and constraints.
+        allowed_single_word_proper_nouns: A tuple of proper nouns that may appear as
+               single-word captions without triggering hard rejections.
     """
     beam_width: int
     min_block_duration_s: float
@@ -35,6 +37,7 @@ class Config:
     min_chars_for_single_word_block: int
     sliders: dict[str, float]
     paths: dict[str, str]
+    allowed_single_word_proper_nouns: tuple[str, ...]
 
 def load_config(path: str = "config.yaml") -> Config:
     """
@@ -84,15 +87,34 @@ def load_config(path: str = "config.yaml") -> Config:
         else:
             print(f"Warning: Could not load constraints file from {full_constraints_path}. Using fallbacks from config.yaml.")
 
+    allowed_single_word_proper_nouns = tuple(
+        str(item) for item in y.get("allowed_single_word_proper_nouns", [])
+    )
+
     return Config(
-      beam_width=int(y.get("beam_width", 7)),
-      min_block_duration_s=float(constraints_json.get("min_block_duration_s", constraints_yaml.get("min_block_duration_s", 1.0))),
-      max_block_duration_s=float(constraints_json.get("max_block_duration_s", constraints_yaml.get("max_block_duration_s", 8.0))),
-      line_length_constraints={
-          "line1": constraints_json.get("line1", {"soft_target": line1_soft, "hard_limit": line1_hard}),
-          "line2": constraints_json.get("line2", {"soft_target": line1_soft, "hard_limit": line1_hard})
-      },
-      min_chars_for_single_word_block=int(constraints_yaml.get("min_chars_for_single_word_block", 10)),
-      sliders=dict(y.get("sliders", {})),
-      paths=dict(y.get("paths", {})),
+        beam_width=int(y.get("beam_width", 7)),
+        min_block_duration_s=float(
+            constraints_json.get(
+                "min_block_duration_s", constraints_yaml.get("min_block_duration_s", 1.0)
+            )
+        ),
+        max_block_duration_s=float(
+            constraints_json.get(
+                "max_block_duration_s", constraints_yaml.get("max_block_duration_s", 8.0)
+            )
+        ),
+        line_length_constraints={
+            "line1": constraints_json.get(
+                "line1", {"soft_target": line1_soft, "hard_limit": line1_hard}
+            ),
+            "line2": constraints_json.get(
+                "line2", {"soft_target": line1_soft, "hard_limit": line1_hard}
+            ),
+        },
+        min_chars_for_single_word_block=int(
+            constraints_yaml.get("min_chars_for_single_word_block", 10)
+        ),
+        sliders=dict(y.get("sliders", {})),
+        paths=dict(y.get("paths", {})),
+        allowed_single_word_proper_nouns=allowed_single_word_proper_nouns,
     )
