@@ -202,21 +202,20 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
 
 def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     """Translate reversed-order break decisions back to the forward timeline."""
-    n = len(reversed_breaks)
-    if n == 0:
+    if not reversed_breaks:
         return []
-    trimmed: List[BreakType] = list(reversed_breaks)
-    had_sentinel = bool(trimmed and trimmed[-1] == "SB")
-    if had_sentinel:
-        trimmed.pop()
-    mapped = list(reversed(trimmed))
-    if had_sentinel:
-        mapped.append("SB")
-    elif mapped:
-        mapped[-1] = "SB"
+
+    mirrored = list(reversed(reversed_breaks))
+
+    if mirrored and mirrored[0] == "SB":
+        mirrored = mirrored[1:]
+
+    if mirrored:
+        mirrored.append("SB")
     else:
-        mapped.append("SB")
-    return mapped
+        mirrored = ["SB"]
+
+    return mirrored
 
 
 def _block_span(breaks: List[BreakType], idx: int) -> tuple[int, int]:
