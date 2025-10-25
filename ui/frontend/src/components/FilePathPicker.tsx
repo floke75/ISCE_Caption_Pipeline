@@ -175,12 +175,14 @@ export function FilePathPicker({
         if (!result.allowed) {
           message = result.detail ?? 'Path is outside the allowed directories';
         } else if (type === 'directory') {
-          // Directories are valid if they exist and are dirs, or if they don't exist yet.
+          // Directories can be created automatically by the backend, so only fail for conflicting entries.
           if (result.exists && !result.isDir) {
             valid = false;
             message = 'Expected a directory path';
+          } else if (!result.exists) {
+            message = 'Directory will be created automatically when the job runs';
           } else if (!message) {
-            message = 'Path is valid';
+            message = 'Directory verified';
           }
         } else if (!result.exists) {
           // Files must exist.

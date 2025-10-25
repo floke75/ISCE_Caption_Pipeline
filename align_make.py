@@ -123,6 +123,17 @@ def ensure_dirs(p: Path):
     """
     p.mkdir(parents=True, exist_ok=True)
 
+
+def _resource_error(stage: str, exc: Exception) -> RuntimeError:
+    """Create a descriptive error when WhisperX resources are missing."""
+
+    hint = (
+        f"Failed to {stage}. WhisperX model assets may not be installed yet. "
+        "Run `python scripts/install.py --skip-frontend` (see README) to pre-download "
+        "required resources before retrying."
+    )
+    return RuntimeError(f"{hint}\nOriginal error: {exc}")
+
 def set_env_tokens(token: str):
     """
     Sets the Hugging Face authentication token as an environment variable.
@@ -265,15 +276,27 @@ def process_file(audio_path: Path, device: str, paths: Dict[str, Path], settings
             print(f"[SKIP] Final ASR file already exists: {asr_final_json.name}")
             return
 
+        cache_dir_setting = settings.get("cache_dir") or str(Path.home() / ".cache" / "whisperx")
+        cache_path = Path(cache_dir_setting)
+        ensure_dirs(cache_path)
+        settings["cache_dir"] = str(cache_path)
+        print(f"[SETUP] Using WhisperX cache at: {cache_path}")
+
         print(f"[PIPELINE] Loading audio from: {converted_audio_path.name}")
         audio = whisperx.load_audio(str(converted_audio_path))
 
         # 1. Transcribe
         print("[PIPELINE] 1/3: Transcribing...")
-        model = whisperx.load_model(
-            settings["whisper_model_id"], device, compute_type=settings["compute_type"],
-            download_root=settings.get("cache_dir"), language=settings.get("language")
-        )
+        try:
+            model = whisperx.load_model(
+                settings["whisper_model_id"],
+                device,
+                compute_type=settings["compute_type"],
+                download_root=str(cache_path),
+                language=settings.get("language"),
+            )
+        except Exception as exc:
+            raise _resource_error("load the WhisperX transcription model", exc) from exc
         result = model.transcribe(audio, batch_size=settings["batch_size"])
 
         print("[PIPELINE] Unloading ASR model...")
@@ -282,10 +305,15 @@ def process_file(audio_path: Path, device: str, paths: Dict[str, Path], settings
 
         # 2. Align
         print("[PIPELINE] 2/3: Verifying and refining word timestamps...")
-        model_a, metadata = whisperx.load_align_model(
-            language_code=result["language"], device=device,
-            model_name=settings["align_model_id"], model_dir=settings.get("cache_dir")
-        )
+        try:
+            model_a, metadata = whisperx.load_align_model(
+                language_code=result["language"],
+                device=device,
+                model_name=settings["align_model_id"],
+                model_dir=str(cache_path),
+            )
+        except Exception as exc:
+            raise _resource_error("load the alignment model", exc) from exc
         result = whisperx.align(
             result["segments"], model_a, metadata, audio, device, return_char_alignments=False
         )
@@ -298,9 +326,12 @@ def process_file(audio_path: Path, device: str, paths: Dict[str, Path], settings
         final_result = result
         if settings.get("do_diarization", True):
             print("[PIPELINE] 3/3: Diarizing...")
-            diarize_model = whisperx.diarize.DiarizationPipeline(
-                use_auth_token=settings.get("hf_token"), device=device
-            )
+            try:
+                diarize_model = whisperx.diarize.DiarizationPipeline(
+                    use_auth_token=settings.get("hf_token"), device=device
+                )
+            except Exception as exc:
+                raise _resource_error("initialise the diarization pipeline", exc) from exc
             diarize_segments = diarize_model(audio, min_speakers=settings.get("diar_min_spk"), max_speakers=settings.get("diar_max_spk"))
             final_result = whisperx.assign_word_speakers(diarize_segments, result)
         else:
