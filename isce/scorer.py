@@ -148,6 +148,8 @@ class Scorer:
             break exists).
         -   Total Duration: Whether the subtitle is on screen for too long
             or too short a time.
+        -   Soft minimums for total block length and the final line, which
+            discourage premature breaks that strand short fragments.
 
         Scores are calculated by comparing these metrics against ideal ranges
         defined in the corpus constraints.
@@ -203,6 +205,10 @@ class Scorer:
             else:
                 score -= self.sl.get("balance", 1.0) * 0.5
         
+        # Soft block-level constraints encourage the segmenter to keep adding
+        # tokens when a block is extremely short *and* the sentence has not yet
+        # reached strong punctuation. They mirror the per-line penalties applied
+        # during beam expansion but operate on the completed block.
         block_constraints = self.cfg.line_length_constraints.get("block", {})
         min_total_chars = block_constraints.get("min_total_chars", 0)
         min_last_line_chars = block_constraints.get("min_last_line_chars", 0)

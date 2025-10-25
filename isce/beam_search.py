@@ -37,6 +37,8 @@ class Segmenter:
         beam: The list of current best `PathState` hypotheses.
         line_len_leniency: A factor to adjust penalties for long lines.
         orphan_leniency: A factor to adjust penalties for single-word lines.
+        fallback_sb_penalty: The cost applied when the beam must force a block break
+                              because no other candidates were viable.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -127,6 +129,10 @@ class Segmenter:
                             overage = new_line_len - soft_target
                             line_len_penalty += ((overage ** 2) * over_scale) / self.line_len_leniency
                         if soft_min and new_line_len < soft_min:
+                            # Apply a smooth penalty when the line is shorter than the
+                            # preferred minimum. The quadratic keeps the gradient gentle
+                            # near the target while still nudging the beam toward longer
+                            # lines when it is safe to continue the sentence.
                             shortfall = soft_min - new_line_len
                             line_len_penalty += ((shortfall ** 2) * under_scale) / self.line_len_leniency
                         score = state.score + transition_scores["O"] - line_len_penalty

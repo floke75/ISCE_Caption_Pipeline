@@ -19,8 +19,10 @@ class Config:
         beam_width: The number of hypotheses to keep at each step of the beam search.
         min_block_duration_s: The minimum duration a subtitle block can have, in seconds.
         max_block_duration_s: The maximum duration a subtitle block can have, in seconds.
-        line_length_constraints: A nested dictionary defining the soft and hard character
-                                 limits for each line of a subtitle block.
+        line_length_constraints: A nested dictionary defining soft targets, hard limits,
+                                 and soft-minimum penalties for each caption line *and*
+                                 the block as a whole. Expected keys are ``"line1"``,
+                                 ``"line2"``, and ``"block"``.
         min_chars_for_single_word_block: The minimum character length required for a
                                          block that contains only a single word.
         sliders: A dictionary of user-adjustable floating-point values that tune the
@@ -89,6 +91,12 @@ def load_config(path: str = "config.yaml") -> Config:
         else:
             print(f"Warning: Could not load constraints file from {full_constraints_path}. Using fallbacks from config.yaml.")
 
+    # ``line_length_constraints`` is a three-level mapping that mirrors the keys used
+    # by the segmenter:
+    #   * ``line1`` and ``line2`` each provide soft targets, hard limits, and penalty
+    #     scales for over- and under-filled lines.
+    #   * ``block`` houses the global soft minimums that encourage subtitles to meet
+    #     a minimum number of characters before ending the block.
     line1_defaults = {
         "soft_target": line1_soft,
         "hard_limit": line1_hard,
