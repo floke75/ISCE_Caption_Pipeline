@@ -419,6 +419,14 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             description="Shortest caption length allowed when a block contains only one word.",
         ),
         ConfigField(
+            path=["allowed_single_word_proper_nouns"],
+            section="Constraints",
+            label="Allowed single-word proper nouns",
+            field_type="list",
+            description="Proper nouns permitted as standalone captions without triggering orphan penalties.",
+            advanced=True,
+        ),
+        ConfigField(
             path=["sliders", "flow"],
             section="Stylistic sliders",
             label="Flow weight",
@@ -450,6 +458,27 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             label="Orphan leniency",
             field_type="number",
             description=">1.0 strengthens penalties for orphan words.",
+        ),
+        ConfigField(
+            path=["sliders", "single_word_line_penalty"],
+            section="Stylistic sliders",
+            label="Single-word line penalty",
+            field_type="number",
+            description="Penalty applied when a cue would end with a single word or sub-minimal line.",
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_penalty"],
+            section="Stylistic sliders",
+            label="Extreme balance penalty",
+            field_type="number",
+            description="Penalty applied when line character counts are dramatically imbalanced.",
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_threshold"],
+            section="Stylistic sliders",
+            label="Extreme balance threshold",
+            field_type="number",
+            description="Character ratio beyond which the extreme balance penalty activates.",
         ),
         ConfigField(
             path=["sliders", "structure_boost"],

@@ -46,6 +46,11 @@ class Segmenter:
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
+        self.short_line_penalty = float(self.scorer.sl.get("single_word_line_penalty", 0.0))
+        self.allowed_proper_nouns = {
+            noun.strip().lower()
+            for noun in getattr(self.cfg, "allowed_single_word_proper_nouns", tuple())
+        }
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
         """Checks if continuing a line (`O`) violates hard length constraints."""
@@ -61,18 +66,57 @@ class Segmenter:
         recent_breaks = state.breaks[state.block_start_idx : current_idx + 1]
         return "LB" not in recent_breaks
 
-    def _is_hard_ok_SB(self, block_start_idx: int, current_idx: int) -> bool:
+    def _count_chars(self, line_tokens: List[Token]) -> int:
+        if not line_tokens:
+            return 0
+        return sum(len(token.w) for token in line_tokens) + (len(line_tokens) - 1)
+
+    def _is_allowed_single_word(self, token: Token) -> bool:
+        if token.pos != "PROPN":
+            return False
+        stripped = token.w.rstrip(".,!?;:\"")
+        return stripped.lower() in self.allowed_proper_nouns
+
+    def _block_profiles(self, state: PathState, block_start_idx: int, end_idx: int) -> tuple[List[Token], List[BreakType], List[List[Token]]]:
+        block_tokens = self.tokens[block_start_idx : end_idx + 1]
+        block_breaks = list(state.breaks[block_start_idx:end_idx]) + ["SB"]
+        lines: List[List[Token]] = []
+        current_line: List[Token] = []
+        for idx, token in enumerate(block_tokens):
+            current_line.append(token)
+            if block_breaks[idx] in ("LB", "SB"):
+                lines.append(list(current_line))
+                current_line = []
+        if current_line:
+            lines.append(list(current_line))
+        return block_tokens, block_breaks, lines
+
+    def _line_violations(self, lines: List[List[Token]]) -> List[str]:
+        violations: List[str] = []
+        min_chars = self.cfg.min_chars_for_single_word_block
+        for line_tokens in lines:
+            if not line_tokens:
+                continue
+            is_single_word = len(line_tokens) == 1
+            allowed_single = is_single_word and self._is_allowed_single_word(line_tokens[0])
+            if is_single_word and not allowed_single:
+                violations.append("single_word")
+                continue
+            if self._count_chars(line_tokens) < min_chars and not allowed_single:
+                violations.append("short_line")
+        return violations
+
+    def _is_hard_ok_SB(self, state: PathState, current_idx: int) -> bool:
         """Checks if a block break (`SB`) violates hard constraints."""
+        block_start_idx = state.block_start_idx
         start_token = self.tokens[block_start_idx]
         end_token = self.tokens[current_idx]
         duration = max(1e-6, end_token.end - start_token.start)
         if duration < self.cfg.min_block_duration_s:
             return False
-        num_words_in_block = (current_idx - block_start_idx) + 1
-        if num_words_in_block == 1:
-            word = start_token.w.rstrip('.,?!')
-            if len(word) < self.cfg.min_chars_for_single_word_block and start_token.pos != "PROPN":
-                return False
+        _, _, lines = self._block_profiles(state, block_start_idx, current_idx)
+        if self._line_violations(lines):
+            return False
         return True
 
     def run(self) -> List[BreakType]:
@@ -136,9 +180,9 @@ class Segmenter:
                     candidates.append(PathState(score=score, line_num=2, line_len=len(nxt.w), block_start_idx=state.block_start_idx, breaks=state.breaks + ("LB",)))
 
                 # Candidate: 'SB' (Block Break)
-                if self._is_hard_ok_SB(state.block_start_idx, i):
-                    block_token_dicts = [dict(t.__dict__) for t in self.tokens[state.block_start_idx : i + 1]]
-                    block_breaks = list(state.breaks[state.block_start_idx:]) + ["SB"]
+                if self._is_hard_ok_SB(state, i):
+                    block_tokens, block_breaks, _ = self._block_profiles(state, state.block_start_idx, i)
+                    block_token_dicts = [dict(t.__dict__) for t in block_tokens]
                     block_score = self.scorer.score_block(block_token_dicts, block_breaks)
                     score = state.score + transition_scores["SB"] + block_score
                     next_word_len = len(nxt.w) if nxt else 0
@@ -146,10 +190,14 @@ class Segmenter:
 
             if not candidates and self.beam:
                 fallback_state = self.beam[0]
-                block_tokens = [dict(t.__dict__) for t in self.tokens[fallback_state.block_start_idx : i + 1]]
-                block_breaks = list(fallback_state.breaks[fallback_state.block_start_idx:]) + ["SB"]
-                block_score = self.scorer.score_block(block_tokens, block_breaks) if block_tokens else 0.0
+                block_tokens, block_breaks, lines = self._block_profiles(fallback_state, fallback_state.block_start_idx, i)
+                block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+                block_score = self.scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
                 next_word_len = len(nxt.w) if nxt else 0
+                violations = self._line_violations(lines)
+                if violations:
+                    per_violation_penalty = self.short_line_penalty if self.short_line_penalty > 0 else self.fallback_sb_penalty
+                    block_score -= per_violation_penalty * len(violations)
                 fallback_candidate = PathState(
                     score=fallback_state.score + transition_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
                     line_num=1,

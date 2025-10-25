@@ -32,9 +32,21 @@ class Scorer:
     def __init__(self, weights: Dict, constraints: Dict, sliders: Dict, cfg: Config):
         self.w = weights
         self.c = constraints
-        self.sl = {"flow": 1.0, "density": 1.0, "balance": 1.0, "structure": 1.0}
+        self.cfg = cfg
+        self.sl = {
+            "flow": 1.0,
+            "density": 1.0,
+            "balance": 1.0,
+            "structure": 1.0,
+            "single_word_line_penalty": 0.0,
+            "extreme_balance_penalty": 0.0,
+            "extreme_balance_threshold": 2.5,
+        }
         self.sl.update(sliders)
         self.structure_boost = self.sl.get("structure_boost", 15.0)
+        self.allowed_single_word_proper_nouns = {
+            noun.strip().lower() for noun in cfg.allowed_single_word_proper_nouns
+        }
 
     def _get_weight(self, group: str, key: str, outcome: str) -> float:
         """
@@ -159,21 +171,39 @@ class Scorer:
             A float representing the overall quality score for the block. A higher
             score is better. Penalties are applied for violating constraints.
         """
-        if not block_tokens: return 0.0
+        if not block_tokens:
+            return 0.0
         score = 0.0
-        
+
         def count_chars(token_slice: List[dict]) -> int:
-            if not token_slice: return 0
+            if not token_slice:
+                return 0
             return sum(len(t.get("w", "")) for t in token_slice) + (len(token_slice) - 1)
-        
-        lb_idx = next((i for i, br in enumerate(block_breaks) if br == "LB"), -1)
-        if lb_idx != -1:
-            len1 = count_chars(block_tokens[:lb_idx + 1])
-            len2 = count_chars(block_tokens[lb_idx + 1:])
-            total_chars = len1 + len2
+
+        def is_allowed_single_word(token_dict: dict) -> bool:
+            if token_dict.get("pos") != "PROPN":
+                return False
+            stripped = token_dict.get("w", "").rstrip(".,!?;:\"")
+            return stripped.lower() in self.allowed_single_word_proper_nouns
+
+        lines: List[List[dict]] = []
+        current_line: List[dict] = []
+        for idx, token in enumerate(block_tokens):
+            current_line.append(token)
+            break_type = block_breaks[idx] if idx < len(block_breaks) else "SB"
+            if break_type in ("LB", "SB"):
+                lines.append(current_line)
+                current_line = []
+        if current_line:
+            lines.append(current_line)
+
+        line_char_counts = [count_chars(line) for line in lines]
+        total_chars = sum(line_char_counts)
+
+        if len(lines) == 2:
+            len1, len2 = line_char_counts
             balance = (len1 / max(1, len2)) if len1 and len2 else 1.0
         else:
-            total_chars = count_chars(block_tokens)
             balance = 1.0
 
         gross_duration = max(1e-6, block_tokens[-1].get("end", 0.0) - block_tokens[0].get("start", 0.0))
@@ -194,13 +224,47 @@ class Scorer:
             distance = abs(cps - median) / max(1e-6, median)
             score -= self.sl.get("density", 1.0) * (1.0 + distance)
 
-        if lb_idx != -1:
+        if len(lines) == 2:
             bal_lo, bal_hi = self.c.get("ideal_balance_iqr", [0.7, 1.4])
             if bal_lo <= balance <= bal_hi:
                 score += self.sl.get("balance", 1.0) * 0.5
             else:
                 score -= self.sl.get("balance", 1.0) * 0.5
-        
+
+        single_word_penalty = float(self.sl.get("single_word_line_penalty", 0.0))
+        if single_word_penalty:
+            min_chars = self.cfg.min_chars_for_single_word_block
+            penalty_lines = 0
+            for line_tokens, char_count in zip(lines, line_char_counts):
+                if not line_tokens:
+                    continue
+                is_single = len(line_tokens) == 1
+                allowed_single = is_single and is_allowed_single_word(line_tokens[0])
+                if is_single and not allowed_single:
+                    penalty_lines += 1
+                    continue
+                if char_count < min_chars and not allowed_single:
+                    penalty_lines += 1
+            if penalty_lines:
+                score -= single_word_penalty * penalty_lines
+
+        extreme_balance_penalty = float(self.sl.get("extreme_balance_penalty", 0.0))
+        extreme_threshold = float(self.sl.get("extreme_balance_threshold", 2.5))
+        if len(line_char_counts) == 2 and extreme_balance_penalty and extreme_threshold > 0:
+            len1, len2 = line_char_counts
+            smaller = min(len1, len2)
+            larger = max(len1, len2)
+            if smaller == 0:
+                severity = 1.0
+            else:
+                ratio = larger / smaller
+                if ratio <= extreme_threshold:
+                    severity = None
+                else:
+                    severity = (ratio - extreme_threshold) / extreme_threshold
+            if severity is not None:
+                score -= extreme_balance_penalty * (1.0 + max(0.0, severity))
+
         if gross_duration < self.c.get("min_block_duration_s", 1.0): score -= 10.0
         if gross_duration > self.c.get("max_block_duration_s", 8.0): score -= 2.0
 
