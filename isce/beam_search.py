@@ -78,7 +78,7 @@ def _compute_transition_scores(tokens: List[Token], scorer: Scorer, *, reverse: 
 
     # Provide a terminal score so the last boundary can still participate in blending.
     terminal_row = TokenRow(
-        token=_token_to_row_dict(reversed_tokens[-1], reverse=True),
+        token=_token_to_row_dict(tokens[-1], reverse=True),
         nxt=None,
         feats=None,
     )
