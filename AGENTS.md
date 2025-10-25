@@ -56,5 +56,6 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 - Frontend validation for output directories is stricter than the backend, which creates missing folders—align behavior when touching UI forms.
 - UI-exposed `project_root` / `pipeline_root` sliders are currently overridden by the backend; adjust messaging or respect overrides if modifying the UI.
 - Some CLI scripts assume WhisperX resources have already been downloaded—follow the installation guidance in `README.md` before running alignment locally.
+- **Test Fixtures:** The `tests/fixtures/` directory contains realistic data (`.srt`, `.asr.json`, `.txt`) used by the integration tests in `tests/test_training_data_integrity.py`. These fixtures are critical for validating the core alignment and feature generation logic. When modifying `build_training_pair_standalone.py`, ensure the tests continue to pass with these fixtures.
 
 This document should orient any agent before deeper changes—consult the referenced README and docs for operational details and historical context.

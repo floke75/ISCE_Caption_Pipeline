@@ -165,6 +165,22 @@ ISCE uses two main configuration files stored in the repository root. The UI bac
 
 The pipeline is designed to be run continuously using the `run_pipeline.py` orchestrator, which monitors a set of "hot folders."
 
+## Testing
+
+The test suite is built using `pytest` and can be run from the root of the repository:
+
+```bash
+pytest
+```
+
+The suite includes a set of crucial integration tests located in `tests/test_training_data_integrity.py`. These tests validate the core data transformation and feature engineering pipeline (`build_training_pair_standalone.py`) to ensure its reliability. Specifically, they cover:
+
+*   **Training Signal Integrity:** Verifies that intentional, human-edited signals in `.srt` files (like line breaks) are correctly translated into specific features (e.g., `is_llm_structural_break`) that the model uses for learning. This ensures that the model is trained on accurate data.
+*   **Data Alignment:** Confirms that the alignment between the `.srt` text and the ASR timing data is correct, preventing mismatches that could corrupt the training data.
+*   **Pipeline Robustness:** Ensures that the script can handle "noisy" or unexpected inputs (such as text with mixed languages or special characters) without crashing.
+
+These tests use realistic fixture data located in `tests/fixtures/` to simulate real-world scenarios.
+
 1.  **Start the Orchestrator:**
     ```bash
     python run_pipeline.py
