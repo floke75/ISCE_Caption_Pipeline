@@ -56,5 +56,50 @@ class TestBeamSearch(unittest.TestCase):
 
         self.assertEqual(breaks, ["LB", "SB", "LB", "SB"])
 
+    def test_bidirectional_breaks_before_trailing_straggler(self):
+        class PauseScorer:
+            def __init__(self):
+                self.sl = {"line_length_leniency": 1.0, "orphan_leniency": 1.0}
+
+            def score_transition(self, row):
+                pause_after = row.token.get("pause_after_ms", 0)
+                base = {"O": 0.0, "LB": -10.0, "SB": -1.0}
+                if pause_after >= 500:
+                    base["SB"] = 12.0
+                return base
+
+            def score_block(self, block_tokens, block_breaks):
+                return 0.0
+
+        tokens = [
+            Token(w="alpha", start=0.0, end=0.5, speaker="A", pause_after_ms=100, pause_before_ms=0, relative_position=0.0),
+            Token(w="beta", start=0.5, end=1.0, speaker="A", pause_after_ms=120, pause_before_ms=100, relative_position=0.5),
+            Token(w="gamma", start=1.0, end=1.6, speaker="A", pause_after_ms=0, pause_before_ms=900, relative_position=1.0),
+        ]
+
+        cfg = Config(
+            beam_width=3,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 25, "hard_limit": 30},
+                "line2": {"soft_target": 25, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+        )
+
+        scorer = PauseScorer()
+        forward_only = segment(tokens, scorer, cfg)
+        forward_breaks = [token.break_type for token in forward_only]
+
+        bidirectional = segment(tokens, scorer, cfg, bidirectional=True)
+        bidir_breaks = [token.break_type for token in bidirectional]
+
+        self.assertEqual(forward_breaks[:2], ["O", "O"])
+        self.assertEqual(bidir_breaks[:2], ["O", "SB"])
+        self.assertEqual(bidir_breaks[-1], "SB")
+
 if __name__ == "__main__":
     unittest.main()
