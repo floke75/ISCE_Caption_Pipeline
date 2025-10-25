@@ -205,9 +205,17 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     n = len(reversed_breaks)
     if n == 0:
         return []
-    mapped: List[BreakType] = ["O"] * n
-    for i in range(n):
-        mapped[i] = reversed_breaks[n - 1 - i]
+    trimmed: List[BreakType] = list(reversed_breaks)
+    had_sentinel = bool(trimmed and trimmed[-1] == "SB")
+    if had_sentinel:
+        trimmed.pop()
+    mapped = list(reversed(trimmed))
+    if had_sentinel:
+        mapped.append("SB")
+    elif mapped:
+        mapped[-1] = "SB"
+    else:
+        mapped.append("SB")
     return mapped
 
 
