@@ -14,6 +14,7 @@ from isce.config import load_config
 from isce.io_utils import load_tokens, save_tokens
 from isce.scorer import Scorer
 from isce.beam_search import segment
+from isce.post_process import reflow_tokens
 from isce.srt_writer import tokens_to_srt
 
 def main():
@@ -51,16 +52,32 @@ def main():
         help="Path to the configuration YAML file."
     )
     parser.add_argument(
-        "--save-labeled-json", 
-        action="store_true", 
+        "--save-labeled-json",
+        action="store_true",
         help="In addition to the SRT, save the output as a labeled JSON file."
     )
+    parser.add_argument(
+        "--refine-blocks",
+        dest="refine_blocks",
+        action="store_true",
+        help="Enable the localized refinement pass to re-score low quality cues.",
+    )
+    parser.add_argument(
+        "--no-refine-blocks",
+        dest="refine_blocks",
+        action="store_false",
+        help="Disable the localized refinement pass regardless of config settings.",
+    )
+    parser.set_defaults(refine_blocks=None)
     args = parser.parse_args()
 
     try:
         # 1. Load configurations
         print(f"Loading configuration from {args.config}...")
         cfg = load_config(args.config)
+
+        if args.refine_blocks is not None:
+            cfg.enable_refinement_pass = args.refine_blocks
 
         # 2. Load input data
         print(f"Loading tokens from {args.input}...")
@@ -86,11 +103,19 @@ def main():
         print("Segmenting tokens...")
         segmented_tokens = segment(tokens, scorer, cfg)
 
-        # 6. Format output as SRT
+        # 6. Optionally refine segmentation with local post-processing. The
+        #    reflow pass is intentionally conservative and only tweaks the
+        #    boundaries within a single block, making it safe to enable for most
+        #    deployments once it has been calibrated on real data.
+        if getattr(cfg, "enable_reflow", False):
+            print("Reflowing segmented tokens...")
+            segmented_tokens = reflow_tokens(segmented_tokens, scorer, cfg)
+
+        # 7. Format output as SRT
         print("Formatting output to SRT...")
         srt_content = tokens_to_srt(segmented_tokens)
 
-        # 7. Write to output file(s)
+        # 8. Write to output file(s)
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:

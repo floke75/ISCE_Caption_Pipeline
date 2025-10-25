@@ -49,6 +49,7 @@ class ConfigField:
 
 
 def _recursive_update(base: MutableMapping[str, Any], update: Dict[str, Any]) -> MutableMapping[str, Any]:
+    """Merge ``update`` into ``base`` recursively without mutating inputs."""
     for key, value in update.items():
         if isinstance(value, dict):
             child = base.get(key)
@@ -61,6 +62,7 @@ def _recursive_update(base: MutableMapping[str, Any], update: Dict[str, Any]) ->
 
 
 def _resolve_placeholders(config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    """Expand ``str.format`` placeholders in ``config`` using ``context``."""
     for key, value in list(config.items()):
         if isinstance(value, dict):
             config[key] = _resolve_placeholders(value, context)
@@ -73,6 +75,7 @@ def _resolve_placeholders(config: Dict[str, Any], context: Dict[str, Any]) -> Di
 
 
 def _prune_nulls(data: Any) -> Any:
+    """Remove ``None`` values from arbitrarily nested mappings and sequences."""
     if isinstance(data, dict):
         cleaned: Dict[str, Any] = {}
         for key, value in data.items():
@@ -87,6 +90,7 @@ def _prune_nulls(data: Any) -> Any:
 
 
 def _ensure_parent(path: Path) -> None:
+    """Create ``path.parent`` if it does not already exist."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -126,33 +130,17 @@ class ConfigService:
     # Public API
     # ------------------------------------------------------------------
     def base_config(self) -> Dict[str, Any]:
-        """Loads and returns the base (default) configuration.
-
-        Returns:
-            A dictionary representing the content of the base config file.
-        """
+        """Return the repository's baseline configuration document."""
         return self._load_yaml(self._base_config_path)
 
     def stored_overrides(self) -> Dict[str, Any]:
-        """Loads and returns the user-defined overrides.
-
-        Returns:
-            A dictionary of the stored overrides, or an empty dictionary if
-            the override file does not exist.
-        """
+        """Return the persisted user overrides, if any exist on disk."""
         if self._overrides_path.exists():
             return self._load_yaml(self._overrides_path)
         return {}
 
     def effective_config(self) -> Dict[str, Any]:
-        """Computes the final, merged configuration.
-
-        This method merges the stored overrides on top of the base config and
-        then resolves any path placeholders.
-
-        Returns:
-            The fully resolved, effective configuration dictionary.
-        """
+        """Return the merged configuration after applying stored overrides."""
         base = self.base_config()
         overrides = self.stored_overrides()
         merged = _recursive_update(base, overrides)
@@ -160,37 +148,16 @@ class ConfigService:
         return _resolve_placeholders(merged, context)
 
     def resolve_paths(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Resolves path placeholders in a given configuration dictionary.
-
-        Args:
-            config: A configuration dictionary.
-
-        Returns:
-            The same dictionary with placeholders like `{repo_root}` resolved.
-        """
+        """Resolve placeholders in an arbitrary config document."""
         context = {k: v for k, v in config.items() if isinstance(v, str)}
         return _resolve_placeholders(config, context)
 
     def describe_fields(self) -> List[ConfigField]:
-        """Returns the flat list of all known, editable fields.
-
-        Returns:
-            A list of `ConfigField` objects from the catalog.
-        """
+        """Expose the catalog used to render editable fields in the UI."""
         return list(self._field_catalog)
 
     def describe_tree(self) -> List[Dict[str, Any]]:
-        """Builds a hierarchical description of the configuration for the UI.
-
-        This method walks the configuration structure and builds a tree of nodes,
-        annotating each node with its default value, current value, override
-        status, and metadata from the field catalog. This tree is directly
-        consumed by the frontend to render the configuration editor.
-
-        Returns:
-            A list of dictionaries, where each dictionary represents a root
-            node in the configuration tree.
-        """
+        """Return a hierarchical view of base values, overrides, and effective output."""
         base = self.base_config()
         effective = self.effective_config()
         overrides = self.stored_overrides()
@@ -201,32 +168,21 @@ class ConfigService:
         ]
 
     def save_overrides(self, overrides: Dict[str, Any]) -> None:
-        """Saves a new set of overrides to the persistent storage file.
-
-        Args:
-            overrides: The dictionary of override values to save.
-        """
+        """Persist overrides to disk after removing empty/null values."""
         cleaned = _prune_nulls(overrides)
         _ensure_parent(self._overrides_path)
         with self._overrides_path.open("w", encoding="utf-8") as fh:
             yaml.safe_dump(cleaned, fh, allow_unicode=True, sort_keys=False)
 
     def apply_patch(self, patch: Dict[str, Any]) -> Dict[str, Any]:
-        """Applies a nested patch to the stored overrides and saves them.
-
-        Args:
-            patch: A nested dictionary representing the changes to apply.
-
-        Returns:
-            The new effective configuration after applying the patch.
-        """
+        """Merge ``patch`` into the stored overrides and return the new effective config."""
         overrides = self.stored_overrides()
         merged = _recursive_update(overrides, patch)
         self.save_overrides(merged)
         return self.effective_config()
 
     def reset_overrides(self) -> None:
-        """Deletes the overrides file, resetting the config to its base state."""
+        """Delete the overrides file if one currently exists."""
         if self._overrides_path.exists():
             self._overrides_path.unlink()
 
@@ -234,6 +190,7 @@ class ConfigService:
     # Helpers
     # ------------------------------------------------------------------
     def _load_yaml(self, path: Path) -> Dict[str, Any]:
+        """Load a YAML document from ``path`` and ensure it is a mapping."""
         if not path.exists():
             return {}
         with path.open("r", encoding="utf-8") as fh:
@@ -243,6 +200,7 @@ class ConfigService:
         return data
 
     def _build_field_catalog(self) -> List[ConfigField]:
+        """Generate the default field metadata consumed by the SPA."""
         return [
             ConfigField(
                 path=["project_root"],
@@ -483,6 +441,20 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             description="Number of parallel hypotheses explored during segmentation.",
         ),
         ConfigField(
+            path=["lookahead_width"],
+            section="Beam search",
+            label="Lookahead width",
+            field_type="number",
+            description="Number of future tokens exposed to transition scoring heuristics.",
+        ),
+        ConfigField(
+            path=["enable_bidirectional_pass"],
+            section="Beam search",
+            label="Enable bidirectional pass",
+            field_type="boolean",
+            description="Run the segmenter forward and backward, reconciling mismatched cues.",
+        ),
+        ConfigField(
             path=["constraints", "min_block_duration_s"],
             section="Constraints",
             label="Minimum block duration (s)",
@@ -512,6 +484,28 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             label="Min chars for single-word block",
             field_type="number",
             description="Shortest caption length allowed when a block contains only one word.",
+        ),
+        ConfigField(
+            path=["allowed_single_word_proper_nouns"],
+            section="Constraints",
+            label="Allowed single-word proper nouns",
+            field_type="list",
+            description="Proper nouns permitted as standalone captions without triggering orphan penalties.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["enable_refinement_pass"],
+            section="Post-processing",
+            label="Enable refinement pass",
+            field_type="boolean",
+            description="Run a localized second pass to rebalance harsh or single-word cues.",
+        ),
+        ConfigField(
+            path=["enable_reflow"],
+            section="Post-processing",
+            label="Enable reflow",
+            field_type="boolean",
+            description="Perform conservative line reflow inside each cue after segmentation.",
         ),
         ConfigField(
             path=["sliders", "flow"],
@@ -545,6 +539,27 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             label="Orphan leniency",
             field_type="number",
             description=">1.0 strengthens penalties for orphan words.",
+        ),
+        ConfigField(
+            path=["sliders", "single_word_line_penalty"],
+            section="Stylistic sliders",
+            label="Single-word line penalty",
+            field_type="number",
+            description="Penalty applied when a cue would end with a single word or sub-minimal line.",
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_penalty"],
+            section="Stylistic sliders",
+            label="Extreme balance penalty",
+            field_type="number",
+            description="Penalty applied when line character counts are dramatically imbalanced.",
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_threshold"],
+            section="Stylistic sliders",
+            label="Extreme balance threshold",
+            field_type="number",
+            description="Character ratio beyond which the extreme balance penalty activates.",
         ),
         ConfigField(
             path=["sliders", "structure_boost"],

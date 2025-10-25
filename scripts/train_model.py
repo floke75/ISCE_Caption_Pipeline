@@ -64,7 +64,6 @@ def partition_corpus_paths(corpus_dir: Path) -> Tuple[list[Path], list[Path]]:
         # `derive_constraints` to run against empty or malformed payloads.
         if ".train." not in name or not name.endswith(".words.json"):
             continue
-
         if any(marker in name for marker in RAW_FILENAME_MARKERS):
             raw_paths.append(path)
         else:

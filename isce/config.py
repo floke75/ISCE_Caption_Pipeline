@@ -1,4 +1,4 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\config.py
+# C:\\dev\\Captions_Formatter\\Formatter_machine\\isce\\config.py
 """Manages the loading and validation of application configuration.
 
 This module defines the `Config` dataclass, which serves as a centralized,
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 import yaml
 import json
 from pathlib import Path
+
 
 @dataclass
 class Config:
@@ -34,7 +35,19 @@ class Config:
                  behavior of the scoring model.
         paths: A dictionary containing the relative paths to model files like weights
                and constraints.
+        lookahead_width: The number of future tokens to expose to the transition
+                          scorer. A value of 0 disables the lookahead pass.
+        enable_reflow: When true, run an additional post-processing pass to reflow
+                       awkward short or imbalanced cues.
+        enable_bidirectional_pass: When true, run both forward and reverse beam search
+                                   passes and reconcile their boundaries.
+        allowed_single_word_proper_nouns: Tuple of proper nouns that may appear as
+               single-word captions without triggering hard rejections.
+        enable_refinement_pass: Whether to run a localized follow-up search that
+                                re-scores low quality cues after the main beam
+                                search finishes.
     """
+
     beam_width: int
     min_block_duration_s: float
     max_block_duration_s: float
@@ -42,6 +55,12 @@ class Config:
     min_chars_for_single_word_block: int
     sliders: dict[str, float]
     paths: dict[str, str]
+    lookahead_width: int = 0
+    enable_reflow: bool = False
+    enable_bidirectional_pass: bool = False
+    allowed_single_word_proper_nouns: tuple[str, ...] = ()
+    enable_refinement_pass: bool = False
+
 
 def load_config(path: str = "config.yaml") -> Config:
     """
@@ -64,6 +83,7 @@ def load_config(path: str = "config.yaml") -> Config:
         ValueError: If there is an error parsing the YAML file.
         TypeError: If the root of the YAML file is not a dictionary.
     """
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             y = yaml.safe_load(f)
@@ -79,7 +99,7 @@ def load_config(path: str = "config.yaml") -> Config:
     constraints_yaml = y.get("constraints", {})
     line1_soft = int(constraints_yaml.get("line_length_soft_target", 37))
     line1_hard = int(constraints_yaml.get("line_length_hard_limit", 42))
-    
+
     # Attempt to load the learned constraints.json file
     constraints_json = {}
     constraints_path_str = y.get("paths", {}).get("constraints")
@@ -89,17 +109,45 @@ def load_config(path: str = "config.yaml") -> Config:
             with open(full_constraints_path, "r", encoding="utf-8") as f:
                 constraints_json = json.load(f)
         else:
-            print(f"Warning: Could not load constraints file from {full_constraints_path}. Using fallbacks from config.yaml.")
+            print(
+                f"Warning: Could not load constraints file from {full_constraints_path}. "
+                "Using fallbacks from config.yaml."
+            )
+
+    allowed_single_word_proper_nouns = tuple(
+        str(item) for item in y.get("allowed_single_word_proper_nouns", [])
+    )
 
     return Config(
-      beam_width=int(y.get("beam_width", 7)),
-      min_block_duration_s=float(constraints_json.get("min_block_duration_s", constraints_yaml.get("min_block_duration_s", 1.0))),
-      max_block_duration_s=float(constraints_json.get("max_block_duration_s", constraints_yaml.get("max_block_duration_s", 8.0))),
-      line_length_constraints={
-          "line1": constraints_json.get("line1", {"soft_target": line1_soft, "hard_limit": line1_hard}),
-          "line2": constraints_json.get("line2", {"soft_target": line1_soft, "hard_limit": line1_hard})
-      },
-      min_chars_for_single_word_block=int(constraints_yaml.get("min_chars_for_single_word_block", 10)),
-      sliders=dict(y.get("sliders", {})),
-      paths=dict(y.get("paths", {})),
+        beam_width=int(y.get("beam_width", 7)),
+        min_block_duration_s=float(
+            constraints_json.get(
+                "min_block_duration_s",
+                constraints_yaml.get("min_block_duration_s", 1.0),
+            )
+        ),
+        max_block_duration_s=float(
+            constraints_json.get(
+                "max_block_duration_s",
+                constraints_yaml.get("max_block_duration_s", 8.0),
+            )
+        ),
+        line_length_constraints={
+            "line1": constraints_json.get(
+                "line1", {"soft_target": line1_soft, "hard_limit": line1_hard}
+            ),
+            "line2": constraints_json.get(
+                "line2", {"soft_target": line1_soft, "hard_limit": line1_hard}
+            ),
+        },
+        min_chars_for_single_word_block=int(
+            constraints_yaml.get("min_chars_for_single_word_block", 10)
+        ),
+        sliders=dict(y.get("sliders", {})),
+        paths=dict(y.get("paths", {})),
+        lookahead_width=int(y.get("lookahead_width", 0)),
+        enable_reflow=bool(y.get("enable_reflow", False)),
+        enable_bidirectional_pass=bool(y.get("enable_bidirectional_pass", False)),
+        allowed_single_word_proper_nouns=allowed_single_word_proper_nouns,
+        enable_refinement_pass=bool(y.get("enable_refinement_pass", False)),
     )

@@ -2,6 +2,10 @@ import json
 from pathlib import Path
 import sys
 
+import json
+import sys
+from pathlib import Path
+
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,10 +26,15 @@ def _fallback_config() -> Config:
         beam_width=7,
         min_block_duration_s=0.5,
         max_block_duration_s=10.0,
-        line_length_constraints={"line1": {"soft_target": 37, "hard_limit": 42}, "line2": {"soft_target": 37, "hard_limit": 42}},
+        line_length_constraints={
+            "line1": {"soft_target": 37, "hard_limit": 42},
+            "line2": {"soft_target": 37, "hard_limit": 42},
+        },
         min_chars_for_single_word_block=4,
         sliders={},
         paths={},
+        lookahead_width=0,
+        allowed_single_word_proper_nouns=(),
     )
 
 
