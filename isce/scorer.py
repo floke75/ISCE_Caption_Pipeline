@@ -136,36 +136,67 @@ class Scorer:
             scores["O"] -= self.structure_boost
 
         # --- Step 3: Optional lookahead heuristics ---
-        if lookahead:
-            speaker_idx = next((idx for idx, future in enumerate(lookahead) if future.get("speaker_change")), None)
-            if speaker_idx is not None:
-                distance = speaker_idx + 1
-                structural_bonus = self.structure_boost / max(1, (distance + 1))
-                scores["SB"] += structural_bonus
-                scores["LB"] += structural_bonus * 0.5
-                scores["O"] -= structural_bonus
-
-            comma_idx = next((idx for idx, future in enumerate(lookahead) if punct_class(future) == "p:comma"), None)
-            if comma_idx is not None:
-                closeness = comma_idx + 1
-                flow_bonus = self.sl.get("flow", 1.0) * (0.6 / closeness)
-                scores["LB"] += flow_bonus
-                scores["O"] -= flow_bonus * 0.5
-
-            final_idx = next((idx for idx, future in enumerate(lookahead) if punct_class(future) == "p:final"), None)
-            if final_idx is not None:
-                closeness = final_idx + 1
-                flow_bonus = self.sl.get("flow", 1.0) * (0.8 / closeness)
-                scores["SB"] += flow_bonus
-                scores["O"] -= flow_bonus * 0.5
-
-            upcoming_pause = max((future.get("pause_before_ms") or future.get("pause_after_ms") or 0) for future in lookahead)
-            if upcoming_pause >= 500:
-                pause_bonus = self.sl.get("flow", 1.0) * 0.5
-                scores["SB"] += pause_bonus
-                scores["LB"] += pause_bonus * 0.5
+        self._apply_lookahead_heuristics(scores, lookahead)
 
         return scores
+
+    def _apply_lookahead_heuristics(self, scores: Dict[str, float], lookahead: List[dict]) -> None:
+        """Apply forward-looking adjustments when future context is available.
+
+        The transition scorer operates primarily on local features, but when the
+        segmenter provides a small window of upcoming tokens we can anticipate
+        high-impact structural events. This helper nudges the raw transition
+        scores toward breaks that align with those events, encouraging earlier
+        block or line boundaries when:
+
+        * a speaker change is imminent,
+        * strong punctuation (comma or sentence-final mark) is approaching, or
+        * a long pause is about to occur.
+
+        These heuristics are intentionally gentle—they scale by the distance to
+        the future event so that remote hints do not overwhelm learned weights.
+
+        Args:
+            scores: The mutable transition score dictionary produced by
+                :meth:`score_transition`.
+            lookahead: A list of dictionary-style token payloads describing the
+                upcoming words. An empty list leaves ``scores`` unchanged.
+        """
+
+        if not lookahead:
+            return
+
+        # Speaker changes are a strong cue for starting a new subtitle block.
+        speaker_idx = next((idx for idx, future in enumerate(lookahead) if future.get("speaker_change")), None)
+        if speaker_idx is not None:
+            distance = speaker_idx + 1
+            structural_bonus = self.structure_boost / max(1, (distance + 1))
+            scores["SB"] += structural_bonus
+            scores["LB"] += structural_bonus * 0.5
+            scores["O"] -= structural_bonus
+
+        # Commas often mark natural clause boundaries; bias toward a gentle break.
+        comma_idx = next((idx for idx, future in enumerate(lookahead) if punct_class(future) == "p:comma"), None)
+        if comma_idx is not None:
+            closeness = comma_idx + 1
+            flow_bonus = self.sl.get("flow", 1.0) * (0.6 / closeness)
+            scores["LB"] += flow_bonus
+            scores["O"] -= flow_bonus * 0.5
+
+        # Sentence-final punctuation is an even stronger cue for ending the block.
+        final_idx = next((idx for idx, future in enumerate(lookahead) if punct_class(future) == "p:final"), None)
+        if final_idx is not None:
+            closeness = final_idx + 1
+            flow_bonus = self.sl.get("flow", 1.0) * (0.8 / closeness)
+            scores["SB"] += flow_bonus
+            scores["O"] -= flow_bonus * 0.5
+
+        # Extended pauses should not straddle a subtitle boundary; favor a break.
+        upcoming_pause = max((future.get("pause_before_ms") or future.get("pause_after_ms") or 0) for future in lookahead)
+        if upcoming_pause >= 500:
+            pause_bonus = self.sl.get("flow", 1.0) * 0.5
+            scores["SB"] += pause_bonus
+            scores["LB"] += pause_bonus * 0.5
 
     def score_block(self, block_tokens: List[dict], block_breaks: List[BreakType]) -> float:
         """
