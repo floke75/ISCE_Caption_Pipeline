@@ -34,6 +34,14 @@ class Config:
                  behavior of the scoring model.
         paths: A dictionary containing the relative paths to model files like weights
                and constraints.
+        enable_bidirectional_pass: When true, run both forward and reverse beam search
+                                   passes and reconcile their boundaries.
+        lookahead_width: The number of future tokens to expose to the transition scorer.
+                          A value of 0 disables the lookahead pass.
+        enable_reflow: When true, run an additional post-processing pass to reflow
+                       awkward short or imbalanced cues.
+        allowed_single_word_proper_nouns: Proper nouns that are permitted as
+                       single-word lines without triggering orphan penalties.
     """
     beam_width: int
     min_block_duration_s: float
@@ -42,6 +50,10 @@ class Config:
     min_chars_for_single_word_block: int
     sliders: dict[str, float]
     paths: dict[str, str]
+    enable_bidirectional_pass: bool = False
+    lookahead_width: int = 0
+    enable_reflow: bool = False
+    allowed_single_word_proper_nouns: tuple[str, ...] = ()
 
 def load_config(path: str = "config.yaml") -> Config:
     """
@@ -92,14 +104,34 @@ def load_config(path: str = "config.yaml") -> Config:
             print(f"Warning: Could not load constraints file from {full_constraints_path}. Using fallbacks from config.yaml.")
 
     return Config(
-      beam_width=int(y.get("beam_width", 7)),
-      min_block_duration_s=float(constraints_json.get("min_block_duration_s", constraints_yaml.get("min_block_duration_s", 1.0))),
-      max_block_duration_s=float(constraints_json.get("max_block_duration_s", constraints_yaml.get("max_block_duration_s", 8.0))),
-      line_length_constraints={
-          "line1": constraints_json.get("line1", {"soft_target": line1_soft, "hard_limit": line1_hard}),
-          "line2": constraints_json.get("line2", {"soft_target": line1_soft, "hard_limit": line1_hard})
-      },
-      min_chars_for_single_word_block=int(constraints_yaml.get("min_chars_for_single_word_block", 10)),
-      sliders=dict(y.get("sliders", {})),
-      paths=dict(y.get("paths", {})),
+        beam_width=int(y.get("beam_width", 7)),
+        min_block_duration_s=float(
+            constraints_json.get(
+                "min_block_duration_s",
+                constraints_yaml.get("min_block_duration_s", 1.0),
+            )
+        ),
+        max_block_duration_s=float(
+            constraints_json.get(
+                "max_block_duration_s",
+                constraints_yaml.get("max_block_duration_s", 8.0),
+            )
+        ),
+        line_length_constraints={
+            "line1": constraints_json.get(
+                "line1", {"soft_target": line1_soft, "hard_limit": line1_hard}
+            ),
+            "line2": constraints_json.get(
+                "line2", {"soft_target": line1_soft, "hard_limit": line1_hard}
+            ),
+        },
+        min_chars_for_single_word_block=int(
+            constraints_yaml.get("min_chars_for_single_word_block", 10)
+        ),
+        sliders=dict(y.get("sliders", {})),
+        paths=dict(y.get("paths", {})),
+        enable_bidirectional_pass=bool(y.get("enable_bidirectional_pass", False)),
+        lookahead_width=int(y.get("lookahead_width", 0)),
+        enable_reflow=bool(y.get("enable_reflow", False)),
+        allowed_single_word_proper_nouns=tuple(y.get("allowed_single_word_proper_nouns", [])),
     )
