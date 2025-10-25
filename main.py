@@ -14,6 +14,7 @@ from isce.config import load_config
 from isce.io_utils import load_tokens, save_tokens
 from isce.scorer import Scorer
 from isce.beam_search import segment
+from isce.postprocess import postprocess
 from isce.srt_writer import tokens_to_srt
 
 def main():
@@ -85,6 +86,9 @@ def main():
         # 5. Run the segmentation algorithm
         print("Segmenting tokens...")
         segmented_tokens = segment(tokens, scorer, cfg)
+
+        print("Running post-processing checks...")
+        segmented_tokens = postprocess(segmented_tokens, scorer)
 
         # 6. Format output as SRT
         print("Formatting output to SRT...")
