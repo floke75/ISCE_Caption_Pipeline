@@ -45,7 +45,15 @@ def _token_to_row_dict(token: Token, *, reverse: bool = False) -> dict:
 
 
 def _compute_transition_scores(tokens: List[Token], scorer: Scorer, *, reverse: bool = False) -> List[Dict[str, float]]:
-    """Return transition scores for each boundary in the requested direction."""
+    """Return transition scores for each boundary in the requested direction.
+
+    Forward scoring walks the token list from left to right, producing a row for
+    every token/boundary pair. When ``reverse`` is true we request the same
+    scores while iterating from the end of the sequence so the caller can blend
+    forward and backward evidence. The backward pass mirrors the order of the
+    forward pass, so the returned list indexes continue to map directly to the
+    original token boundaries.
+    """
 
     if not tokens:
         return []
@@ -65,6 +73,8 @@ def _compute_transition_scores(tokens: List[Token], scorer: Scorer, *, reverse: 
     reversed_tokens = list(reversed(tokens))
     scores: List[Optional[Dict[str, float]]] = [None] * len(tokens)
 
+    # Walk the reversed list, mapping each pair back to the corresponding
+    # forward boundary index so callers can blend the two lists by position.
     for ridx in range(len(reversed_tokens) - 1):
         token = reversed_tokens[ridx]
         nxt = reversed_tokens[ridx + 1]
@@ -78,6 +88,9 @@ def _compute_transition_scores(tokens: List[Token], scorer: Scorer, *, reverse: 
 
     # Provide a terminal score so the last boundary can still participate in blending.
     terminal_row = TokenRow(
+        # Use the original final token to keep the backward terminal row aligned
+        # with the last boundary instead of the first token from the reversed
+        # sequence. ``reverse=True`` ensures pause metadata is mirrored.
         token=_token_to_row_dict(tokens[-1], reverse=True),
         nxt=None,
         feats=None,
