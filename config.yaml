@@ -3,6 +3,9 @@
 
 # --- Algorithm Parameters ---
 beam_width: 14
+# Number of future tokens each boundary can peek when scoring transitions.
+# Set to 0 to disable lookahead heuristics.
+lookahead_width: 0
 
 # --- Fallback Constraints ---
 # These are used by the trainer if the learned constraints.json cannot be found.

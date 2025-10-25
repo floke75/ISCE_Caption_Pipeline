@@ -196,6 +196,9 @@ ISCE uses two main configuration files, both located in the `configs/` directory
     *   `beam_width`: The width of the beam search algorithm. A larger number may yield better results but will be slower.
     *   `sliders`: User-adjustable weights to fine-tune the importance of different features in the scoring model.
     *   `paths`: The paths to your trained `model_weights.json` and `constraints.json` files.
+    *   `lookahead_width`: (New) Enables a forward-looking pass in the segmenter so the transition scorer can see upcoming
+        pauses, punctuation, or speaker changes. Set this to `0` to preserve legacy behavior or increase it (e.g., `2`) to allow
+        the beam search to anticipate rapid clause endings and speaker turns.
 
 ## Usage
 

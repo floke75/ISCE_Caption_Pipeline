@@ -30,13 +30,15 @@ class Segmenter:
     segmentation hypotheses (`PathState` objects). It uses a `Scorer` to
     evaluate the quality of different break decisions at each step.
 
-    Attributes:
-        tokens: The list of `Token` objects to be segmented.
-        scorer: The `Scorer` instance used to score potential breaks.
-        cfg: The main configuration object.
-        beam: The list of current best `PathState` hypotheses.
-        line_len_leniency: A factor to adjust penalties for long lines.
-        orphan_leniency: A factor to adjust penalties for single-word lines.
+        Attributes:
+            tokens: The list of `Token` objects to be segmented.
+            scorer: The `Scorer` instance used to score potential breaks.
+            cfg: The main configuration object.
+            beam: The list of current best `PathState` hypotheses.
+            line_len_leniency: A factor to adjust penalties for long lines.
+            orphan_leniency: A factor to adjust penalties for single-word lines.
+            lookahead_width: Number of future tokens to pass to the scorer when
+                computing transition scores.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -46,6 +48,7 @@ class Segmenter:
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
+        self.lookahead_width = getattr(cfg, "lookahead_width", 0)
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
         """Checks if continuing a line (`O`) violates hard length constraints."""
@@ -102,12 +105,20 @@ class Segmenter:
 
             token_dict = dict(token.__dict__)
             nxt_dict = dict(nxt.__dict__) if nxt else None
+            lookahead_tokens = None
+            if self.lookahead_width > 0:
+                # Expose a shallow copy of the upcoming tokens so the scorer can
+                # apply lookahead heuristics without mutating the canonical list.
+                future_slice = self.tokens[i + 1 : i + 1 + self.lookahead_width]
+                if future_slice:
+                    lookahead_tokens = tuple(dict(t.__dict__) for t in future_slice)
 
             # Create the dictionary-based TokenRow required by the refactored scorer
             scorer_row = TokenRow(
                 token=token_dict,
                 nxt=nxt_dict,
-                feats=None # feats object is no longer used by the scorer
+                feats=None, # feats object is no longer used by the scorer
+                lookahead=lookahead_tokens,
             )
             transition_scores = self.scorer.score_transition(scorer_row)
 
