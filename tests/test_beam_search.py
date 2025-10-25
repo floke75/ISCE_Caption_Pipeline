@@ -56,5 +56,49 @@ class TestBeamSearch(unittest.TestCase):
 
         self.assertEqual(breaks, ["LB", "SB", "LB", "SB"])
 
+    def test_refinement_pass_merges_single_word_cue(self):
+        class RefinementScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "flow": 1.0,
+                    "density": 1.0,
+                    "balance": 1.0,
+                    "structure": 1.0,
+                }
+
+            def score_transition(self, row):
+                return {"O": -40.0, "LB": -100.0, "SB": 0.0}
+
+            def score_block(self, block_tokens, block_breaks):
+                return 100.0 if len(block_tokens) >= 2 else -5.0
+
+        tokens = [
+            make_token("one", 0.0),
+            make_token("two", 0.4),
+            make_token("three", 0.8),
+            make_token("four", 1.2),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 42, "hard_limit": 42},
+                "line2": {"soft_target": 42, "hard_limit": 42},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            enable_refinement_pass=True,
+        )
+
+        segmented = segment(tokens, RefinementScorer(), cfg)
+        breaks = [token.break_type for token in segmented]
+
+        self.assertEqual(breaks, ["O", "SB", "O", "SB"])
+
 if __name__ == "__main__":
     unittest.main()
