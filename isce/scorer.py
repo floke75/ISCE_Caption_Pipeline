@@ -1,11 +1,11 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\scorer.py
 
 from __future__ import annotations
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .model_builder import bin_pause_z, punct_class, bin_rel_pos
 from .config import Config
-from .types import BreakType, TokenRow
+from .types import BreakType, TokenRow, TransitionContext
 
 class Scorer:
     """
@@ -57,7 +57,7 @@ class Scorer:
         except (KeyError, AttributeError):
             return 0.0
 
-    def score_transition(self, row: TokenRow) -> Dict[str, float]:
+    def score_transition(self, row: TokenRow, ctx: Optional[TransitionContext] = None) -> Dict[str, float]:
         """
         Calculates the scores for each possible break type after the current token.
 
@@ -133,6 +133,16 @@ class Scorer:
         if token.get("is_llm_structural_break"):
             scores["SB"] += self.structure_boost
             scores["O"] -= self.structure_boost
+
+        if ctx and ctx.current_line_num == 1:
+            projected_words = ctx.projected_second_line_words
+            projected_chars = ctx.projected_second_line_chars if ctx.projected_second_line_chars is not None else 0
+            if projected_words is not None and projected_words <= 1:
+                threshold = float(self.sl.get("fragment_char_threshold", 8.0))
+                penalty_strength = float(self.sl.get("fragment_penalty", 6.0))
+                deficit = max(0.0, threshold - projected_chars)
+                severity = 1.0 if projected_words == 0 else deficit / max(threshold, 1e-6)
+                scores["LB"] -= penalty_strength * severity
 
         return scores
 
