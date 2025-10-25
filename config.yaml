@@ -3,6 +3,10 @@
 
 # --- Algorithm Parameters ---
 beam_width: 14
+enable_bidirectional_pass: false
+lookahead_width: 2
+enable_reflow: true
+enable_refinement_pass: true
 
 # --- Fallback Constraints ---
 # These are used by the trainer if the learned constraints.json cannot be found.
@@ -12,6 +16,11 @@ constraints:
   line_length_soft_target: 37
   line_length_hard_limit: 42
   min_chars_for_single_word_block: 10
+  min_line_length_for_break: 15
+  min_last_word_len_for_break: 5
+  min_block_length_char: 10
+  min_line_length_char: 5
+
 
 # --- Stylistic Sliders & Boosts ---
 sliders:
@@ -26,6 +35,8 @@ sliders:
 
   # Additive boost for structural breaks (speaker changes, dashes, LLM hints)
   structure_boost: 18.0
+  single_word_line_penalty: 10.0
+  extreme_balance_penalty: 20.0
 
 # --- File Paths (relative to this config file's location) ---
 paths:

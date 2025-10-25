@@ -19,6 +19,16 @@ def make_config() -> Config:
         min_chars_for_single_word_block=10,
         sliders={},
         paths={},
+        enable_bidirectional_pass=False,
+        lookahead_width=0,
+        enable_reflow=False,
+        min_line_length_for_break=1,
+        min_last_word_len_for_break=1,
+        single_word_line_penalty=0.0,
+        extreme_balance_penalty=0.0,
+        enable_refinement_pass=False,
+        min_block_length_char=1,
+        min_line_length_char=1,
     )
 
 

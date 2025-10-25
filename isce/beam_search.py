@@ -16,6 +16,7 @@ from tqdm import tqdm
 from .types import Token, BreakType, TokenRow
 from .scorer import Scorer
 from .config import Config
+from .utils import _token_to_row_dict, _compute_transition_scores, _get_lookahead_slice
 
 FALLBACK_SB_PENALTY = 25.0
 
@@ -44,6 +45,7 @@ class Segmenter:
         beam: The list of current best `PathState` hypotheses.
         line_len_leniency: A factor to adjust penalties for long lines.
         orphan_leniency: A factor to adjust penalties for single-word lines.
+        transition_scores_cache: A cache for transition scores.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -53,6 +55,7 @@ class Segmenter:
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
+        self.transition_scores_cache = {}
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
         """Checks if continuing a line (`O`) violates hard length constraints."""
@@ -85,19 +88,19 @@ class Segmenter:
     def run(self) -> List[BreakType]:
         """
         Executes the main beam search algorithm.
-
         This method iterates through each token in the input sequence. At each
         step, it expands each hypothesis in the current beam by considering all
         valid next break types ('O', 'LB', 'SB'). Each new potential path is
         scored, and the beam is pruned to keep only the top N hypotheses, where
         N is the beam width.
-
         Returns:
             A list of `BreakType` enums representing the best-scoring
             segmentation path found.
         """
         if not self.tokens:
             return []
+
+        self.transition_scores_cache = _compute_transition_scores(self.tokens, self.scorer, self.cfg)
 
         initial_state = PathState(score=0.0, line_num=1, line_len=len(self.tokens[0].w), block_start_idx=0, breaks=())
         self.beam = [initial_state]
@@ -106,17 +109,7 @@ class Segmenter:
             candidates: List[PathState] = []
             is_last_token = (i == len(self.tokens) - 1)
             nxt = self.tokens[i + 1] if not is_last_token else None
-
-            token_dict = dict(token.__dict__)
-            nxt_dict = dict(nxt.__dict__) if nxt else None
-
-            # Create the dictionary-based TokenRow required by the refactored scorer
-            scorer_row = TokenRow(
-                token=token_dict,
-                nxt=nxt_dict,
-                feats=None # feats object is no longer used by the scorer
-            )
-            transition_scores = self.scorer.score_transition(scorer_row)
+            transition_scores = self.transition_scores_cache[i]
 
             for state in self.beam:
                 # Candidate: 'O' (No Break)
@@ -181,26 +174,93 @@ class Segmenter:
         
         return final_breaks
 
+def _refine_blocks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
+    """
+    Improves low-scoring blocks by re-running a localized beam search with a wider beam.
+    """
+    refined_tokens = list(tokens)
+    block_ranges = list(_block_ranges(refined_tokens))
+
+    for i, (start, end) in enumerate(block_ranges):
+        block = refined_tokens[start : end + 1]
+        breaks = [t.break_type for t in block]
+        score = scorer.score_block([t.__dict__ for t in block], breaks)
+
+        if score < -5.0:  # Threshold for a "low-scoring" block
+            window_start = max(0, start - 5)
+            window_end = min(len(tokens), end + 5)
+            window_tokens = tokens[window_start:window_end]
+
+            refined_cfg = replace(cfg, beam_width=cfg.beam_width * 2)
+            segmenter = Segmenter(window_tokens, scorer, refined_cfg)
+            refined_breaks = segmenter.run()
+
+            for j, br in enumerate(refined_breaks):
+                if window_start + j < len(refined_tokens):
+                    refined_tokens[window_start + j] = replace(refined_tokens[window_start + j], break_type=br)
+
+    return refined_tokens
+
+def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
+    """Translate reversed-order break decisions back to the forward timeline."""
+    n = len(reversed_breaks)
+    if n == 0:
+        return []
+
+    # Reverse the breaks and handle the sentinel "SB"
+    mapped = reversed(reversed_breaks)
+    final_breaks = [b if b != "SB" else "O" for b in mapped]
+    if final_breaks:
+        final_breaks[-1] = "SB"
+    return final_breaks
+
+
+def _reconcile_bidirectional_breaks(forward_breaks: List[BreakType], backward_breaks: List[BreakType], scorer: Scorer, tokens: List[Token]) -> List[BreakType]:
+    """
+    Reconciles conflicting break decisions from forward and backward passes.
+    """
+    reconciled = list(forward_breaks)
+    for i in range(len(tokens)):
+        if forward_breaks[i] != backward_breaks[i]:
+            # Simple reconciliation: prefer SB over LB, and LB over O
+            if backward_breaks[i] == "SB":
+                reconciled[i] = "SB"
+            elif backward_breaks[i] == "LB" and forward_breaks[i] == "O":
+                reconciled[i] = "LB"
+    return reconciled
+
 def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
     """
     High-level wrapper to perform beam search segmentation.
-
     This function instantiates the `Segmenter` class, runs the beam search
     algorithm, and applies the resulting break types to the input tokens.
-
     Args:
         tokens: The list of `Token` objects to segment.
         scorer: The `Scorer` instance to use for evaluating breaks.
         cfg: The main configuration object.
-
     Returns:
         A new list of `Token` objects with the `break_type` attribute set
         according to the segmentation result.
     """
     if not tokens:
         return []
-    
-    segmenter = Segmenter(tokens, scorer, cfg)
-    final_breaks = segmenter.run()
 
-    return [replace(token, break_type=final_breaks[i]) for i, token in enumerate(tokens)]
+    # Initial forward pass
+    forward_segmenter = Segmenter(tokens, scorer, cfg)
+    final_breaks = forward_segmenter.run()
+
+    # Optional bidirectional pass
+    if cfg.enable_bidirectional_pass:
+        reversed_tokens = tokens[::-1]
+        backward_segmenter = Segmenter(reversed_tokens, scorer, cfg)
+        backward_raw_breaks = backward_segmenter.run()
+        backward_breaks = _map_reversed_breaks(backward_raw_breaks)
+        final_breaks = _reconcile_bidirectional_breaks(final_breaks, backward_breaks, scorer, tokens)
+
+    segmented_tokens = [replace(token, break_type=final_breaks[i]) for i, token in enumerate(tokens)]
+
+    # Optional refinement pass
+    if cfg.enable_refinement_pass:
+        segmented_tokens = _refine_blocks(segmented_tokens, scorer, cfg)
+
+    return segmented_tokens
