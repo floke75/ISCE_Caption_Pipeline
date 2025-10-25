@@ -27,7 +27,8 @@ def main():
     2.  Loads the enriched tokens from the input JSON file.
     3.  Initializes the `Scorer` with the loaded models and configuration.
     4.  Runs the beam search segmentation algorithm (`segment`) to determine the
-        optimal break points (`SB`, `LB`, `O`).
+        optimal break points (`SB`, `LB`, `O`). Optional bidirectional search can
+        be enabled to reconcile forward/backward beams for tricky trailing words.
     5.  Formats the segmented tokens into the standard SRT file format.
     6.  Writes the final output to the specified SRT file.
     """
@@ -51,9 +52,14 @@ def main():
         help="Path to the configuration YAML file."
     )
     parser.add_argument(
-        "--save-labeled-json", 
-        action="store_true", 
+        "--save-labeled-json",
+        action="store_true",
         help="In addition to the SRT, save the output as a labeled JSON file."
+    )
+    parser.add_argument(
+        "--bidirectional",
+        action="store_true",
+        help="Blend forward and backward beams to reduce trailing stragglers."
     )
     args = parser.parse_args()
 
@@ -84,7 +90,7 @@ def main():
 
         # 5. Run the segmentation algorithm
         print("Segmenting tokens...")
-        segmented_tokens = segment(tokens, scorer, cfg)
+        segmented_tokens = segment(tokens, scorer, cfg, bidirectional=args.bidirectional)
 
         # 6. Format output as SRT
         print("Formatting output to SRT...")
