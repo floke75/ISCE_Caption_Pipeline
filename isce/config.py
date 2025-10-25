@@ -27,6 +27,8 @@ class Config:
                  behavior of the scoring model.
         paths: A dictionary containing the relative paths to model files like weights
                and constraints.
+        enable_bidirectional_pass: When true, run both forward and reverse beam search
+                                   passes and reconcile their boundaries.
     """
     beam_width: int
     min_block_duration_s: float
@@ -35,6 +37,7 @@ class Config:
     min_chars_for_single_word_block: int
     sliders: dict[str, float]
     paths: dict[str, str]
+    enable_bidirectional_pass: bool = False
 
 def load_config(path: str = "config.yaml") -> Config:
     """
@@ -95,4 +98,5 @@ def load_config(path: str = "config.yaml") -> Config:
       min_chars_for_single_word_block=int(constraints_yaml.get("min_chars_for_single_word_block", 10)),
       sliders=dict(y.get("sliders", {})),
       paths=dict(y.get("paths", {})),
+      enable_bidirectional_pass=bool(y.get("enable_bidirectional_pass", False)),
     )

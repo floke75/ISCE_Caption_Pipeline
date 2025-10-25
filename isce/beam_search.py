@@ -171,8 +171,115 @@ class Segmenter:
             final_breaks.append("O")
         if final_breaks:
             final_breaks[-1] = "SB"
-        
+
         return final_breaks
+
+
+def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
+    """Create a reversed copy of the tokens suited for the backward beam."""
+    reversed_tokens: List[Token] = []
+    for token in reversed(tokens):
+        relative_position = 1.0 - token.relative_position if token.relative_position is not None else None
+        if relative_position is None:
+            relative_position = 0.0
+        else:
+            relative_position = max(0.0, min(1.0, relative_position))
+        reversed_tokens.append(
+            replace(
+                token,
+                start=-token.end,
+                end=-token.start,
+                pause_after_ms=token.pause_before_ms,
+                pause_before_ms=token.pause_after_ms,
+                is_sentence_initial=token.is_sentence_final,
+                is_sentence_final=token.is_sentence_initial,
+                relative_position=relative_position,
+                break_type=None,
+            )
+        )
+    return reversed_tokens
+
+
+def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
+    """Translate reversed-order break decisions back to the forward timeline."""
+    if not reversed_breaks:
+        return []
+
+    mirrored = list(reversed(reversed_breaks))
+
+    if mirrored and mirrored[0] == "SB":
+        mirrored = mirrored[1:]
+
+    if mirrored:
+        mirrored.append("SB")
+    else:
+        mirrored = ["SB"]
+
+    return mirrored
+
+
+def _block_span(breaks: List[BreakType], idx: int) -> tuple[int, int]:
+    start = idx
+    while start > 0 and breaks[start - 1] != "SB":
+        start -= 1
+    end = idx
+    while end < len(breaks) - 1 and breaks[end] != "SB":
+        end += 1
+    return start, end
+
+
+def _score_block(tokens: List[Token], breaks: List[BreakType], start: int, end: int, scorer: Scorer) -> float:
+    block_tokens = [dict(t.__dict__) for t in tokens[start : end + 1]]
+    block_breaks = list(breaks[start : end + 1])
+    if block_breaks and block_breaks[-1] != "SB":
+        block_breaks[-1] = "SB"
+    return scorer.score_block(block_tokens, block_breaks)
+
+
+def _reconcile_bidirectional_breaks(
+    tokens: List[Token],
+    scorer: Scorer,
+    forward_breaks: List[BreakType],
+    backward_breaks: List[BreakType],
+) -> List[BreakType]:
+    final_breaks = list(forward_breaks)
+    locked = [False] * len(tokens)
+
+    for i in range(len(tokens) - 1):
+        if locked[i] or forward_breaks[i] == backward_breaks[i]:
+            continue
+        if "SB" not in {forward_breaks[i], backward_breaks[i]}:
+            continue
+
+        f_start, f_end = _block_span(forward_breaks, i)
+        b_start, b_end = _block_span(backward_breaks, i)
+        f_score = _score_block(tokens, forward_breaks, f_start, f_end, scorer)
+        b_score = _score_block(tokens, backward_breaks, b_start, b_end, scorer)
+
+        if b_score > f_score:
+            final_breaks[b_start : b_end + 1] = backward_breaks[b_start : b_end + 1]
+            for j in range(b_start, b_end + 1):
+                locked[j] = True
+        else:
+            final_breaks[f_start : f_end + 1] = forward_breaks[f_start : f_end + 1]
+            for j in range(f_start, f_end + 1):
+                locked[j] = True
+
+    if final_breaks:
+        final_breaks[-1] = "SB"
+    return final_breaks
+
+
+def _run_forward_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[BreakType]:
+    return Segmenter(tokens, scorer, cfg).run()
+
+
+def _run_bidirectional_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[BreakType]:
+    forward_breaks = _run_forward_breaks(tokens, scorer, cfg)
+    reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
+    backward_reversed_breaks = Segmenter(reversed_tokens, scorer, cfg).run()
+    backward_breaks = _map_reversed_breaks(backward_reversed_breaks)
+    return _reconcile_bidirectional_breaks(tokens, scorer, forward_breaks, backward_breaks)
 
 def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
     """
@@ -193,7 +300,9 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
     if not tokens:
         return []
     
-    segmenter = Segmenter(tokens, scorer, cfg)
-    final_breaks = segmenter.run()
+    if cfg.enable_bidirectional_pass:
+        final_breaks = _run_bidirectional_breaks(tokens, scorer, cfg)
+    else:
+        final_breaks = _run_forward_breaks(tokens, scorer, cfg)
 
     return [replace(token, break_type=final_breaks[i]) for i, token in enumerate(tokens)]

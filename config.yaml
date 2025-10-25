@@ -3,6 +3,7 @@
 
 # --- Algorithm Parameters ---
 beam_width: 14
+enable_bidirectional_pass: false
 
 # --- Fallback Constraints ---
 # These are used by the trainer if the learned constraints.json cannot be found.
