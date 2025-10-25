@@ -49,6 +49,8 @@ class ConfigField:
 
 
 def _recursive_update(base: MutableMapping[str, Any], update: Dict[str, Any]) -> MutableMapping[str, Any]:
+    """Merge ``update`` into ``base`` recursively without mutating inputs."""
+
     for key, value in update.items():
         if isinstance(value, dict):
             child = base.get(key)
@@ -61,6 +63,8 @@ def _recursive_update(base: MutableMapping[str, Any], update: Dict[str, Any]) ->
 
 
 def _resolve_placeholders(config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    """Expand ``str.format`` placeholders in ``config`` using ``context``."""
+
     for key, value in list(config.items()):
         if isinstance(value, dict):
             config[key] = _resolve_placeholders(value, context)
@@ -73,6 +77,8 @@ def _resolve_placeholders(config: Dict[str, Any], context: Dict[str, Any]) -> Di
 
 
 def _prune_nulls(data: Any) -> Any:
+    """Remove ``None`` values from arbitrarily nested mappings and sequences."""
+
     if isinstance(data, dict):
         cleaned: Dict[str, Any] = {}
         for key, value in data.items():
@@ -87,6 +93,8 @@ def _prune_nulls(data: Any) -> Any:
 
 
 def _ensure_parent(path: Path) -> None:
+    """Create ``path.parent`` if it does not already exist."""
+
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -234,6 +242,8 @@ class ConfigService:
     # Helpers
     # ------------------------------------------------------------------
     def _load_yaml(self, path: Path) -> Dict[str, Any]:
+        """Load a YAML document from ``path`` and ensure it is a mapping."""
+
         if not path.exists():
             return {}
         with path.open("r", encoding="utf-8") as fh:
@@ -243,6 +253,8 @@ class ConfigService:
         return data
 
     def _build_field_catalog(self) -> List[ConfigField]:
+        """Generate the default field metadata consumed by the SPA."""
+
         return [
             ConfigField(
                 path=["project_root"],
@@ -514,6 +526,14 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             description="Shortest caption length allowed when a block contains only one word.",
         ),
         ConfigField(
+            path=["allowed_single_word_proper_nouns"],
+            section="Constraints",
+            label="Allowed single-word proper nouns",
+            field_type="list",
+            description="Proper nouns that may appear alone without triggering penalties.",
+            advanced=True,
+        ),
+        ConfigField(
             path=["sliders", "flow"],
             section="Stylistic sliders",
             label="Flow weight",
@@ -533,6 +553,22 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             field_type="number",
         ),
         ConfigField(
+            path=["sliders", "short_block_penalty"],
+            section="Stylistic sliders",
+            label="Short block penalty",
+            field_type="number",
+            description="Penalty applied per missing character when a cue is shorter than desired.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["sliders", "short_line_penalty"],
+            section="Stylistic sliders",
+            label="Short last line penalty",
+            field_type="number",
+            description="Penalty applied per missing character when the final line is too short.",
+            advanced=True,
+        ),
+        ConfigField(
             path=["sliders", "line_length_leniency"],
             section="Stylistic sliders",
             label="Line length leniency",
@@ -545,6 +581,30 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             label="Orphan leniency",
             field_type="number",
             description=">1.0 strengthens penalties for orphan words.",
+        ),
+        ConfigField(
+            path=["sliders", "single_word_line_penalty"],
+            section="Stylistic sliders",
+            label="Single-word line penalty",
+            field_type="number",
+            description="Penalty applied when a cue produces a single-word line.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_penalty"],
+            section="Stylistic sliders",
+            label="Extreme balance penalty",
+            field_type="number",
+            description="Penalty applied when one line dwarfs the other.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_threshold"],
+            section="Stylistic sliders",
+            label="Extreme balance threshold",
+            field_type="number",
+            description="Character ratio threshold before the extreme balance penalty applies.",
+            advanced=True,
         ),
         ConfigField(
             path=["sliders", "structure_boost"],

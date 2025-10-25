@@ -10,7 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any, Literal, Optional
 
-__all__ = ["BreakType", "Token", "TokenRow", "Engineered"]
+__all__ = [
+    "BreakType",
+    "Token",
+    "TokenRow",
+    "TransitionContext",
+    "Engineered",
+]
 
 BreakType = Literal["O", "LB", "SB"]
 
@@ -104,11 +110,42 @@ class Token:
 
 @dataclass(frozen=True)
 class TokenRow:
-    """A lightweight container describing a token boundary."""
+    """A lightweight container describing the local scoring context.
+
+    The scorer operates on plain dictionaries rather than the full :class:`Token`
+    dataclass. Each ``TokenRow`` packages the current token, the optional next
+    token, and any additional artifacts the scorer may need (engineered
+    features, lookahead slices, etc.).
+
+    Attributes:
+        token: Dictionary representation of the token being scored.
+        nxt: Optional dictionary for the immediate next token.
+        feats: Legacy field for pre-computed feature payloads.
+        lookahead: Tuple of upcoming token dictionaries exposed when the
+            segmenter is configured with ``lookahead_width`` > 0.
+    """
 
     token: dict[str, Any]
     nxt: Optional[dict[str, Any]]
     feats: Any = None
+    lookahead: Optional[tuple[dict[str, Any], ...]] = None
+
+    @property
+    def has_lookahead(self) -> bool:
+        """Return ``True`` when future-token context is attached to the row."""
+
+        return bool(self.lookahead)
+
+
+@dataclass(frozen=True)
+class TransitionContext:
+    """Contextual information passed to the scorer for lookahead-aware scoring."""
+
+    pending_tokens: tuple[dict[str, Any], ...]
+    current_line_num: int
+    current_line_len: int
+    projected_second_line_chars: Optional[int] = None
+    projected_second_line_words: Optional[int] = None
 
 
 @dataclass(frozen=True)

@@ -15,6 +15,7 @@ from isce.io_utils import load_tokens, save_tokens
 from isce.scorer import Scorer
 from isce.beam_search import segment
 from isce.srt_writer import tokens_to_srt
+from isce.post_process import reflow_tokens
 
 def main():
     """
@@ -28,8 +29,10 @@ def main():
     3.  Initializes the `Scorer` with the loaded models and configuration.
     4.  Runs the beam search segmentation algorithm (`segment`) to determine the
         optimal break points (`SB`, `LB`, `O`).
-    5.  Formats the segmented tokens into the standard SRT file format.
-    6.  Writes the final output to the specified SRT file.
+    5.  Optionally applies a post-processing reflow pass to merge or rebalance
+        awkward subtitle blocks when enabled in the configuration.
+    6.  Formats the segmented tokens into the standard SRT file format.
+    7.  Writes the final output to the specified SRT file.
     """
     parser = argparse.ArgumentParser(
         description="Generate subtitles from enriched token files using the ISCE model.",
@@ -86,11 +89,19 @@ def main():
         print("Segmenting tokens...")
         segmented_tokens = segment(tokens, scorer, cfg)
 
-        # 6. Format output as SRT
+        # 6. Optionally refine segmentation with local post-processing.  The
+        #    reflow pass is intentionally conservative and only tweaks the
+        #    boundaries within a single block, making it safe to enable for most
+        #    deployments once it has been calibrated on real data.
+        if getattr(cfg, "enable_reflow", False):
+            print("Reflowing segmented tokens...")
+            segmented_tokens = reflow_tokens(segmented_tokens, scorer, cfg)
+
+        # 7. Format output as SRT
         print("Formatting output to SRT...")
         srt_content = tokens_to_srt(segmented_tokens)
 
-        # 7. Write to output file(s)
+        # 8. Write to output file(s)
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:

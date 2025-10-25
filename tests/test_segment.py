@@ -20,7 +20,7 @@ class DummyScorer:
             "fallback_sb_penalty": 5.0,
         }
 
-    def score_transition(self, row: TokenRow) -> Dict[str, float]:
+    def score_transition(self, row: TokenRow, ctx=None) -> Dict[str, float]:
         if row.nxt is None:
             # Always close the subtitle when we reach the final token.
             return {"O": -5.0, "LB": -5.0, "SB": 20.0}
