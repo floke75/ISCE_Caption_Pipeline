@@ -90,6 +90,16 @@ def _merge_short_blocks(tokens: List[Token], scorer: Scorer) -> List[Token]:
             if len(word) > 6:
                 continue
 
+            boundary_token = block1[-1]
+            next_token = block2[0]
+            speakers_differ = (
+                boundary_token.speaker is not None
+                and next_token.speaker is not None
+                and boundary_token.speaker != next_token.speaker
+            )
+            if boundary_token.speaker_change or speakers_differ:
+                continue
+
             current_score = (
                 scorer.score_block(_as_dicts(block1, _block_breaks(block1)), _block_breaks(block1))
                 + scorer.score_block(_as_dicts(block2, _block_breaks(block2)), _block_breaks(block2))
