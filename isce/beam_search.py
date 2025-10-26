@@ -84,7 +84,9 @@ class Segmenter:
         """Checks if a block break (`SB`) violates hard constraints."""
         start_token = self.tokens[block_start_idx]
         end_token = self.tokens[current_idx]
-        duration = max(1e-6, end_token.end - start_token.start)
+        chronological_start = min(start_token.start, end_token.start)
+        chronological_end = max(start_token.end, end_token.end)
+        duration = max(1e-6, chronological_end - chronological_start)
         if duration < self.cfg.min_block_duration_s:
             return False
         num_words_in_block = (current_idx - block_start_idx) + 1
