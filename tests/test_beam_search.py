@@ -4,7 +4,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from isce.beam_search import Segmenter, PathState, segment
+from isce.beam_search import (
+    Segmenter,
+    PathState,
+    _map_reversed_breaks,
+    _reconcile_bidirectional_breaks,
+    segment,
+)
 from isce.config import Config
 from isce.scorer import Scorer
 from isce.types import Token
@@ -37,6 +43,32 @@ class DummyScorer:
         return scores
 
     def score_block(self, block_tokens, block_breaks):
+        return 0.0
+
+
+class BlockPreferenceScorer:
+    def __init__(self):
+        self.sl = {
+            "line_length_leniency": 1.0,
+            "orphan_leniency": 1.0,
+            "single_word_line_penalty": 0.0,
+            "extreme_balance_penalty": 0.0,
+            "extreme_balance_threshold": 2.5,
+            "fragment_char_threshold": 8.0,
+            "fragment_penalty": 6.0,
+        }
+
+    def score_transition(self, row, ctx=None):
+        return {"O": 0.0, "LB": 0.0, "SB": 0.0}
+
+    def score_block(self, block_tokens, block_breaks):
+        words = [token.get("w") for token in block_tokens]
+        if words == ["a", "b", "c", "d"]:
+            return -10.0
+        if words == ["a", "b"]:
+            return 6.0
+        if words == ["c", "d"]:
+            return 6.0
         return 0.0
 
 
@@ -239,6 +271,44 @@ class TestBeamSearch(unittest.TestCase):
 
         self.assertEqual(breaks[0], "O")
         self.assertNotIn("LB", breaks[:2])
+
+    def test_map_reversed_breaks_preserves_backward_boundaries(self):
+        reversed_breaks = ["SB", "O", "SB", "SB"]
+        mapped = _map_reversed_breaks(reversed_breaks)
+        self.assertEqual(mapped, ["SB", "O", "SB", "SB"])
+
+    def test_bidirectional_reconciliation_prefers_higher_score(self):
+        tokens = [
+            make_token("a", 0.0),
+            make_token("b", 0.2),
+            make_token("c", 0.4),
+            make_token("d", 0.6),
+        ]
+
+        forward_breaks = ["O", "O", "O", "SB"]
+        backward_breaks = ["O", "SB", "O", "SB"]
+
+        cfg = Config(
+            beam_width=2,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        scorer = BlockPreferenceScorer()
+        reconciled = _reconcile_bidirectional_breaks(
+            forward_breaks, backward_breaks, scorer, tokens, cfg
+        )
+
+        self.assertEqual(reconciled, ["O", "SB", "O", "SB"])
 
 
 class TestLineViolations(unittest.TestCase):

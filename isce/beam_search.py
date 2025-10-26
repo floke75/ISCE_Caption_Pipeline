@@ -9,7 +9,7 @@ orphan lines.
 """
 from __future__ import annotations
 from dataclasses import dataclass, replace
-from typing import List
+from typing import Any, List, Optional, Sequence
 from heapq import nlargest
 from tqdm import tqdm
 
@@ -18,6 +18,52 @@ from .scorer import Scorer
 from .config import Config
 
 FALLBACK_SB_PENALTY = 25.0
+
+
+def _token_to_row_dict(token: Optional[Token]) -> Optional[dict[str, Any]]:
+    """Project a token dataclass into the dictionary payload expected by ``Scorer``."""
+
+    if token is None:
+        return None
+    return dict(token.__dict__)
+
+
+def _get_lookahead_slice(tokens: Sequence[Token], start: int, width: int) -> Optional[tuple[dict[str, Any], ...]]:
+    """Return a tuple of upcoming token dictionaries for lookahead heuristics."""
+
+    if width <= 0:
+        return None
+    future = tokens[start : start + width]
+    if not future:
+        return None
+    return tuple(dict(token.__dict__) for token in future)
+
+
+def _estimate_second_line_window(tokens: Sequence[Token], current_idx: int, cfg: Config) -> tuple[int, int]:
+    """Estimate characters and words available for a prospective second line."""
+
+    if current_idx + 1 >= len(tokens):
+        return 0, 0
+
+    length = 0
+    words = 0
+    soft_target = cfg.line_length_constraints.get("line2", {}).get("soft_target", 37)
+
+    for token in tokens[current_idx + 1 :]:
+        if words > 0:
+            length += 1
+        length += len(token.w)
+        words += 1
+
+        if words >= 2:
+            break
+        if token.is_sentence_final or token.speaker_change or token.starts_with_dialogue_dash:
+            break
+        if length >= soft_target:
+            break
+
+    return length, words
+
 
 @dataclass(frozen=True)
 class PathState:
@@ -174,46 +220,9 @@ class Segmenter:
         return True
 
     def _estimate_second_line(self, current_idx: int) -> tuple[int, int]:
-        """Estimate room available for a hypothetical second line.
+        """Estimate room available for a hypothetical second line."""
 
-        When the current path is still on the first line of a block we ask the
-        scorer to evaluate what a line break would look like. That requires a
-        rough idea of how many characters and words could fit on the second
-        line before encountering a natural stopping point such as punctuation,
-        a speaker change, or the soft length target. The heuristic is simple and
-        intentionally deterministic so that unit tests can reason about its
-        behaviour.
-
-        Args:
-            current_idx: Index of the token currently being evaluated.
-
-        Returns:
-            A ``(characters, words)`` tuple estimating the second line content.
-            ``(0, 0)`` indicates that no additional words are available.
-        """
-
-        if current_idx + 1 >= len(self.tokens):
-            return 0, 0
-
-        length = 0
-        words = 0
-        soft_target = self.cfg.line_length_constraints.get("line2", {}).get("soft_target", 37)
-
-        for j in range(current_idx + 1, len(self.tokens)):
-            token = self.tokens[j]
-            if words > 0:
-                length += 1
-            length += len(token.w)
-            words += 1
-
-            if words >= 2:
-                break
-            if token.is_sentence_final or token.speaker_change or token.starts_with_dialogue_dash:
-                break
-            if length >= soft_target:
-                break
-
-        return length, words
+        return _estimate_second_line_window(self.tokens, current_idx, self.cfg)
 
     def _build_transition_context(self, state: PathState, current_idx: int) -> TransitionContext:
         """Construct the lookahead context passed into the scorer.
@@ -392,73 +401,130 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
 
 
 def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
-    """Translate reversed-order break decisions back to the forward timeline."""
-    if not reversed_breaks:
+    """Translate reverse-order break decisions back into forward order."""
+
+    n = len(reversed_breaks)
+    if n == 0:
         return []
 
-    mirrored = list(reversed(reversed_breaks))
+    mapped = list(reversed(reversed_breaks))
+    final_breaks: List[BreakType] = [b if b != "SB" else "O" for b in mapped]
+    final_breaks[-1] = "SB"
 
-    if mirrored and mirrored[0] == "SB":
-        mirrored = mirrored[1:]
+    for backward_idx, br in enumerate(reversed_breaks[:-1]):
+        if br == "SB":
+            forward_idx = (n - 2) - backward_idx
+            if 0 <= forward_idx < len(final_breaks):
+                final_breaks[forward_idx] = "SB"
 
-    if mirrored:
-        mirrored.append("SB")
-    else:
-        mirrored = ["SB"]
-
-    return mirrored
-
-
-def _block_span(breaks: List[BreakType], idx: int) -> tuple[int, int]:
-    start = idx
-    while start > 0 and breaks[start - 1] != "SB":
-        start -= 1
-    end = idx
-    while end < len(breaks) - 1 and breaks[end] != "SB":
-        end += 1
-    return start, end
+    return final_breaks
 
 
-def _score_block(tokens: List[Token], breaks: List[BreakType], start: int, end: int, scorer: Scorer) -> float:
-    block_tokens = [dict(t.__dict__) for t in tokens[start : end + 1]]
-    block_breaks = list(breaks[start : end + 1])
-    if block_breaks and block_breaks[-1] != "SB":
-        block_breaks[-1] = "SB"
-    return scorer.score_block(block_tokens, block_breaks)
+def _score_segmentation(
+    tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config
+) -> float:
+    """Calculate holistic scores for an entire segmentation sequence."""
+
+    total = 0.0
+    block_tokens: List[Token] = []
+    block_breaks: List[BreakType] = []
+    block_start = 0
+    line_num = 1
+    line_len = len(tokens[0].w) if tokens else 0
+
+    for idx, (token, br) in enumerate(zip(tokens, breaks)):
+        block_tokens.append(token)
+        block_breaks.append(br)
+
+        nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
+        row = TokenRow(
+            token=_token_to_row_dict(token) or {},
+            nxt=_token_to_row_dict(nxt),
+            feats=None,
+            lookahead=_get_lookahead_slice(tokens, idx + 1, cfg.lookahead_width),
+        )
+
+        pending_tokens = tuple(
+            dict(t.__dict__) for t in tokens[block_start : idx + 1]
+        )
+        projected_chars: Optional[int]
+        projected_words: Optional[int]
+        projected_chars = projected_words = None
+        if line_num == 1 and nxt is not None:
+            projected_chars, projected_words = _estimate_second_line_window(tokens, idx, cfg)
+
+        ctx = TransitionContext(
+            pending_tokens=pending_tokens,
+            current_line_num=line_num,
+            current_line_len=line_len,
+            projected_second_line_chars=projected_chars,
+            projected_second_line_words=projected_words,
+        )
+        transition_scores = scorer.score_transition(row, ctx)
+        total += transition_scores.get(br, 0.0)
+
+        if br == "SB":
+            block_dicts = [dict(t.__dict__) for t in block_tokens]
+            total += scorer.score_block(block_dicts, block_breaks)
+            block_tokens = []
+            block_breaks = []
+            block_start = idx + 1
+            line_num = 1
+            line_len = len(nxt.w) if nxt else 0
+        elif br == "LB":
+            line_num = 2
+            line_len = len(nxt.w) if nxt else 0
+        else:  # "O"
+            if nxt is not None:
+                line_len = line_len + 1 + len(nxt.w)
+
+    return total
 
 
 def _reconcile_bidirectional_breaks(
-    tokens: List[Token],
-    scorer: Scorer,
     forward_breaks: List[BreakType],
     backward_breaks: List[BreakType],
+    scorer: Scorer,
+    tokens: List[Token],
+    cfg: Config,
 ) -> List[BreakType]:
-    final_breaks = list(forward_breaks)
-    locked = [False] * len(tokens)
+    """Blend forward and backward break choices into a single sequence."""
 
-    for i in range(len(tokens) - 1):
-        if locked[i] or forward_breaks[i] == backward_breaks[i]:
+    reconciled = list(forward_breaks)
+    current_score = _score_segmentation(tokens, reconciled, scorer, cfg)
+    tie_priority = {"LB": 3, "SB": 2, "O": 1}
+
+    for i in range(len(tokens)):
+        candidate_break = backward_breaks[i]
+        if reconciled[i] == candidate_break:
             continue
-        if "SB" not in {forward_breaks[i], backward_breaks[i]}:
-            continue
 
-        f_start, f_end = _block_span(forward_breaks, i)
-        b_start, b_end = _block_span(backward_breaks, i)
-        f_score = _score_block(tokens, forward_breaks, f_start, f_end, scorer)
-        b_score = _score_block(tokens, backward_breaks, b_start, b_end, scorer)
+        candidate_breaks = list(reconciled)
+        candidate_breaks[i] = candidate_break
+        candidate_score = _score_segmentation(tokens, candidate_breaks, scorer, cfg)
 
-        if b_score > f_score:
-            final_breaks[b_start : b_end + 1] = backward_breaks[b_start : b_end + 1]
-            for j in range(b_start, b_end + 1):
-                locked[j] = True
-        else:
-            final_breaks[f_start : f_end + 1] = forward_breaks[f_start : f_end + 1]
-            for j in range(f_start, f_end + 1):
-                locked[j] = True
+        prefer_candidate = False
+        if candidate_score > current_score + 1e-6:
+            prefer_candidate = True
+        elif abs(candidate_score - current_score) <= 1e-6:
+            tie_delta = tie_priority.get(candidate_break, 0) - tie_priority.get(reconciled[i], 0)
+            if tie_delta > 0:
+                prefer_candidate = True
+            elif (
+                reconciled[i] == "SB"
+                and candidate_break != "SB"
+                and i + 1 < len(tokens)
+                and reconciled[i + 1] == "SB"
+            ):
+                prefer_candidate = True
 
-    if final_breaks:
-        final_breaks[-1] = "SB"
-    return final_breaks
+        if prefer_candidate:
+            reconciled = candidate_breaks
+            current_score = candidate_score
+
+    if reconciled:
+        reconciled[-1] = "SB"
+    return reconciled
 
 
 def _run_forward_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[BreakType]:
@@ -470,7 +536,7 @@ def _run_bidirectional_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) 
     reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
     backward_reversed_breaks = Segmenter(reversed_tokens, scorer, cfg).run()
     backward_breaks = _map_reversed_breaks(backward_reversed_breaks)
-    return _reconcile_bidirectional_breaks(tokens, scorer, forward_breaks, backward_breaks)
+    return _reconcile_bidirectional_breaks(forward_breaks, backward_breaks, scorer, tokens, cfg)
 
 def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
     """
