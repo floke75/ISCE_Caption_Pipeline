@@ -1,3 +1,4 @@
+import math
 import pytest
 
 from isce.scorer import Scorer
@@ -5,19 +6,23 @@ from isce.config import Config
 from isce.types import TokenRow
 
 
-def _make_cfg() -> Config:
-    return Config(
+def _make_cfg(**overrides) -> Config:
+    defaults = dict(
         beam_width=5,
         min_block_duration_s=1.0,
         max_block_duration_s=8.0,
         line_length_constraints={
             "line1": {"soft_target": 37, "hard_limit": 42},
             "line2": {"soft_target": 37, "hard_limit": 42},
+            "block": {"min_total_chars": 0, "min_last_line_chars": 0},
         },
         min_chars_for_single_word_block=10,
         sliders={},
         paths={},
+        allowed_single_word_proper_nouns=(),
     )
+    defaults.update(overrides)
+    return Config(**defaults)
 
 
 def test_score_transition_applies_weights_and_structure_boost():
@@ -98,3 +103,230 @@ def test_score_block_balances_density_and_duration():
     score = scorer.score_block(block_tokens, block_breaks)
 
     assert score == pytest.approx(0.5)
+
+
+def test_single_word_penalty_applies():
+    cfg = _make_cfg()
+    scorer = Scorer(
+        weights={},
+        constraints={
+            "ideal_cps_iqr": [10.0, 18.0],
+            "ideal_cps_median": 14.0,
+            "ideal_balance_iqr": [0.7, 1.4],
+            "min_block_duration_s": 0.5,
+            "max_block_duration_s": 8.0,
+        },
+        sliders={"single_word_line_penalty": 5.0},
+        cfg=cfg,
+    )
+    block_tokens = [{"w": "Hello", "start": 0.0, "end": 0.5, "pos": "NOUN"}]
+    block_breaks = ["SB"]
+
+    score = scorer.score_block(block_tokens, block_breaks)
+
+    assert score == pytest.approx(-4.0, rel=1e-3)
+
+
+def test_single_word_penalty_ignored_for_whitelist():
+    cfg = _make_cfg(allowed_single_word_proper_nouns=("NASA",))
+    scorer = Scorer(
+        weights={},
+        constraints={
+            "ideal_cps_iqr": [10.0, 18.0],
+            "ideal_cps_median": 14.0,
+            "ideal_balance_iqr": [0.7, 1.4],
+            "min_block_duration_s": 0.5,
+            "max_block_duration_s": 8.0,
+        },
+        sliders={"single_word_line_penalty": 5.0},
+        cfg=cfg,
+    )
+    block_tokens = [{"w": "NASA", "start": 0.0, "end": 0.5, "pos": "PROPN"}]
+    block_breaks = ["SB"]
+
+    baseline = Scorer(
+        weights={},
+        constraints={
+            "ideal_cps_iqr": [10.0, 18.0],
+            "ideal_cps_median": 14.0,
+            "ideal_balance_iqr": [0.7, 1.4],
+            "min_block_duration_s": 0.5,
+            "max_block_duration_s": 8.0,
+        },
+        sliders={},
+        cfg=cfg,
+    ).score_block(block_tokens, block_breaks)
+
+    score = scorer.score_block(block_tokens, block_breaks)
+
+    assert score == pytest.approx(baseline)
+
+
+def test_short_multi_word_line_not_penalized():
+    cfg = _make_cfg()
+    constraints = {
+        "ideal_cps_iqr": [10.0, 18.0],
+        "ideal_cps_median": 14.0,
+        "ideal_balance_iqr": [0.7, 1.4],
+        "min_block_duration_s": 0.5,
+        "max_block_duration_s": 8.0,
+    }
+
+    baseline = Scorer(weights={}, constraints=constraints, sliders={}, cfg=cfg)
+    penalized = Scorer(
+        weights={},
+        constraints=constraints,
+        sliders={"single_word_line_penalty": 5.0},
+        cfg=cfg,
+    )
+
+    block_tokens = [
+        {"w": "Go", "start": 0.0, "end": 0.3, "pos": "VERB"},
+        {"w": "now", "start": 0.3, "end": 0.6, "pos": "ADV"},
+    ]
+    block_breaks = ["O", "SB"]
+
+    assert penalized.score_block(block_tokens, block_breaks) == pytest.approx(
+        baseline.score_block(block_tokens, block_breaks)
+    )
+
+
+def test_extreme_balance_penalty_applies():
+    cfg = _make_cfg()
+    base_sliders = {
+        "extreme_balance_penalty": 0.0,
+        "extreme_balance_threshold": 1.5,
+        "single_word_line_penalty": 0.0,
+    }
+    penalized_sliders = dict(base_sliders, extreme_balance_penalty=3.0)
+
+    constraints = {
+        "ideal_cps_iqr": [10.0, 18.0],
+        "ideal_cps_median": 14.0,
+        "ideal_balance_iqr": [0.7, 1.4],
+        "min_block_duration_s": 0.5,
+        "max_block_duration_s": 8.0,
+    }
+
+    block_tokens = [
+        {"w": "Short", "start": 0.0, "end": 1.0, "pos": "ADJ"},
+        {"w": "Supercalifragilisticexpialidocious", "start": 1.0, "end": 2.5, "pos": "NOUN"},
+    ]
+    block_breaks = ["LB", "SB"]
+
+    baseline = Scorer({}, constraints, base_sliders, cfg).score_block(block_tokens, block_breaks)
+    penalized = Scorer({}, constraints, penalized_sliders, cfg).score_block(block_tokens, block_breaks)
+
+    assert penalized < baseline
+    len1 = len(block_tokens[0]["w"])
+    len2 = len(block_tokens[1]["w"])
+    ratio = max(len1, len2) / min(len1, len2)
+    expected_penalty = 3.0 * (1.0 + (ratio - 1.5) / 1.5)
+    assert math.isclose(baseline - penalized, expected_penalty, rel_tol=1e-6)
+
+
+def test_short_block_penalty_applies_for_underfilled_block():
+    cfg = _make_cfg(
+        line_length_constraints={
+            "line1": {"soft_target": 37, "hard_limit": 42},
+            "line2": {"soft_target": 37, "hard_limit": 42},
+            "block": {"min_total_chars": 12, "min_last_line_chars": 0},
+        }
+    )
+    constraints = {
+        "ideal_cps_iqr": [10.0, 18.0],
+        "ideal_cps_median": 14.0,
+        "ideal_balance_iqr": [0.7, 1.4],
+        "min_block_duration_s": 0.5,
+        "max_block_duration_s": 8.0,
+    }
+
+    block_tokens = [
+        {"w": "Hello", "start": 0.0, "end": 0.45, "pause_after_ms": 0},
+        {
+            "w": "all",
+            "start": 0.45,
+            "end": 0.9,
+            "pause_after_ms": 0,
+            "is_sentence_final": False,
+        },
+    ]
+    block_breaks = ["O", "SB"]
+
+    baseline = Scorer({}, constraints, {}, cfg).score_block(block_tokens, block_breaks)
+    penalized = Scorer(
+        {},
+        constraints,
+        {"short_block_penalty": 1.5},
+        cfg,
+    ).score_block(block_tokens, block_breaks)
+
+    assert penalized == pytest.approx(baseline - 4.5)
+
+
+def test_short_line_penalty_applies_to_last_line():
+    cfg = _make_cfg(
+        line_length_constraints={
+            "line1": {"soft_target": 37, "hard_limit": 42},
+            "line2": {"soft_target": 37, "hard_limit": 42},
+            "block": {"min_total_chars": 0, "min_last_line_chars": 8},
+        }
+    )
+    constraints = {
+        "ideal_cps_iqr": [10.0, 18.0],
+        "ideal_cps_median": 14.0,
+        "ideal_balance_iqr": [0.7, 1.4],
+        "min_block_duration_s": 0.5,
+        "max_block_duration_s": 8.0,
+    }
+
+    block_tokens = [
+        {"w": "Keep", "start": 0.0, "end": 0.4, "pause_after_ms": 0},
+        {"w": "it", "start": 0.4, "end": 0.7, "pause_after_ms": 0},
+        {"w": "now", "start": 0.7, "end": 1.2, "pause_after_ms": 0},
+    ]
+    block_breaks = ["LB", "O", "SB"]
+
+    baseline = Scorer({}, constraints, {}, cfg).score_block(block_tokens, block_breaks)
+    penalized = Scorer(
+        {},
+        constraints,
+        {"short_line_penalty": 1.0},
+        cfg,
+    ).score_block(block_tokens, block_breaks)
+
+    assert penalized == pytest.approx(baseline - 2.0)
+
+
+def test_short_line_penalty_skips_whitelisted_single_word():
+    cfg = _make_cfg(
+        line_length_constraints={
+            "line1": {"soft_target": 37, "hard_limit": 42},
+            "line2": {"soft_target": 37, "hard_limit": 42},
+            "block": {"min_total_chars": 0, "min_last_line_chars": 8},
+        },
+        allowed_single_word_proper_nouns=("NASA",),
+    )
+    constraints = {
+        "ideal_cps_iqr": [10.0, 18.0],
+        "ideal_cps_median": 14.0,
+        "ideal_balance_iqr": [0.7, 1.4],
+        "min_block_duration_s": 0.5,
+        "max_block_duration_s": 8.0,
+    }
+
+    block_tokens = [
+        {"w": "Thanks", "start": 0.0, "end": 0.5, "pause_after_ms": 0},
+        {"w": "NASA", "start": 0.5, "end": 0.9, "pause_after_ms": 0, "pos": "PROPN"},
+    ]
+    block_breaks = ["LB", "SB"]
+
+    baseline = Scorer({}, constraints, {}, cfg).score_block(block_tokens, block_breaks)
+    penalized = Scorer(
+        {},
+        constraints,
+        {"short_line_penalty": 3.0},
+        cfg,
+    ).score_block(block_tokens, block_breaks)
+
+    assert penalized == pytest.approx(baseline)

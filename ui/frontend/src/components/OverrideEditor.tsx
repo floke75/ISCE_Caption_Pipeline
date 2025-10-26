@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { usePipelineConfig } from '../hooks/useConfig';
+import { usePipelineConfig, useSegmentationConfig } from '../hooks/useConfig';
 import { ConfigNode } from '../types';
 import '../styles/forms.css';
 
+export type OverridePatches = {
+  pipeline: Record<string, unknown>;
+  segmentation: Record<string, unknown>;
+};
+
+type OverrideResource = 'pipeline' | 'segmentation';
+
 interface OverrideEditorProps {
-  onChange: (patch: Record<string, unknown>, hasErrors: boolean) => void;
+  onChange: (patches: OverridePatches, hasErrors: boolean) => void;
 }
 
 type OverrideErrors = Record<string, string>;
@@ -313,103 +320,168 @@ function OverrideTreeItem({
  * @param {OverrideEditorProps} props The props for the component.
  * @returns {JSX.Element} The rendered override editor.
  */
+const RESOURCE_LABEL: Record<OverrideResource, string> = {
+  pipeline: 'Pipeline configuration',
+  segmentation: 'Segmentation configuration',
+};
+
+const RESOURCE_SUMMARY: Record<OverrideResource, string> = {
+  pipeline: 'Paths, orchestration toggles, and pipeline defaults applied to every run.',
+  segmentation: 'Segmentation model sliders and guardrails used when producing captions.',
+};
+
+type ConfigQueryResult = ReturnType<typeof usePipelineConfig>;
+
 export function OverrideEditor({ onChange }: OverrideEditorProps) {
-  const { data, isLoading, isError } = usePipelineConfig();
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [edits, setEdits] = useState<Record<string, unknown>>({});
-  const [errors, setErrors] = useState<OverrideErrors>({});
+  const pipelineQuery = usePipelineConfig();
+  const segmentationQuery = useSegmentationConfig();
 
-  useEffect(() => {
-    setEdits({});
-    setErrors({});
-  }, [data?.effective]);
-
-  const patch = useMemo(() => buildNested(edits), [edits]);
-  const hasErrors = useMemo(() => Object.keys(errors).length > 0, [errors]);
-
-  useEffect(() => {
-    onChange(patch, hasErrors);
-  }, [patch, hasErrors, onChange]);
-
-  const handleValueChange = useCallback(
-    (node: ConfigNode, raw: unknown) => {
-      const dotted = node.path.join('.');
-      const result = coerceValue(node, raw);
-      setErrors((prev) => {
-        if (!(dotted in prev)) {
-          return prev;
-        }
-        const next = { ...prev };
-        delete next[dotted];
-        return next;
-      });
-      if (result.unset) {
-        setEdits((prev) => {
-          if (!(dotted in prev)) {
-            return prev;
-          }
-          const next = { ...prev };
-          delete next[dotted];
-          return next;
-        });
-        return;
-      }
-      if (result.error) {
-        setErrors((prev) => ({ ...prev, [dotted]: result.error! }));
-        setEdits((prev) => {
-          if (!(dotted in prev)) {
-            return prev;
-          }
-          const next = { ...prev };
-          delete next[dotted];
-          return next;
-        });
-        return;
-      }
-      const value = result.value;
-      if (valuesEqual(value, node.current)) {
-        setEdits((prev) => {
-          if (!(dotted in prev)) {
-            return prev;
-          }
-          const next = { ...prev };
-          delete next[dotted];
-          return next;
-        });
-        return;
-      }
-      setEdits((prev) => ({ ...prev, [dotted]: value }));
-    },
-    [setEdits, setErrors]
+  const [activeTab, setActiveTab] = useState<OverrideResource>('pipeline');
+  const [edits, setEdits] = useState<Record<OverrideResource, Record<string, unknown>>>(
+    () => ({ pipeline: {}, segmentation: {} })
+  );
+  const [errors, setErrors] = useState<Record<OverrideResource, OverrideErrors>>(
+    () => ({ pipeline: {}, segmentation: {} })
+  );
+  const [showAdvanced, setShowAdvanced] = useState<Record<OverrideResource, boolean>>(
+    () => ({ pipeline: false, segmentation: false })
   );
 
-  const handleClear = useCallback((node: ConfigNode) => {
+  useEffect(() => {
+    if (pipelineQuery.data?.effective) {
+      setEdits((prev) => ({ ...prev, pipeline: {} }));
+      setErrors((prev) => ({ ...prev, pipeline: {} }));
+    }
+  }, [pipelineQuery.data?.effective]);
+
+  useEffect(() => {
+    if (segmentationQuery.data?.effective) {
+      setEdits((prev) => ({ ...prev, segmentation: {} }));
+      setErrors((prev) => ({ ...prev, segmentation: {} }));
+    }
+  }, [segmentationQuery.data?.effective]);
+
+  const pipelinePatch = useMemo(() => buildNested(edits.pipeline), [edits.pipeline]);
+  const segmentationPatch = useMemo(() => buildNested(edits.segmentation), [edits.segmentation]);
+  const hasErrors = useMemo(
+    () => Object.values(errors).some((group) => Object.keys(group).length > 0),
+    [errors]
+  );
+
+  useEffect(() => {
+    onChange({ pipeline: pipelinePatch, segmentation: segmentationPatch }, hasErrors);
+  }, [onChange, pipelinePatch, segmentationPatch, hasErrors]);
+
+  const handleValueChange = useCallback((resource: OverrideResource, node: ConfigNode, raw: unknown) => {
+    const dotted = node.path.join('.');
+    const result = coerceValue(node, raw);
+
+    setErrors((prev) => {
+      const group = prev[resource];
+      if (!(dotted in group)) {
+        return prev;
+      }
+      const nextGroup = { ...group };
+      delete nextGroup[dotted];
+      return { ...prev, [resource]: nextGroup };
+    });
+
+    if (result.unset) {
+      setEdits((prev) => {
+        const group = prev[resource];
+        if (!(dotted in group)) {
+          return prev;
+        }
+        const nextGroup = { ...group };
+        delete nextGroup[dotted];
+        return { ...prev, [resource]: nextGroup };
+      });
+      return;
+    }
+
+    if (result.error) {
+      setErrors((prev) => ({
+        ...prev,
+        [resource]: { ...prev[resource], [dotted]: result.error! },
+      }));
+      setEdits((prev) => {
+        const group = prev[resource];
+        if (!(dotted in group)) {
+          return prev;
+        }
+        const nextGroup = { ...group };
+        delete nextGroup[dotted];
+        return { ...prev, [resource]: nextGroup };
+      });
+      return;
+    }
+
+    const value = result.value;
+    if (valuesEqual(value, node.current)) {
+      setEdits((prev) => {
+        const group = prev[resource];
+        if (!(dotted in group)) {
+          return prev;
+        }
+        const nextGroup = { ...group };
+        delete nextGroup[dotted];
+        return { ...prev, [resource]: nextGroup };
+      });
+      return;
+    }
+
+    setEdits((prev) => ({
+      ...prev,
+      [resource]: { ...prev[resource], [dotted]: value },
+    }));
+  }, []);
+
+  const handleClear = useCallback((resource: OverrideResource, node: ConfigNode) => {
     const dotted = node.path.join('.');
     setEdits((prev) => {
-      if (!(dotted in prev)) {
+      const group = prev[resource];
+      if (!(dotted in group)) {
         return prev;
       }
-      const next = { ...prev };
-      delete next[dotted];
-      return next;
+      const nextGroup = { ...group };
+      delete nextGroup[dotted];
+      return { ...prev, [resource]: nextGroup };
     });
     setErrors((prev) => {
-      if (!(dotted in prev)) {
+      const group = prev[resource];
+      if (!(dotted in group)) {
         return prev;
       }
-      const next = { ...prev };
-      delete next[dotted];
-      return next;
+      const nextGroup = { ...group };
+      delete nextGroup[dotted];
+      return { ...prev, [resource]: nextGroup };
     });
   }, []);
 
-  const handleClearAll = () => {
-    setEdits({});
-    setErrors({});
+  const handleClearAll = useCallback((resource: OverrideResource) => {
+    setEdits((prev) => ({ ...prev, [resource]: {} }));
+    setErrors((prev) => ({ ...prev, [resource]: {} }));
+  }, []);
+
+  const queries: Record<OverrideResource, ConfigQueryResult> = {
+    pipeline: pipelineQuery,
+    segmentation: segmentationQuery,
   };
 
-  const overrideCount = Object.keys(edits).length;
-  const diffPreview = useMemo(() => JSON.stringify(patch, null, 2), [patch]);
+  const activeQuery = queries[activeTab];
+  const activeData = activeQuery.data;
+  const activeEdits = edits[activeTab];
+  const activeErrors = errors[activeTab];
+  const activeShowAdvanced = showAdvanced[activeTab];
+  const overrideCount = Object.keys(activeEdits).length;
+  const activePatch = useMemo(() => buildNested(activeEdits), [activeEdits]);
+  const diffPreview = useMemo(() => JSON.stringify(activePatch, null, 2), [activePatch]);
+  const activeHasErrors = Object.keys(activeErrors).length > 0;
+  const diffWarning = activeHasErrors
+    ? ' • resolve errors in this tab'
+    : hasErrors
+    ? ' • resolve errors in other tabs'
+    : '';
 
   return (
     <div className="form-card" style={{ gap: '0.75rem' }}>
@@ -417,45 +489,71 @@ export function OverrideEditor({ onChange }: OverrideEditorProps) {
         <div>
           <p className="section-title">Per-run overrides</p>
           <p className="section-subtitle">
-            Browse the configuration tree, set typed overrides, and preview the diff that will be merged for this job.
+            Browse the pipeline and segmentation configuration trees, set typed overrides, and preview the merged diff for this
+            job.
           </p>
         </div>
         <div className="override-actions">
-          <button type="button" className="ghost" onClick={() => setShowAdvanced((prev) => !prev)}>
-            {showAdvanced ? 'Hide advanced' : 'Show advanced'}
+          <button
+            type="button"
+            className="ghost"
+            onClick={() =>
+              setShowAdvanced((prev) => ({ ...prev, [activeTab]: !prev[activeTab] }))
+            }
+          >
+            {activeShowAdvanced ? 'Hide advanced' : 'Show advanced'}
           </button>
-          <button type="button" className="ghost" onClick={handleClearAll} disabled={!overrideCount}>
-            Clear all
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => handleClearAll(activeTab)}
+            disabled={!overrideCount}
+          >
+            Clear {activeTab === 'pipeline' ? 'pipeline' : 'segmentation'} overrides
           </button>
         </div>
       </div>
-      {isLoading ? (
+      <div className="config-tabs">
+        {(Object.keys(queries) as OverrideResource[]).map((resource) => (
+          <button
+            key={resource}
+            type="button"
+            className={resource === activeTab ? 'config-tab active' : 'config-tab'}
+            onClick={() => setActiveTab(resource)}
+          >
+            {RESOURCE_LABEL[resource]}
+          </button>
+        ))}
+      </div>
+      <p className="section-subtitle">{RESOURCE_SUMMARY[activeTab]}</p>
+      {activeQuery.isLoading ? (
         <div>Loading configuration…</div>
-      ) : isError || !data ? (
+      ) : activeQuery.isError || !activeData ? (
         <div className="override-error">Failed to load configuration metadata.</div>
       ) : (
         <div className="override-tree">
-          {data.schema
+          {activeData.schema
             .map((node) => (
               <OverrideTreeItem
                 key={node.path.join('.')}
                 node={node}
                 depth={0}
-                showAdvanced={showAdvanced}
-                edits={edits}
-                errors={errors}
-                onValueChange={handleValueChange}
-                onClear={handleClear}
+                showAdvanced={activeShowAdvanced}
+                edits={activeEdits}
+                errors={activeErrors}
+                onValueChange={(item, raw) => handleValueChange(activeTab, item, raw)}
+                onClear={(item) => handleClear(activeTab, item)}
               />
             ))
             .filter((child): child is JSX.Element => Boolean(child))}
-          {!data.schema.length ? <div>No configurable values found.</div> : null}
+          {!activeData.schema.length ? <div>No configurable values found.</div> : null}
         </div>
       )}
       <div>
         <div className="override-summary">
           <p className="section-subtitle">
-            Diff preview ({overrideCount} override{overrideCount === 1 ? '' : 's'}){hasErrors ? ' • resolve errors to continue' : ''}
+            Diff preview for {RESOURCE_LABEL[activeTab].toLowerCase()} ({overrideCount} override
+            {overrideCount === 1 ? '' : 's'}){diffWarning}
           </p>
         </div>
         <pre className="override-preview">{overrideCount ? diffPreview : '{}'}</pre>

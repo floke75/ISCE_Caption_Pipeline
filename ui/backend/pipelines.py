@@ -75,6 +75,7 @@ def run_inference(ctx: JobContext) -> None:
     transcript_path = params.get("transcript_path")
     output_dir_override = params.get("output_dir")
     overrides = params.get("config_overrides") or {}
+    segmentation_overrides = params.get("segmentation_overrides") or {}
 
     if not media_path.exists():
         raise FileNotFoundError(f"Media file not found: {media_path}")
@@ -97,7 +98,7 @@ def run_inference(ctx: JobContext) -> None:
             model_config_path = Path(default_model_config)
         else:  # pragma: no cover - defensive fallback
             try:
-                model_config_path = ctx.segmentation_config()
+                model_config_path = ctx.segmentation_config(segmentation_overrides)
             except RuntimeError:
                 model_config_path = repo_root / "config.yaml"
 

@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import client from '../api/client';
-import { OverrideEditor } from './OverrideEditor';
+import { OverrideEditor, type OverridePatches } from './OverrideEditor';
 import { FilePathPicker } from './FilePathPicker';
 import '../styles/forms.css';
 
@@ -23,7 +23,10 @@ export function TrainingPairForm({ onJobCreated }: Props) {
   const [mediaPath, setMediaPath] = useState('');
   const [srtPath, setSrtPath] = useState('');
   const [notes, setNotes] = useState('');
-  const [overridePatch, setOverridePatch] = useState<Record<string, unknown>>({});
+  const [overridePatch, setOverridePatch] = useState<OverridePatches>({
+    pipeline: {},
+    segmentation: {},
+  });
   const [overrideInvalid, setOverrideInvalid] = useState(false);
   const [mediaValid, setMediaValid] = useState(false);
   const [srtValid, setSrtValid] = useState(false);
@@ -35,8 +38,11 @@ export function TrainingPairForm({ onJobCreated }: Props) {
         srt_path: srtPath.trim(),
       };
       if (notes) payload.notes = notes;
-      if (Object.keys(overridePatch).length) {
-        payload.config_overrides = overridePatch;
+      if (Object.keys(overridePatch.pipeline).length) {
+        payload.config_overrides = overridePatch.pipeline;
+      }
+      if (Object.keys(overridePatch.segmentation).length) {
+        payload.segmentation_overrides = overridePatch.segmentation;
       }
       const { data } = await client.post('/jobs/training-pair', payload);
       return data;
@@ -63,8 +69,8 @@ export function TrainingPairForm({ onJobCreated }: Props) {
     mutation.mutate();
   };
 
-  const handleOverrideChange = useCallback((patch: Record<string, unknown>, hasErrors: boolean) => {
-    setOverridePatch(patch);
+  const handleOverrideChange = useCallback((patches: OverridePatches, hasErrors: boolean) => {
+    setOverridePatch(patches);
     setOverrideInvalid(hasErrors);
   }, []);
 

@@ -49,6 +49,7 @@ class ConfigField:
 
 
 def _recursive_update(base: MutableMapping[str, Any], update: Dict[str, Any]) -> MutableMapping[str, Any]:
+    """Merge ``update`` into ``base`` without mutating nested mappings in place."""
     for key, value in update.items():
         if isinstance(value, dict):
             child = base.get(key)
@@ -61,6 +62,7 @@ def _recursive_update(base: MutableMapping[str, Any], update: Dict[str, Any]) ->
 
 
 def _resolve_placeholders(config: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively substitute ``str.format`` placeholders using ``context``."""
     for key, value in list(config.items()):
         if isinstance(value, dict):
             config[key] = _resolve_placeholders(value, context)
@@ -73,6 +75,7 @@ def _resolve_placeholders(config: Dict[str, Any], context: Dict[str, Any]) -> Di
 
 
 def _prune_nulls(data: Any) -> Any:
+    """Remove ``None`` entries from nested lists and dictionaries."""
     if isinstance(data, dict):
         cleaned: Dict[str, Any] = {}
         for key, value in data.items():
@@ -87,6 +90,7 @@ def _prune_nulls(data: Any) -> Any:
 
 
 def _ensure_parent(path: Path) -> None:
+    """Create the parent directory for ``path`` if it does not already exist."""
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -234,6 +238,7 @@ class ConfigService:
     # Helpers
     # ------------------------------------------------------------------
     def _load_yaml(self, path: Path) -> Dict[str, Any]:
+        """Load a YAML mapping from ``path`` returning an empty dict if missing."""
         if not path.exists():
             return {}
         with path.open("r", encoding="utf-8") as fh:
@@ -243,6 +248,7 @@ class ConfigService:
         return data
 
     def _build_field_catalog(self) -> List[ConfigField]:
+        """Return the default catalog of configuration fields for the UI."""
         return [
             ConfigField(
                 path=["project_root"],
@@ -402,6 +408,7 @@ class ConfigService:
     def _determine_value_type(
         self, field: Optional[ConfigField], default_value: Any, current_value: Any
     ) -> str:
+        """Infer a UI-friendly type label for the provided value pair."""
         if field:
             mapping = {
                 "string": "string",
@@ -425,12 +432,14 @@ class ConfigService:
         return "string"
 
     def _humanize_label(self, key: str) -> str:
+        """Convert a dictionary key into a display label."""
         cleaned = key.replace("_", " ").strip()
         if not cleaned:
             return key
         return cleaned[:1].upper() + cleaned[1:]
 
     def _has_override(self, overrides: Dict[str, Any], path: List[str]) -> bool:
+        """Return ``True`` when the nested ``path`` exists in ``overrides``."""
         target: Any = overrides
         for segment in path:
             if not isinstance(target, dict) or segment not in target:
@@ -439,6 +448,7 @@ class ConfigService:
         return True
 
     def _value_at(self, source: Dict[str, Any], path: List[str]) -> Any:
+        """Retrieve a nested value from ``source`` while tolerating missing keys."""
         target: Any = source
         for segment in path:
             if not isinstance(target, dict) or segment not in target:
@@ -477,78 +487,187 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
     return [
         ConfigField(
             path=["beam_width"],
-            section="Beam search",
+            section="Search strategy",
             label="Beam width",
             field_type="number",
             description="Number of parallel hypotheses explored during segmentation.",
         ),
         ConfigField(
+            path=["lookahead_width"],
+            section="Search strategy",
+            label="Lookahead width",
+            field_type="number",
+            description="How many upcoming tokens the scorer can inspect when ranking potential breaks.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["enable_bidirectional_pass"],
+            section="Search safeguards",
+            label="Bidirectional reconciliation",
+            field_type="boolean",
+            description="Run a backward beam search and keep whichever boundary scores higher at each position.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["enable_refinement_pass"],
+            section="Search safeguards",
+            label="Refinement pass",
+            field_type="boolean",
+            description="Retry low-confidence cues with a wider beam before handing off to post-processing.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["enable_reflow"],
+            section="Post-processing",
+            label="Post-segmentation reflow",
+            field_type="boolean",
+            description="Reflow short or imbalanced cues after segmentation while respecting speaker changes.",
+            advanced=True,
+        ),
+        ConfigField(
             path=["constraints", "min_block_duration_s"],
-            section="Constraints",
+            section="Timing constraints",
             label="Minimum block duration (s)",
             field_type="number",
         ),
         ConfigField(
             path=["constraints", "max_block_duration_s"],
-            section="Constraints",
+            section="Timing constraints",
             label="Maximum block duration (s)",
             field_type="number",
         ),
         ConfigField(
             path=["constraints", "line_length_soft_target"],
-            section="Constraints",
+            section="Line constraints",
             label="Line length soft target",
             field_type="number",
         ),
         ConfigField(
             path=["constraints", "line_length_hard_limit"],
-            section="Constraints",
+            section="Line constraints",
             label="Line length hard limit",
             field_type="number",
         ),
         ConfigField(
             path=["constraints", "min_chars_for_single_word_block"],
-            section="Constraints",
+            section="Line constraints",
             label="Min chars for single-word block",
             field_type="number",
             description="Shortest caption length allowed when a block contains only one word.",
         ),
         ConfigField(
+            path=["allowed_single_word_proper_nouns"],
+            section="Single-word exceptions",
+            label="Allowed single-word proper nouns",
+            field_type="list",
+            description="Proper nouns permitted as standalone captions without triggering orphan penalties.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["constraints", "min_total_chars_per_block"],
+            section="Guardrail thresholds",
+            label="Min total chars per block",
+            field_type="number",
+            description="Blocks shorter than this many characters can incur short-block penalties.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["constraints", "min_last_line_chars"],
+            section="Guardrail thresholds",
+            label="Min last-line chars",
+            field_type="number",
+            description="Final lines shorter than this value can incur last-line penalties.",
+            advanced=True,
+        ),
+        ConfigField(
             path=["sliders", "flow"],
-            section="Stylistic sliders",
+            section="Statistical weights",
             label="Flow weight",
             field_type="number",
             description="Multiplier for rhythm-focused statistical weights.",
         ),
         ConfigField(
             path=["sliders", "density"],
-            section="Stylistic sliders",
+            section="Statistical weights",
             label="Density weight",
             field_type="number",
         ),
         ConfigField(
             path=["sliders", "balance"],
-            section="Stylistic sliders",
+            section="Statistical weights",
             label="Balance weight",
             field_type="number",
         ),
         ConfigField(
             path=["sliders", "line_length_leniency"],
-            section="Stylistic sliders",
+            section="Guardrail penalties",
             label="Line length leniency",
             field_type="number",
             description=">1.0 allows longer lines before applying penalties.",
         ),
         ConfigField(
             path=["sliders", "orphan_leniency"],
-            section="Stylistic sliders",
+            section="Guardrail penalties",
             label="Orphan leniency",
             field_type="number",
             description=">1.0 strengthens penalties for orphan words.",
         ),
         ConfigField(
+            path=["sliders", "single_word_line_penalty"],
+            section="Guardrail penalties",
+            label="Single-word line penalty",
+            field_type="number",
+            description="Penalty applied when a cue would end with a single word or sub-minimal line.",
+        ),
+        ConfigField(
+            path=["sliders", "short_block_penalty"],
+            section="Guardrail penalties",
+            label="Short block penalty",
+            field_type="number",
+            description="Penalty per missing character when a block falls short of the minimum total characters.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["sliders", "short_line_penalty"],
+            section="Guardrail penalties",
+            label="Short last-line penalty",
+            field_type="number",
+            description="Penalty per missing character when the final line misses the configured threshold.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["sliders", "fragment_penalty"],
+            section="Guardrail penalties",
+            label="Fragment penalty",
+            field_type="number",
+            description="Penalty when the projected second line would be empty or a short fragment.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["sliders", "fragment_char_threshold"],
+            section="Guardrail penalties",
+            label="Fragment character threshold",
+            field_type="number",
+            description="Characters required on the projected second line before fragment penalties stop applying.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_penalty"],
+            section="Guardrail penalties",
+            label="Extreme balance penalty",
+            field_type="number",
+            description="Penalty applied when line character counts are dramatically imbalanced.",
+        ),
+        ConfigField(
+            path=["sliders", "extreme_balance_threshold"],
+            section="Guardrail penalties",
+            label="Extreme balance threshold",
+            field_type="number",
+            description="Character ratio beyond which the extreme balance penalty activates.",
+        ),
+        ConfigField(
             path=["sliders", "structure_boost"],
-            section="Stylistic sliders",
+            section="Structure cues",
             label="Structure boost",
             field_type="number",
             description="Additive boost for structural cues like speaker changes.",

@@ -510,7 +510,8 @@ class JobManager:
         runtime["__path__"] = str(record.workspace / "pipeline_config.runtime.yaml")
 
         if self._segmentation_service is not None:
-            segmentation_path = self.prepare_segmentation_config(record)
+            segmentation_overrides = record.params.get("segmentation_overrides")
+            segmentation_path = self.prepare_segmentation_config(record, segmentation_overrides)
             runtime["segmentation_config_path"] = str(segmentation_path)
 
         return runtime

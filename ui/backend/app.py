@@ -224,6 +224,7 @@ class InferenceJobRequest(BaseModel):
     output_dir: Optional[str] = None
     model_config_path: Optional[str] = None
     config_overrides: Optional[Dict[str, Any]] = None
+    segmentation_overrides: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
 
 
@@ -231,6 +232,7 @@ class TrainingPairRequest(BaseModel):
     media_path: str
     srt_path: str
     config_overrides: Optional[Dict[str, Any]] = None
+    segmentation_overrides: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
 
 
@@ -239,6 +241,7 @@ class ModelTrainingRequest(BaseModel):
     iterations: Optional[int] = None
     error_boost_factor: Optional[float] = None
     config_overrides: Optional[Dict[str, Any]] = None
+    segmentation_overrides: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
 
 

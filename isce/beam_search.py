@@ -1,23 +1,80 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\beam_search.py
-"""Implements the core beam search algorithm for text segmentation.
+"""Beam search segmentation with lookahead, refinement, and guardrails.
 
-This module contains the `Segmenter` class, which performs the beam search
-to find the optimal sequence of break decisions (`O`, `LB`, `SB`) for a given
-list of tokens. It maintains a beam of the most promising hypotheses (paths)
-at each step, using a `Scorer` to evaluate the quality of each potential
-decision based on a statistical model and heuristic rules.
+This module hosts the core implementation of ISCE's beam search. The logic has
+accumulated a number of heuristics over the years, so we keep the code heavily
+documented to make the data flow and motivations explicit. In particular:
+
+* the scorer receives a :class:`~isce.types.TransitionContext` so transition
+  scores can consider partially written lines and projected second-line space;
+* optional lookahead exposes a shallow copy of the next ``N`` tokens so the
+  scorer can anticipate speaker changes or punctuation while keeping the hot
+  path side-effect free;
+* fallback penalties and single-word guardrails ensure forced ``SB`` decisions
+  still surface problematic cues for operators; and
+* bidirectional reconciliation plus a targeted refinement pass revisit weak
+  blocks without forcing a full rerun of the global search.
 """
 from __future__ import annotations
+from collections import Counter
 from dataclasses import dataclass, replace
-from typing import List
 from heapq import nlargest
+from typing import Any, List, Optional, Sequence
 from tqdm import tqdm
 
-from .types import Token, BreakType, TokenRow
+from .types import Token, BreakType, TokenRow, TransitionContext
 from .scorer import Scorer
 from .config import Config
 
 FALLBACK_SB_PENALTY = 25.0
+LOCAL_REFINEMENT_MIN_BEAM = 5
+LOCAL_REFINEMENT_IMPROVEMENT = 0.5
+BALANCE_RATIO_THRESHOLD = 2.5
+
+
+def _token_to_row_dict(token: Optional[Token]) -> Optional[dict[str, Any]]:
+    """Project a token dataclass into the dictionary payload expected by ``Scorer``."""
+
+    if token is None:
+        return None
+    return dict(token.__dict__)
+
+
+def _get_lookahead_slice(tokens: Sequence[Token], start: int, width: int) -> Optional[tuple[dict[str, Any], ...]]:
+    """Return a tuple of upcoming token dictionaries for lookahead heuristics."""
+
+    if width <= 0:
+        return None
+    future = tokens[start : start + width]
+    if not future:
+        return None
+    return tuple(dict(token.__dict__) for token in future)
+
+
+def _estimate_second_line_window(tokens: Sequence[Token], current_idx: int, cfg: Config) -> tuple[int, int]:
+    """Estimate characters and words available for a prospective second line."""
+
+    if current_idx + 1 >= len(tokens):
+        return 0, 0
+
+    length = 0
+    words = 0
+    soft_target = cfg.line_length_constraints.get("line2", {}).get("soft_target", 37)
+
+    for token in tokens[current_idx + 1 :]:
+        if words > 0:
+            length += 1
+        length += len(token.w)
+        words += 1
+
+        if words >= 2:
+            break
+        if token.is_sentence_final or token.speaker_change or token.starts_with_dialogue_dash:
+            break
+        if length >= soft_target:
+            break
+
+    return length, words
+
 
 @dataclass(frozen=True)
 class PathState:
@@ -29,21 +86,48 @@ class PathState:
     breaks: tuple[BreakType, ...]
 
 class Segmenter:
-    """
-    Manages the beam search segmentation process.
+    """Stateful orchestrator for the beam search segmentation process.
 
-    This stateful class encapsulates the logic for the beam search algorithm,
-    iterating through tokens and maintaining a beam of the most likely
-    segmentation hypotheses (`PathState` objects). It uses a `Scorer` to
-    evaluate the quality of different break decisions at each step.
+    The :class:`Segmenter` encapsulates the outer loop of the captioning beam
+    search. It iterates through tokens, expands each hypothesis with the three
+    allowed break types (``O``, ``LB``, ``SB``), and relies on
+    :class:`~isce.scorer.Scorer` for the actual scoring mechanics. The class also
+    carries a handful of pre-computed settings derived from the active
+    configuration so that the tight inner loops stay lean.
 
-    Attributes:
-        tokens: The list of `Token` objects to be segmented.
-        scorer: The `Scorer` instance used to score potential breaks.
-        cfg: The main configuration object.
-        beam: The list of current best `PathState` hypotheses.
-        line_len_leniency: A factor to adjust penalties for long lines.
-        orphan_leniency: A factor to adjust penalties for single-word lines.
+    Attributes
+    ----------
+    tokens:
+        Ordered list of :class:`~isce.types.Token` objects to be segmented.
+    scorer:
+        Instance responsible for scoring transition and block level decisions.
+    cfg:
+        The loaded :class:`~isce.config.Config` describing constraints.
+    beam:
+        Mutable collection of the best :class:`PathState` hypotheses explored
+        so far.
+    line_len_leniency:
+        Multiplier used to scale soft penalties once a line exceeds its target
+        character count.
+    orphan_leniency:
+        Multiplier for discouraging line breaks that would leave sentence-final
+        orphans (``LB`` followed by punctuation).
+    fallback_sb_penalty:
+        Penalty applied when we are forced to emit an ``SB`` because every
+        other decision violates a hard constraint.
+    single_word_line_penalty:
+        Optional override letting the scorer fine-tune penalties for sub-minimal
+        or single-word lines when the fallback escape hatch is triggered.
+    allowed_proper_nouns:
+        Normalised set of proper nouns that may appear as single-word captions
+        without being considered violations.
+    lookahead_width:
+        Number of future tokens to pass to the scorer when computing transition
+        scores.
+    last_path_score:
+        Score of the best path returned by the most recent :meth:`run` call.
+        This is cached so that refinement helpers can compare alternate
+        segmentations without re-scoring from scratch.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -53,6 +137,11 @@ class Segmenter:
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
+        self.lookahead_width = getattr(cfg, "lookahead_width", 0)
+        self.single_word_line_penalty = float(self.scorer.sl.get("single_word_line_penalty", 0.0))
+        allowed_proper_nouns = getattr(self.cfg, "allowed_single_word_proper_nouns", tuple())
+        self.allowed_proper_nouns = {noun.strip().lower() for noun in allowed_proper_nouns}
+        self.last_path_score: float | None = None
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
         """Checks if continuing a line (`O`) violates hard length constraints."""
@@ -68,35 +157,147 @@ class Segmenter:
         recent_breaks = state.breaks[state.block_start_idx : current_idx + 1]
         return "LB" not in recent_breaks
 
-    def _is_hard_ok_SB(self, block_start_idx: int, current_idx: int) -> bool:
+    def _count_chars(self, line_tokens: List[Token]) -> int:
+        """Return the rendered character length for ``line_tokens``.
+
+        The helper mirrors :func:`_count_chars` in :mod:`isce.post_process` so
+        that guardrail checks stay consistent between the beam search and the
+        optional reflow pass. A space is charged between adjacent tokens to
+        approximate how multi-word cues appear on screen.
+        """
+
+        if not line_tokens:
+            return 0
+        return sum(len(token.w) for token in line_tokens) + (len(line_tokens) - 1)
+
+    def _is_allowed_single_word(self, token: Token) -> bool:
+        """Return ``True`` when ``token`` is exempt from single-word penalties."""
+        if token.pos != "PROPN":
+            return False
+        stripped = token.w.rstrip(".,!?;:\"")
+        return stripped.lower() in self.allowed_proper_nouns
+
+    def _block_profiles(
+        self, state: PathState, block_start_idx: int, end_idx: int
+    ) -> tuple[List[Token], List[BreakType], List[List[Token]]]:
+        """Construct token, break, and line views for a completed block.
+
+        The scorer expects both the raw token payloads and the per-line
+        segmentation decisions when evaluating a block break. This helper
+        recreates those structures from the running path state so that callers
+        can hand the scorer a self-contained snapshot of the block we are about
+        to close.
+        """
+        block_tokens = self.tokens[block_start_idx : end_idx + 1]
+        block_breaks = list(state.breaks[block_start_idx:end_idx]) + ["SB"]
+        lines: List[List[Token]] = []
+        current_line: List[Token] = []
+        for idx, token in enumerate(block_tokens):
+            current_line.append(token)
+            if block_breaks[idx] in ("LB", "SB"):
+                lines.append(list(current_line))
+                current_line = []
+        if current_line:
+            lines.append(list(current_line))
+        return block_tokens, block_breaks, lines
+
+    def _line_violations(self, lines: List[List[Token]]) -> Counter[str]:
+        """Report soft violations found within the prospective block lines.
+
+        The current fallback strategy applies manual penalties when we are
+        forced to emit a block despite failing soft constraints. Returning the
+        violation counts lets the caller scale those penalties proportionally
+        while keeping the core heuristics encapsulated. Only genuine single-word
+        blocks – cues that contain a single token across all rendered lines –
+        are subject to the short-line guardrail. Multi-line captions that end
+        on a brief second line should remain eligible so the search is free to
+        prefer a balanced layout when the scorer deems it stronger.
+        """
+        violations: Counter[str] = Counter()
+        total_tokens = sum(len(line_tokens) for line_tokens in lines)
+        if total_tokens != 1:
+            return violations
+        min_chars_single = self.cfg.min_chars_for_single_word_block
+        for line_tokens in lines:
+            if not line_tokens:
+                continue
+            if len(line_tokens) != 1:
+                continue
+
+            single_word_token = line_tokens[0]
+            if self._is_allowed_single_word(single_word_token):
+                continue
+
+            char_count = self._count_chars(line_tokens)
+            if char_count < min_chars_single:
+                violations["single_word"] += 1
+                violations["short_line"] += 1
+        return violations
+
+    def _is_hard_ok_SB(self, state: PathState, current_idx: int) -> bool:
         """Checks if a block break (`SB`) violates hard constraints."""
+        block_start_idx = state.block_start_idx
         start_token = self.tokens[block_start_idx]
         end_token = self.tokens[current_idx]
         duration = max(1e-6, end_token.end - start_token.start)
         if duration < self.cfg.min_block_duration_s:
             return False
-        num_words_in_block = (current_idx - block_start_idx) + 1
-        if num_words_in_block == 1:
-            word = start_token.w.rstrip('.,?!')
-            if len(word) < self.cfg.min_chars_for_single_word_block and start_token.pos != "PROPN":
-                return False
+        _, _, lines = self._block_profiles(state, block_start_idx, current_idx)
+        if self._line_violations(lines):
+            return False
         return True
 
+    def _estimate_second_line(self, current_idx: int) -> tuple[int, int]:
+        """Estimate room available for a hypothetical second line."""
+
+        return _estimate_second_line_window(self.tokens, current_idx, self.cfg)
+
+    def _build_transition_context(self, state: PathState, current_idx: int) -> TransitionContext:
+        """Construct the lookahead context passed into the scorer.
+
+        The :class:`~isce.scorer.Scorer` only works with serialisable
+        dictionaries, so we project the dataclass tokens into dictionaries and
+        package the relevant line metrics. ``projected_second_line_*`` is
+        provided only when the current path is still mid-first-line; otherwise
+        the scorer can infer that the transition stays within the same line.
+        """
+
+        pending_tokens = tuple(dict(t.__dict__) for t in self.tokens[state.block_start_idx : current_idx + 1])
+        projected_chars: int | None = None
+        projected_words: int | None = None
+        if state.line_num == 1 and current_idx + 1 < len(self.tokens):
+            projected_chars, projected_words = self._estimate_second_line(current_idx)
+
+        return TransitionContext(
+            pending_tokens=pending_tokens,
+            current_line_num=state.line_num,
+            current_line_len=state.line_len,
+            projected_second_line_chars=projected_chars,
+            projected_second_line_words=projected_words,
+        )
+
     def run(self) -> List[BreakType]:
-        """
-        Executes the main beam search algorithm.
+        """Execute the primary beam search and cache the best-path score.
 
-        This method iterates through each token in the input sequence. At each
-        step, it expands each hypothesis in the current beam by considering all
-        valid next break types ('O', 'LB', 'SB'). Each new potential path is
-        scored, and the beam is pruned to keep only the top N hypotheses, where
-        N is the beam width.
+        The segmenter iterates through each token, expanding every active
+        hypothesis with the three allowed break types (``O``, ``LB``, ``SB``).
+        Each candidate transition is scored, soft penalties are applied when
+        lines exceed their preferred length, and the beam is pruned back to the
+        configured width. The method also records :attr:`last_path_score` so
+        downstream refinement passes can compare alternate segmentations
+        without recomputing the entire search from scratch. When no legal
+        candidates exist we fall back to a forced ``SB`` decision and assess a
+        manual penalty, ensuring the search always terminates.
 
-        Returns:
-            A list of `BreakType` enums representing the best-scoring
-            segmentation path found.
+        Returns
+        -------
+        list[BreakType]
+            The highest scoring break sequence discovered by the beam.
         """
+        self.last_path_score = None
+
         if not self.tokens:
+            self.last_path_score = 0.0
             return []
 
         initial_state = PathState(score=0.0, line_num=1, line_len=len(self.tokens[0].w), block_start_idx=0, breaks=())
@@ -111,14 +312,25 @@ class Segmenter:
             nxt_dict = dict(nxt.__dict__) if nxt else None
 
             # Create the dictionary-based TokenRow required by the refactored scorer
+            lookahead_tokens = None
+            if self.lookahead_width > 0:
+                # Expose a shallow copy of the upcoming tokens so the scorer can
+                # apply lookahead heuristics without mutating the canonical list.
+                future_slice = self.tokens[i + 1 : i + 1 + self.lookahead_width]
+                if future_slice:
+                    lookahead_tokens = tuple(dict(t.__dict__) for t in future_slice)
+
             scorer_row = TokenRow(
                 token=token_dict,
                 nxt=nxt_dict,
-                feats=None # feats object is no longer used by the scorer
+                feats=None,  # feats object is no longer used by the scorer
+                lookahead=lookahead_tokens,
             )
-            transition_scores = self.scorer.score_transition(scorer_row)
 
             for state in self.beam:
+                context = self._build_transition_context(state, i)
+                transition_scores = self.scorer.score_transition(scorer_row, context)
+
                 # Candidate: 'O' (No Break)
                 if nxt:
                     if self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
@@ -143,22 +355,42 @@ class Segmenter:
                     candidates.append(PathState(score=score, line_num=2, line_len=len(nxt.w), block_start_idx=state.block_start_idx, breaks=state.breaks + ("LB",)))
 
                 # Candidate: 'SB' (Block Break)
-                if self._is_hard_ok_SB(state.block_start_idx, i):
-                    block_token_dicts = [dict(t.__dict__) for t in self.tokens[state.block_start_idx : i + 1]]
-                    block_breaks = list(state.breaks[state.block_start_idx:]) + ["SB"]
+                if self._is_hard_ok_SB(state, i):
+                    block_tokens, block_breaks, _ = self._block_profiles(state, state.block_start_idx, i)
+                    block_token_dicts = [dict(t.__dict__) for t in block_tokens]
                     block_score = self.scorer.score_block(block_token_dicts, block_breaks)
                     score = state.score + transition_scores["SB"] + block_score
                     next_word_len = len(nxt.w) if nxt else 0
                     candidates.append(PathState(score=score, line_num=1, line_len=next_word_len, block_start_idx=i + 1, breaks=state.breaks + ("SB",)))
 
             if not candidates and self.beam:
+                # The hard constraints occasionally paint the search into a
+                # corner—for example when the minimum block duration has not yet
+                # been satisfied. Rather than crashing we emit a forced block
+                # break from the best surviving hypothesis and assess a manual
+                # penalty so that the search only uses this escape hatch when no
+                # feasible alternative exists.
                 fallback_state = self.beam[0]
-                block_tokens = [dict(t.__dict__) for t in self.tokens[fallback_state.block_start_idx : i + 1]]
-                block_breaks = list(fallback_state.breaks[fallback_state.block_start_idx:]) + ["SB"]
-                block_score = self.scorer.score_block(block_tokens, block_breaks) if block_tokens else 0.0
+                fallback_context = self._build_transition_context(fallback_state, i)
+                fallback_scores = self.scorer.score_transition(scorer_row, fallback_context)
+                block_tokens, block_breaks, lines = self._block_profiles(
+                    fallback_state, fallback_state.block_start_idx, i
+                )
+                block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+                block_score = self.scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
                 next_word_len = len(nxt.w) if nxt else 0
+                violations = self._line_violations(lines)
+                if violations:
+                    per_violation_penalty = (
+                        self.single_word_line_penalty
+                        if self.single_word_line_penalty > 0
+                        else self.fallback_sb_penalty
+                    )
+                    violating_lines = violations.get("single_word", 0)
+                    if violating_lines:
+                        block_score -= per_violation_penalty * violating_lines
                 fallback_candidate = PathState(
-                    score=fallback_state.score + transition_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
+                    score=fallback_state.score + fallback_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
                     line_num=1,
                     line_len=next_word_len,
                     block_start_idx=i + 1,
@@ -178,29 +410,369 @@ class Segmenter:
             final_breaks.append("O")
         if final_breaks:
             final_breaks[-1] = "SB"
-        
+
+        self.last_path_score = best_path.score
         return final_breaks
 
-def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
+
+def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
+    """Create a reversed copy of the tokens suited for the backward beam."""
+    reversed_tokens: List[Token] = []
+    for idx in range(len(tokens) - 1, -1, -1):
+        token = tokens[idx]
+        speaker_change = False
+        if idx > 0:
+            next_token = tokens[idx - 1]
+            if token.speaker is not None and next_token.speaker is not None:
+                speaker_change = token.speaker != next_token.speaker
+        relative_position = 1.0 - token.relative_position if token.relative_position is not None else None
+        if relative_position is None:
+            relative_position = 0.0
+        else:
+            relative_position = max(0.0, min(1.0, relative_position))
+        reversed_tokens.append(
+            replace(
+                token,
+                start=-token.end,
+                end=-token.start,
+                pause_after_ms=token.pause_before_ms,
+                pause_before_ms=token.pause_after_ms,
+                is_sentence_initial=token.is_sentence_final,
+                is_sentence_final=token.is_sentence_initial,
+                speaker_change=speaker_change,
+                relative_position=relative_position,
+                break_type=None,
+            )
+        )
+    return reversed_tokens
+
+
+def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
+    """Translate reverse-order break decisions back into forward order."""
+
+    n = len(reversed_breaks)
+    if n == 0:
+        return []
+
+    mapped = list(reversed(reversed_breaks))
+    final_breaks: List[BreakType] = [b if b != "SB" else "O" for b in mapped]
+    final_breaks[-1] = "SB"
+
+    for backward_idx, br in enumerate(reversed_breaks[:-1]):
+        if br == "SB":
+            forward_idx = (n - 2) - backward_idx
+            if 0 <= forward_idx < len(final_breaks):
+                final_breaks[forward_idx] = "SB"
+
+    return final_breaks
+
+
+def _score_segmentation(
+    tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config
+) -> float:
+    """Calculate holistic scores for an entire segmentation sequence."""
+
+    total = 0.0
+    block_tokens: List[Token] = []
+    block_breaks: List[BreakType] = []
+    block_start = 0
+    line_num = 1
+    line_len = len(tokens[0].w) if tokens else 0
+
+    for idx, (token, br) in enumerate(zip(tokens, breaks)):
+        block_tokens.append(token)
+        block_breaks.append(br)
+
+        nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
+        row = TokenRow(
+            token=_token_to_row_dict(token) or {},
+            nxt=_token_to_row_dict(nxt),
+            feats=None,
+            lookahead=_get_lookahead_slice(tokens, idx + 1, cfg.lookahead_width),
+        )
+
+        pending_tokens = tuple(
+            dict(t.__dict__) for t in tokens[block_start : idx + 1]
+        )
+        projected_chars: Optional[int]
+        projected_words: Optional[int]
+        projected_chars = projected_words = None
+        if line_num == 1 and nxt is not None:
+            projected_chars, projected_words = _estimate_second_line_window(tokens, idx, cfg)
+
+        ctx = TransitionContext(
+            pending_tokens=pending_tokens,
+            current_line_num=line_num,
+            current_line_len=line_len,
+            projected_second_line_chars=projected_chars,
+            projected_second_line_words=projected_words,
+        )
+        transition_scores = scorer.score_transition(row, ctx)
+        total += transition_scores.get(br, 0.0)
+
+        if br == "SB":
+            block_dicts = [dict(t.__dict__) for t in block_tokens]
+            total += scorer.score_block(block_dicts, block_breaks)
+            block_tokens = []
+            block_breaks = []
+            block_start = idx + 1
+            line_num = 1
+            line_len = len(nxt.w) if nxt else 0
+        elif br == "LB":
+            line_num = 2
+            line_len = len(nxt.w) if nxt else 0
+        else:  # "O"
+            if nxt is not None:
+                line_len = line_len + 1 + len(nxt.w)
+
+    return total
+
+
+def _split_block_lines(
+    block_tokens: Sequence[Token], block_breaks: Sequence[BreakType]
+) -> List[List[Token]]:
+    """Return per-line token lists reconstructed from ``block_breaks``.
+
+    ``Segmenter`` and the refinement pass both need a rendered view of the
+    current block to reason about line balance or short-line guardrails.  The
+    scorer already consumes dictionary payloads, so this helper simply
+    rebuilds the dataclass representation grouped by line decisions.
     """
-    High-level wrapper to perform beam search segmentation.
+    lines: List[List[Token]] = []
+    current: List[Token] = []
+    for token, decision in zip(block_tokens, block_breaks):
+        current.append(token)
+        if decision in ("LB", "SB"):
+            lines.append(current)
+            current = []
+    if current:
+        lines.append(current)
+    return lines
 
-    This function instantiates the `Segmenter` class, runs the beam search
-    algorithm, and applies the resulting break types to the input tokens.
 
-    Args:
-        tokens: The list of `Token` objects to segment.
-        scorer: The `Scorer` instance to use for evaluating breaks.
-        cfg: The main configuration object.
+def _block_balance(block_tokens: Sequence[Token], block_breaks: Sequence[BreakType]) -> float:
+    """Return the ratio between the longest and shortest rendered lines."""
 
-    Returns:
-        A new list of `Token` objects with the `break_type` attribute set
-        according to the segmentation result.
+    if not block_tokens:
+        return 1.0
+    lines = _split_block_lines(block_tokens, block_breaks)
+    if not lines:
+        return 1.0
+    lengths = [
+        (sum(len(tok.w) for tok in line) + max(0, len(line) - 1))
+        for line in lines
+    ]
+    if not lengths:
+        return 1.0
+    shorter = min(lengths)
+    longer = max(lengths)
+    if shorter == 0:
+        return float("inf")
+    return longer / shorter
+
+
+def _should_refine_block(
+    block_tokens: Sequence[Token],
+    block_breaks: Sequence[BreakType],
+    block_score: float,
+) -> bool:
+    """Return ``True`` when refinement heuristics should revisit the block."""
+
+    if not block_tokens:
+        return False
+    if len(block_tokens) == 1:
+        return True
+    if block_score < 0.0:
+        return True
+    return _block_balance(block_tokens, block_breaks) > BALANCE_RATIO_THRESHOLD
+
+
+def _score_path(
+    tokens: Sequence[Token],
+    breaks: Sequence[BreakType],
+    scorer: Scorer,
+    cfg: Config,
+) -> float:
+    """Convenience wrapper mirroring :func:`_score_segmentation` for slices."""
+
+    return _score_segmentation(list(tokens), list(breaks), scorer, cfg)
+
+
+def _reconcile_bidirectional_breaks(
+    forward_breaks: List[BreakType],
+    backward_breaks: List[BreakType],
+    scorer: Scorer,
+    tokens: List[Token],
+    cfg: Config,
+) -> List[BreakType]:
+    """Blend forward and backward break choices into a single sequence."""
+
+    reconciled = list(forward_breaks)
+    current_score = _score_segmentation(tokens, reconciled, scorer, cfg)
+    tie_priority = {"LB": 3, "SB": 2, "O": 1}
+
+    for i in range(len(tokens)):
+        candidate_break = backward_breaks[i]
+        if reconciled[i] == candidate_break:
+            continue
+
+        candidate_breaks = list(reconciled)
+        candidate_breaks[i] = candidate_break
+        candidate_score = _score_segmentation(tokens, candidate_breaks, scorer, cfg)
+
+        prefer_candidate = False
+        if candidate_score > current_score + 1e-6:
+            prefer_candidate = True
+        elif abs(candidate_score - current_score) <= 1e-6:
+            tie_delta = tie_priority.get(candidate_break, 0) - tie_priority.get(reconciled[i], 0)
+            if tie_delta > 0:
+                prefer_candidate = True
+            elif (
+                reconciled[i] == "SB"
+                and candidate_break != "SB"
+                and i + 1 < len(tokens)
+                and reconciled[i + 1] == "SB"
+            ):
+                prefer_candidate = True
+
+        if prefer_candidate:
+            reconciled = candidate_breaks
+            current_score = candidate_score
+
+    if reconciled:
+        reconciled[-1] = "SB"
+    return reconciled
+
+
+def _run_forward_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[BreakType]:
+    """Run a single forward beam-search pass over ``tokens``."""
+
+    return Segmenter(tokens, scorer, cfg).run()
+
+
+def _run_bidirectional_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[BreakType]:
+    """Run forward/backward passes and reconcile the competing break sets."""
+
+    forward_breaks = _run_forward_breaks(tokens, scorer, cfg)
+    reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
+    backward_reversed_breaks = Segmenter(reversed_tokens, scorer, cfg).run()
+    backward_breaks = _map_reversed_breaks(backward_reversed_breaks)
+    return _reconcile_bidirectional_breaks(forward_breaks, backward_breaks, scorer, tokens, cfg)
+
+
+def refine_blocks(
+    tokens: Sequence[Token],
+    breaks: Sequence[BreakType],
+    scorer: Scorer,
+    cfg: Config,
+) -> List[BreakType]:
+    """Re-run targeted refinement over low-scoring or lopsided blocks.
+
+    The primary beam search occasionally emits awkward captions when hard
+    constraints paint the search into a corner.  The refinement pass gives the
+    model a second chance by expanding a local window with a wider beam and
+    replaying the search.  Only blocks that look suspicious—single-token cues,
+    negative scorer feedback, or severe balance ratios—are reconsidered so the
+    routine stays fast enough for interactive use.
+    """
+
+    if not tokens or not breaks:
+        return list(breaks)
+
+    refined = list(breaks)
+
+    def _block_boundaries() -> List[tuple[int, int]]:
+        spans: List[tuple[int, int]] = []
+        start = 0
+        for idx, decision in enumerate(refined):
+            if decision == "SB":
+                spans.append((start, idx))
+                start = idx + 1
+        return spans
+
+    boundaries = _block_boundaries()
+    if not boundaries:
+        return refined
+    idx = 0
+
+    while idx < len(boundaries):
+        block_start, block_end = boundaries[idx]
+        block_tokens = list(tokens[block_start : block_end + 1])
+        block_breaks = list(refined[block_start : block_end + 1])
+        block_dicts = [dict(t.__dict__) for t in block_tokens]
+        block_score = scorer.score_block(block_dicts, block_breaks)
+
+        if not _should_refine_block(block_tokens, block_breaks, block_score):
+            idx += 1
+            continue
+
+        window_start = block_start
+        window_end_idx = idx
+        if len(block_tokens) == 1 and idx + 1 < len(boundaries):
+            window_end_idx += 1
+        window_end_idx = min(window_end_idx, len(boundaries) - 1)
+        window_end = boundaries[window_end_idx][1]
+
+        window_tokens = list(tokens[window_start : window_end + 1])
+        window_breaks = list(refined[window_start : window_end + 1])
+        baseline_score = _score_path(window_tokens, window_breaks, scorer, cfg)
+
+        refine_beam = max(cfg.beam_width, LOCAL_REFINEMENT_MIN_BEAM)
+        refine_cfg = replace(cfg, beam_width=refine_beam, enable_refinement_pass=False)
+        candidate_segmenter = Segmenter(window_tokens, scorer, refine_cfg)
+        candidate_breaks = candidate_segmenter.run()
+        candidate_score = candidate_segmenter.last_path_score
+        if candidate_score is None:
+            candidate_score = _score_path(window_tokens, candidate_breaks, scorer, cfg)
+
+        if candidate_score >= baseline_score + LOCAL_REFINEMENT_IMPROVEMENT:
+            refined[window_start : window_end + 1] = candidate_breaks
+            boundaries = _block_boundaries()
+            idx = 0
+            continue
+
+        idx += 1
+
+    return refined
+
+
+def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
+    """Execute segmentation with optional bidirectional and refinement passes.
+
+    ``segment`` is the high-level entry point used by :mod:`main` and the UI
+    backend.  It wires together the primary :class:`Segmenter` beam search,
+    optional bidirectional reconciliation, and the refinement pass that
+    revisits weak captions with a wider beam.  The returned tokens always carry
+    the winning break decisions in their ``break_type`` field so downstream
+    consumers (SRT writers, diagnostics, post-processing) operate on a common
+    shape.
+
+    Parameters
+    ----------
+    tokens:
+        Ordered :class:`~isce.types.Token` sequence to segment.
+    scorer:
+        Active :class:`~isce.scorer.Scorer` configured with weights, sliders,
+        and guardrail penalties.
+    cfg:
+        Loaded :class:`~isce.config.Config` object describing beam width,
+        optional lookahead, and post-search safeguards.
+
+    Returns
+    -------
+    list[Token]
+        Tokens with their ``break_type`` attributes updated to reflect the best
+        segmentation discovered by the configured passes.
     """
     if not tokens:
         return []
     
-    segmenter = Segmenter(tokens, scorer, cfg)
-    final_breaks = segmenter.run()
+    if cfg.enable_bidirectional_pass:
+        final_breaks = _run_bidirectional_breaks(tokens, scorer, cfg)
+    else:
+        final_breaks = _run_forward_breaks(tokens, scorer, cfg)
+
+    if getattr(cfg, "enable_refinement_pass", False):
+        final_breaks = refine_blocks(tokens, final_breaks, scorer, cfg)
 
     return [replace(token, break_type=final_breaks[i]) for i, token in enumerate(tokens)]
