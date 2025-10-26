@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from isce.config import Config
 from isce.scorer import Scorer
-from isce.types import TokenRow
+from isce.types import TokenRow, TransitionContext
 
 
 def _make_config(**overrides) -> Config:
@@ -219,3 +219,67 @@ def test_lookahead_penalises_short_projection_and_last_word() -> None:
     penalised = Scorer({}, constraints, {}, tuned_cfg).score_transition(row)
 
     assert penalised["LB"] < baseline["LB"]
+
+
+def test_transition_context_penalises_fragmented_second_line() -> None:
+    constraints = _make_constraints()
+    sliders = {"fragment_penalty": 8.0, "fragment_char_threshold": 6.0}
+    cfg = _make_config()
+    scorer = Scorer({}, constraints, sliders, cfg)
+
+    token = {
+        "w": "Hello",
+        "pause_z": 0.0,
+        "relative_position": 0.4,
+        "pos": "INTJ",
+        "is_sentence_initial": False,
+    }
+    nxt = {"w": "world", "pos": "NOUN", "is_sentence_initial": False}
+    row = TokenRow(token=token, nxt=nxt)
+
+    context = TransitionContext(
+        pending_tokens=(dict(token),),
+        current_line_num=1,
+        current_line_len=len(token["w"]),
+        projected_second_line_chars=3,
+        projected_second_line_words=1,
+    )
+
+    baseline = scorer.score_transition(row)
+    penalised = scorer.score_transition(row, context)
+
+    threshold = sliders["fragment_char_threshold"]
+    deficit = threshold - context.projected_second_line_chars
+    expected_penalty = sliders["fragment_penalty"] * (deficit / threshold)
+
+    assert pytest.approx(baseline["LB"] - penalised["LB"], rel=1e-6) == expected_penalty
+
+
+def test_transition_context_ignores_non_first_line_fragments() -> None:
+    constraints = _make_constraints()
+    sliders = {"fragment_penalty": 7.5, "fragment_char_threshold": 5.0}
+    cfg = _make_config()
+    scorer = Scorer({}, constraints, sliders, cfg)
+
+    token = {
+        "w": "Fine",
+        "pause_z": 0.0,
+        "relative_position": 0.5,
+        "pos": "ADJ",
+        "is_sentence_initial": False,
+    }
+    nxt = {"w": "then", "pos": "ADV", "is_sentence_initial": False}
+    row = TokenRow(token=token, nxt=nxt)
+
+    context = TransitionContext(
+        pending_tokens=(dict(token),),
+        current_line_num=2,
+        current_line_len=len(token["w"]),
+        projected_second_line_chars=0,
+        projected_second_line_words=0,
+    )
+
+    baseline = scorer.score_transition(row)
+    penalised = scorer.score_transition(row, context)
+
+    assert penalised["LB"] == pytest.approx(baseline["LB"])
