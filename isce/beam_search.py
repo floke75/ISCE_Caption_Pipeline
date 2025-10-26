@@ -446,6 +446,19 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
     function rebuilds that computation without mutating global state.
     """
 
+    fallback_sb_penalty = float(scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
+    short_line_penalty = float(scorer.sl.get("single_word_line_penalty", 0.0))
+    allowed_proper_nouns = {
+        noun.strip().lower()
+        for noun in getattr(cfg, "allowed_single_word_proper_nouns", tuple())
+    }
+
+    def _is_allowed_single_word(token: Token) -> bool:
+        if token.pos != "PROPN":
+            return False
+        stripped = token.w.rstrip(".,!?;:\"")
+        return stripped.lower() in allowed_proper_nouns
+
     if not tokens:
         return 0.0
 
@@ -496,7 +509,39 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
             block_token_dicts = [dict(t.__dict__) for t in tokens[block_start_idx : i + 1]]
             block_breaks = list(breaks[block_start_idx:i]) + ["SB"]
             block_score = scorer.score_block(block_token_dicts, block_breaks)
-            total += transition_scores.get("SB", 0.0) + block_score
+
+            forced_penalty = 0.0
+            violations: List[str] = []
+            lines: List[List[Token]] = []
+            current_line: List[Token] = []
+            for token_in_block, br in zip(tokens[block_start_idx : i + 1], block_breaks):
+                current_line.append(token_in_block)
+                if br in {"LB", "SB"}:
+                    lines.append(current_line)
+                    current_line = []
+            if current_line:
+                lines.append(current_line)
+
+            min_chars = cfg.min_chars_for_single_word_block
+            for line_tokens in lines:
+                if not line_tokens:
+                    continue
+                is_single_word = len(line_tokens) == 1
+                allowed_single = is_single_word and _is_allowed_single_word(line_tokens[0])
+                if is_single_word and not allowed_single:
+                    violations.append("single_word")
+                    continue
+                if _count_chars(line_tokens) < min_chars and not allowed_single:
+                    violations.append("short_line")
+
+            block_duration = max(1e-6, tokens[i].end - tokens[block_start_idx].start)
+            if block_duration < cfg.min_block_duration_s or violations:
+                forced_penalty += fallback_sb_penalty
+                if violations:
+                    per_violation_penalty = short_line_penalty if short_line_penalty > 0 else fallback_sb_penalty
+                    forced_penalty += per_violation_penalty * len(violations)
+
+            total += transition_scores.get("SB", 0.0) + block_score - forced_penalty
             line_num = 1
             line_len = len(nxt.w) if nxt else 0
             block_start_idx = i + 1
