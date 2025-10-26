@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from isce.config import Config
 from isce.model_builder import derive_constraints
-from scripts.train_model import partition_corpus_paths
+from scripts.train_model import partition_corpus_paths, get_full_feature_table_and_rows
 
 
 def _write_tokens(path: Path, tokens: list[dict]) -> None:
@@ -79,3 +79,80 @@ def test_constraints_ignore_raw_duplicates(tmp_path: Path) -> None:
 
     polluted_constraints = derive_constraints([str(p) for p in human_paths + raw_paths], cfg)
     assert polluted_constraints["ideal_cps_median"] != pytest.approx(expected["ideal_cps_median"])
+
+
+def test_get_full_feature_table_includes_spacy_features(tmp_path: Path) -> None:
+    cfg = _fallback_config()
+
+    rich_tokens = [
+        {
+            "w": "Running",
+            "start": 0.0,
+            "end": 0.5,
+            "break_type": "O",
+            "pause_after_ms": 120,
+            "lemma": "run",
+            "tag": "VBG",
+            "morph": "Tense=Pres|VerbForm=Part",
+            "dep": "advcl",
+            "head_idx": 1,
+        },
+        {
+            "w": "fast",
+            "start": 0.5,
+            "end": 0.9,
+            "break_type": "LB",
+            "pause_after_ms": 30,
+            "lemma": "fast",
+            "tag": "RB",
+            "morph": "Degree=Pos",
+            "dep": "advmod",
+            "head_idx": 0,
+        },
+    ]
+
+    sparse_tokens = [
+        {
+            "w": "We",
+            "start": 1.0,
+            "end": 1.2,
+            "break_type": "O",
+            "pause_after_ms": 40,
+        },
+        {
+            "w": "go",
+            "start": 1.2,
+            "end": 1.5,
+            "break_type": "SB",
+            "pause_after_ms": 0,
+        },
+    ]
+
+    rich_path = tmp_path / "rich.train.words.json"
+    sparse_path = tmp_path / "sparse.train.words.json"
+    _write_tokens(rich_path, rich_tokens)
+    _write_tokens(sparse_path, sparse_tokens)
+
+    df, token_rows = get_full_feature_table_and_rows([
+        str(rich_path),
+        str(sparse_path),
+    ], cfg)
+
+    assert len(token_rows) == 2
+    assert {"lemma_bigram", "tag_bigram", "morph_bigram", "dep_bigram", "head_position", "head_link"}.issubset(df.columns)
+
+    rich_row = df.iloc[0]
+    assert rich_row["lemma_bigram"] == "lb:run|fast"
+    assert rich_row["tag_bigram"] == "tb:vbg|rb"
+    assert rich_row["morph_bigram"] == "mb:tense=pres+verbform=part|degree=pos"
+    assert rich_row["dep_bigram"] == "db:advcl|advmod"
+    assert rich_row["head_position"] == "head_pos:next"
+    assert rich_row["head_link"] == "dep_link:token->next"
+
+    sparse_row = df.iloc[1]
+    assert sparse_row["lemma_bigram"] == "lb:none|none"
+    assert sparse_row["tag_bigram"] == "tb:none|none"
+    assert sparse_row["morph_bigram"] == "mb:none|none"
+    assert sparse_row["dep_bigram"] == "db:none|none"
+    assert sparse_row["head_position"] == "head_pos:unknown"
+    assert sparse_row["head_link"] == "dep_link:none"
