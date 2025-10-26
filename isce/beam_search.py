@@ -190,9 +190,13 @@ def _refine_blocks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Tok
     drops below the empirical ``-5.0`` threshold we re-segment a window around
     the problematic cue using a temporary segmenter configured with a wider
     beam.  The function reuses :func:`isce.post_process._block_ranges` so the
-    refinement pass stays aligned with the post-processing utilities.
+    refinement pass stays aligned with the post-processing utilities.  When a
+    window extends beyond the block being refined we keep the trailing token's
+    original break decision so the localized search does not introduce spurious
+    subtitle breaks into the surrounding context.
     """
     refined_tokens = list(tokens)
+    original_breaks = [token.break_type for token in tokens]
     block_ranges = list(_block_ranges(refined_tokens))
 
     for i, (start, end) in enumerate(block_ranges):
@@ -210,8 +214,22 @@ def _refine_blocks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Tok
             refined_breaks = segmenter.run()
 
             for j, br in enumerate(refined_breaks):
-                if window_start + j < len(refined_tokens):
-                    refined_tokens[window_start + j] = replace(refined_tokens[window_start + j], break_type=br)
+                absolute_idx = window_start + j
+                if absolute_idx >= len(refined_tokens):
+                    break
+
+                new_break: BreakType = br
+                is_last_in_window = j == len(refined_breaks) - 1
+                window_has_trailing_context = window_end < len(tokens)
+
+                if is_last_in_window and window_has_trailing_context:
+                    preserved = original_breaks[absolute_idx] if absolute_idx < len(original_breaks) else None
+                    if preserved is not None:
+                        new_break = preserved
+                    else:
+                        new_break = "SB" if absolute_idx == len(refined_tokens) - 1 else "O"
+
+                refined_tokens[absolute_idx] = replace(refined_tokens[absolute_idx], break_type=new_break)
 
     return refined_tokens
 
