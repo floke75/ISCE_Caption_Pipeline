@@ -144,12 +144,16 @@ class Segmenter:
             if not line_tokens:
                 continue
             is_single_word = len(line_tokens) == 1
-            allowed_single = is_single_word and self._is_allowed_single_word(line_tokens[0])
-            if is_single_word and not allowed_single:
-                violations.append("single_word")
+            if not is_single_word:
+                # Multi-word cues may legitimately be short (e.g. "go now").
+                # The short-line guardrail only applies to single-word lines so
+                # we do not over-constrain normal captions.
                 continue
-            if self._count_chars(line_tokens) < min_chars and not allowed_single:
-                violations.append("short_line")
+            allowed_single = self._is_allowed_single_word(line_tokens[0])
+            if not allowed_single:
+                violations.append("single_word")
+                if self._count_chars(line_tokens) < min_chars:
+                    violations.append("short_line")
         return violations
 
     def _is_hard_ok_SB(self, state: PathState, current_idx: int) -> bool:
