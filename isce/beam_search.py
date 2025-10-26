@@ -136,23 +136,27 @@ class Segmenter:
         The current fallback strategy applies manual penalties when we are
         forced to emit a block despite failing soft constraints. Returning the
         violation labels lets the caller scale those penalties proportionally
-        while keeping the core heuristics encapsulated.
+        while keeping the core heuristics encapsulated. Only genuine single-word
+        lines are subject to the short-line guardrail; multi-word cues may be
+        shorter than the ``min_chars_for_single_word_block`` threshold without
+        being treated as violations.
         """
         violations: List[str] = []
-        min_chars = self.cfg.min_chars_for_single_word_block
+        min_chars_single = self.cfg.min_chars_for_single_word_block
         for line_tokens in lines:
             if not line_tokens:
                 continue
-            is_single_word = len(line_tokens) == 1
-            if not is_single_word:
+            if len(line_tokens) != 1:
                 # Multi-word cues may legitimately be short (e.g. "go now").
                 # The short-line guardrail only applies to single-word lines so
                 # we do not over-constrain normal captions.
                 continue
-            allowed_single = self._is_allowed_single_word(line_tokens[0])
+
+            single_word_token = line_tokens[0]
+            allowed_single = self._is_allowed_single_word(single_word_token)
             if not allowed_single:
                 violations.append("single_word")
-                if self._count_chars(line_tokens) < min_chars:
+                if self._count_chars(line_tokens) < min_chars_single:
                     violations.append("short_line")
         return violations
 

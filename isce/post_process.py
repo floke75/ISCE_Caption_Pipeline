@@ -79,7 +79,25 @@ def _make_breaks_with_lb(length: int, lb_index: int | None) -> List[BreakType]:
 
 
 def reflow_tokens(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[Token]:
-    """Apply lightweight refinements to segmented tokens."""
+    """Apply lightweight refinements to segmented tokens.
+
+    ``reflow_tokens`` performs two safe post-processing heuristics:
+
+    #. Merge the current block with the next one when the cue is extremely
+       short or the existing line break produces a lopsided layout. We avoid
+       merging across speaker changes so each speaker retains an explicit
+       subtitle.
+    #. Nudge an existing line break within a block when doing so produces a
+       more balanced pair of lines without harming the scorer's opinion of the
+       cue.
+
+    Args:
+        tokens: The block-segmented tokens produced by the beam search.
+        scorer: A :class:`~isce.scorer.Scorer` instance used to evaluate
+            candidate adjustments.
+        cfg: Parsed :class:`~isce.config.Config` settings. Only the light-weight
+            heuristics from the configuration are required.
+    """
     if not tokens:
         return []
 
@@ -136,7 +154,10 @@ def reflow_tokens(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[
                     and next_token.speaker is not None
                     and boundary_token.speaker != next_token.speaker
                 )
-                if not (boundary_token.speaker_change or speakers_differ):
+                can_merge = not (
+                    boundary_token.speaker_change or speakers_differ
+                )
+                if can_merge:
                     next_breaks = _block_breaks(next_tokens)
                     next_dicts = _tokens_to_dicts(next_tokens)
                     base_score = block_score + scorer.score_block(next_dicts, next_breaks)

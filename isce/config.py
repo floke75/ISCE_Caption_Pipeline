@@ -30,6 +30,7 @@ class Config:
                                  limits for each line of a subtitle block.
         min_chars_for_single_word_block: The minimum character length required for a
                                          block that contains only a single word.
+                                         Multi-word cues are exempt from this guardrail.
         sliders: A dictionary of user-adjustable floating-point values that tune the
                  behavior of the scoring model.
         paths: A dictionary containing the relative paths to model files like weights
