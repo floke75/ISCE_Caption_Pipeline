@@ -214,6 +214,9 @@ class Segmenter:
     allowed_proper_nouns:
         Normalised allowlist of proper nouns that may appear as single-word
         captions without triggering penalties.
+    last_path_score:
+        Cache of the score for the best path returned by :meth:`run`. The value
+        is reused by refinement helpers to avoid recomputing block scores.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -382,17 +385,26 @@ class Segmenter:
     def run(
         self, transition_overrides: Optional[Sequence[Optional[Dict[str, float]]]] = None
     ) -> List[BreakType]:
-        """
-        Executes the main beam search algorithm.
+        """Execute the main beam search algorithm.
 
-        This method iterates through each token in the input sequence. At each
-        step, it expands each hypothesis in the current beam by considering all
-        valid next break types ('O', 'LB', 'SB'). Each new potential path is
-        scored, and the beam is pruned to keep only the top N hypotheses, where
-        N is the beam width.
+        The segmenter iterates through each token in the input sequence. At each
+        step it expands every hypothesis in the current beam by considering all
+        valid next break types (``"O"``, ``"LB"``, ``"SB"``). Each new potential
+        path is scored and the beam is pruned to keep only the top ``N``
+        hypotheses, where ``N`` is the configured beam width. The final list of
+        break decisions is derived from the best-scoring surviving path.
+
+        Args:
+            transition_overrides:
+                Optional sequence of precomputed transition score dictionaries.
+                Each entry is expected to contain *absolute* scores for every
+                outcome at the corresponding token position. When provided the
+                overrides replace the freshly computed transition scores so that
+                bidirectional or refinement passes can reuse cached evaluations
+                without double counting.
 
         Returns:
-            A list of `BreakType` enums representing the best-scoring
+            A list of :class:`BreakType` enums representing the best-scoring
             segmentation path found.
         """
         if not self.tokens:
@@ -658,6 +670,14 @@ def _should_refine_block(
 def _prepare_transition_overrides(
     tokens: Sequence[Token], scorer: Scorer, cfg: Config
 ) -> Optional[List[Optional[Dict[str, float]]]]:
+    """Compute absolute transition scores for the bidirectional refinement pass.
+
+    The forward and backward passes each evaluate the transition scorer across
+    the entire token sequence. The results are blended into a single table of
+    absolute scores so :meth:`Segmenter.run` can replace its freshly computed
+    values instead of adding them, preventing double counting of transition
+    weights when overrides are active.
+    """
     if len(tokens) <= 1:
         return None
 

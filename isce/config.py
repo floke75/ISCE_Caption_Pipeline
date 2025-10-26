@@ -23,25 +23,41 @@ class Config:
     It is typically instantiated by the `load_config` function.
 
     Attributes:
-        beam_width: The number of hypotheses to keep at each step of the beam search.
-        min_block_duration_s: The minimum duration a subtitle block can have, in seconds.
-        max_block_duration_s: The maximum duration a subtitle block can have, in seconds.
-        line_length_constraints: A nested dictionary defining the soft and hard character
-                                 limits for each line of a subtitle block.
-        min_chars_for_single_word_block: The minimum character length required for a
-                                         block that contains only a single word.
-        sliders: A dictionary of user-adjustable floating-point values that tune the
-                 behavior of the scoring model.
-        paths: A dictionary containing the relative paths to model files like weights
-               and constraints.
-        enable_bidirectional_pass: When true, run both forward and reverse beam search
-                                   passes and reconcile their boundaries.
-        lookahead_width: The number of future tokens exposed to the transition scorer.
-                          A value of 0 disables the lookahead heuristics entirely.
-        enable_reflow: Enables a lightweight post-processing pass that can merge or
-                       rebalance awkward subtitle blocks after beam search.
-        allowed_single_word_proper_nouns: Tuple of proper nouns that may appear as
-                       single-word captions without triggering hard rejections.
+        beam_width:
+            The number of hypotheses to keep at each step of the beam search.
+        min_block_duration_s:
+            The minimum duration a subtitle block can have, in seconds.
+        max_block_duration_s:
+            The maximum duration a subtitle block can have, in seconds.
+        line_length_constraints:
+            A nested dictionary defining the soft and hard character limits for
+            each line of a subtitle block (``line1``/``line2``) and aggregate
+            block-level minima.
+        min_chars_for_single_word_block:
+            The minimum character length required for a block that contains only
+            a single word.
+        sliders:
+            A dictionary of user-adjustable floating-point values that tune the
+            behavior of the scoring model, including penalties for short blocks
+            or lines and leniency multipliers.
+        paths:
+            A dictionary containing the relative paths to model files like
+            weights and constraints.
+        enable_bidirectional_pass:
+            When ``True``, run both forward and reverse beam search passes and
+            reconcile their boundaries before scoring transitions.
+        lookahead_width:
+            The number of future tokens exposed to the transition scorer. A
+            value of ``0`` disables the lookahead heuristics entirely.
+        enable_reflow:
+            Enables a lightweight post-processing pass that can merge or
+            rebalance awkward subtitle blocks after beam search.
+        enable_refinement_pass:
+            Enables the local refinement pass that re-explores low scoring
+            blocks with a wider beam to smooth out poor break placement.
+        allowed_single_word_proper_nouns:
+            Tuple of proper nouns that may appear as single-word captions
+            without triggering hard rejections.
     """
     beam_width: int
     min_block_duration_s: float
@@ -61,10 +77,13 @@ def load_config(path: str = "config.yaml") -> Config:
     Loads, merges, and validates configuration files into a single Config object.
 
     This function is the primary entry point for loading all application settings.
-    It reads the base settings from the user--editable `config.yaml` file. It then
+    It reads the base settings from the user-editable `config.yaml` file. It then
     intelligently loads the `constraints.json` file (which is generated during
     model training) and merges its values, prioritizing the learned constraints
-    over the fallback values in the YAML file.
+    over the fallback values in the YAML file. Booleans that toggle the
+    bidirectional refinement pass, the post-segmentation reflow, and the
+    single-block refinement sweep are exposed directly from the YAML file so the
+    beam search can opt in to those behaviors without additional wiring.
 
     Args:
         path: The path to the main `config.yaml` file.

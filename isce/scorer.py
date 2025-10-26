@@ -37,11 +37,20 @@ class Scorer:
         on aggregate features like CPS and line balance.
 
     Attributes:
-        w: A dictionary of learned weights for different features.
-        c: A dictionary of corpus-derived constraints (e.g., ideal CPS range).
-        sl: A dictionary of user-adjustable sliders to tune model behavior.
-        structure_boost: A powerful, non-statistical bonus applied to breaks
-                         that align with strong structural hints.
+        w:
+            A dictionary of learned weights for different features.
+        c:
+            A dictionary of corpus-derived constraints (e.g., ideal CPS range).
+        sl:
+            A dictionary of user-adjustable sliders to tune model behavior,
+            including penalties for short blocks/lines, balance thresholds, and
+            fragment handling heuristics.
+        structure_boost:
+            A powerful, non-statistical bonus applied to breaks that align with
+            strong structural hints.
+        allowed_single_word_proper_nouns:
+            Lower-cased allowlist of proper nouns that can appear as single-word
+            captions without being penalised by the fallback heuristics.
     """
     def __init__(self, weights: Dict, constraints: Dict, sliders: Dict, cfg: Config):
         self.w = weights
@@ -100,6 +109,10 @@ class Scorer:
         Args:
             row: A `TokenRow` object containing the current token and the next
                  token, structured as dictionaries.
+            ctx: Optional transition context describing the in-flight block. When
+                 supplied it enables heuristics that penalise projected orphaned
+                 second lines and other imbalance patterns surfaced during the
+                 refinement passes.
 
         Returns:
             A dictionary mapping each break type ('O', 'LB', 'SB') to its
