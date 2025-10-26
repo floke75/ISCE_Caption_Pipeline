@@ -12,15 +12,16 @@ small windows for low quality cues and invoke post-processing helpers from
 ``isce.post_process``.
 """
 from __future__ import annotations
+import inspect
 from dataclasses import dataclass, replace
 from typing import List
 from heapq import nlargest
 from tqdm import tqdm
 
-from .types import Token, BreakType, TokenRow
+from .types import Token, BreakType, TokenRow, TransitionContext
 from .scorer import Scorer
 from .config import Config
-from .utils import _token_to_row_dict, _compute_transition_scores, _get_lookahead_slice
+from .utils import _build_token_rows
 from .post_process import _block_ranges, reflow_tokens
 
 FALLBACK_SB_PENALTY = 25.0
@@ -66,7 +67,17 @@ class Segmenter:
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
-        self.transition_scores_cache = {}
+        self.lookahead_width = getattr(self.cfg, "lookahead_width", 0)
+        self.short_line_penalty = float(self.scorer.sl.get("single_word_line_penalty", 0.0))
+        allowed_proper_nouns = getattr(self.cfg, "allowed_single_word_proper_nouns", set())
+        self.allowed_proper_nouns = {noun.strip().lower() for noun in allowed_proper_nouns}
+        self._token_rows = _build_token_rows(self.tokens, self.cfg)
+        signature = inspect.signature(self.scorer.score_transition)
+        params = list(signature.parameters.values())
+        self._transition_accepts_ctx = any(
+            param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+            for param in params
+        ) or len(params) >= 2
         self.last_path_score: float | None = None
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
@@ -83,8 +94,55 @@ class Segmenter:
         recent_breaks = state.breaks[state.block_start_idx : current_idx + 1]
         return "LB" not in recent_breaks
 
-    def _is_hard_ok_SB(self, block_start_idx: int, current_idx: int) -> bool:
+    def _count_chars(self, line_tokens: List[Token]) -> int:
+        if not line_tokens:
+            return 0
+        return sum(len(token.w) for token in line_tokens) + max(0, len(line_tokens) - 1)
+
+    def _is_allowed_single_word(self, token: Token) -> bool:
+        if token.pos != "PROPN":
+            return False
+        stripped = token.w.rstrip(".,!?;:\"")
+        return stripped.lower() in self.allowed_proper_nouns
+
+    def _block_profiles(
+        self, state: PathState, block_start_idx: int, end_idx: int
+    ) -> tuple[List[Token], List[BreakType], List[List[Token]]]:
+        """Return tokens, break labels, and per-line groupings for a block."""
+
+        block_tokens = self.tokens[block_start_idx : end_idx + 1]
+        block_breaks = list(state.breaks[block_start_idx:end_idx]) + ["SB"]
+        lines: List[List[Token]] = []
+        current_line: List[Token] = []
+        for idx, token in enumerate(block_tokens):
+            current_line.append(token)
+            if block_breaks[idx] in ("LB", "SB"):
+                lines.append(list(current_line))
+                current_line = []
+        if current_line:
+            lines.append(list(current_line))
+        return block_tokens, block_breaks, lines
+
+    def _line_violations(self, lines: List[List[Token]]) -> List[str]:
+        """Surface soft violations found within the candidate block lines."""
+
+        violations: List[str] = []
+        min_chars = self.cfg.min_chars_for_single_word_block
+        for line_tokens in lines:
+            if not line_tokens:
+                continue
+            is_single_word = len(line_tokens) == 1
+            allowed_single = is_single_word and self._is_allowed_single_word(line_tokens[0])
+            if is_single_word and not allowed_single:
+                violations.append("single_word")
+                continue
+            if self._count_chars(line_tokens) < min_chars and not allowed_single:
+                violations.append("short_line")
+        return violations
+
+    def _is_hard_ok_SB(self, state: PathState, current_idx: int) -> bool:
         """Checks if a block break (`SB`) violates hard constraints."""
+        block_start_idx = state.block_start_idx
         start_token = self.tokens[block_start_idx]
         end_token = self.tokens[current_idx]
         chronological_start = min(start_token.start, end_token.start)
@@ -92,18 +150,58 @@ class Segmenter:
         duration = max(1e-6, chronological_end - chronological_start)
         if duration < self.cfg.min_block_duration_s:
             return False
-        num_words_in_block = (current_idx - block_start_idx) + 1
-        if num_words_in_block == 1:
-            word = start_token.w.rstrip('.,?!;:"')
-            if len(word) < self.cfg.min_chars_for_single_word_block:
-                normalized = word.lower()
-                is_allowed_propn = (
-                    start_token.pos == "PROPN"
-                    and normalized in self.cfg.allowed_single_word_proper_nouns
-                )
-                if not is_allowed_propn:
-                    return False
+        _, _, lines = self._block_profiles(state, block_start_idx, current_idx)
+        if self._line_violations(lines):
+            return False
         return True
+
+    def _estimate_second_line(self, current_idx: int) -> tuple[int, int]:
+        """Estimate how much content a hypothetical second line could hold."""
+
+        if current_idx + 1 >= len(self.tokens):
+            return 0, 0
+
+        length = 0
+        words = 0
+        soft_target = self.cfg.line_length_constraints.get("line2", {}).get("soft_target", 37)
+
+        for j in range(current_idx + 1, len(self.tokens)):
+            token = self.tokens[j]
+            if words > 0:
+                length += 1
+            length += len(token.w)
+            words += 1
+
+            if words >= 2:
+                break
+            if token.is_sentence_final or token.speaker_change or token.starts_with_dialogue_dash:
+                break
+            if length >= soft_target:
+                break
+
+        return length, words
+
+    def _build_transition_context(self, state: PathState, current_idx: int) -> TransitionContext:
+        """Construct the context describing the partially written block."""
+
+        block_tokens = tuple(dict(t.__dict__) for t in self.tokens[state.block_start_idx : current_idx + 1])
+        projected_chars: int | None = None
+        projected_words: int | None = None
+        if state.line_num == 1 and current_idx + 1 < len(self.tokens):
+            projected_chars, projected_words = self._estimate_second_line(current_idx)
+
+        return TransitionContext(
+            pending_tokens=block_tokens,
+            current_line_num=state.line_num,
+            current_line_len=state.line_len,
+            projected_second_line_chars=projected_chars,
+            projected_second_line_words=projected_words,
+        )
+
+    def _score_transition(self, row: TokenRow, context: TransitionContext) -> dict[str, float]:
+        if self._transition_accepts_ctx:
+            return self.scorer.score_transition(row, context)
+        return self.scorer.score_transition(row)
 
     def run(self) -> List[BreakType]:
         """
@@ -120,7 +218,7 @@ class Segmenter:
         if not self.tokens:
             return []
 
-        self.transition_scores_cache = _compute_transition_scores(self.tokens, self.scorer, self.cfg)
+        self._token_rows = _build_token_rows(self.tokens, self.cfg)
 
         initial_state = PathState(score=0.0, line_num=1, line_len=len(self.tokens[0].w), block_start_idx=0, breaks=())
         self.beam = [initial_state]
@@ -129,33 +227,43 @@ class Segmenter:
             candidates: List[PathState] = []
             is_last_token = (i == len(self.tokens) - 1)
             nxt = self.tokens[i + 1] if not is_last_token else None
-            transition_scores = self.transition_scores_cache[i]
+            row = self._token_rows[i]
 
             for state in self.beam:
+                context = self._build_transition_context(state, i)
+                transition_scores = self._score_transition(row, context)
+
                 # Candidate: 'O' (No Break)
-                if nxt:
-                    if self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
-                        new_line_len = state.line_len + 1 + len(nxt.w)
-                        limit_key = f"line{state.line_num}"
-                        constraints = self.cfg.line_length_constraints.get(limit_key, {})
-                        soft_target = constraints.get("soft_target", 37)
-                        soft_min = constraints.get("soft_min", self.cfg.line_length_soft_min)
-                        over_scale = constraints.get(
-                            "soft_over_penalty_scale", self.cfg.line_length_overflow_scale
+                if nxt and self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
+                    new_line_len = state.line_len + 1 + len(nxt.w)
+                    limit_key = f"line{state.line_num}"
+                    constraints = self.cfg.line_length_constraints.get(limit_key, {})
+                    soft_target = constraints.get("soft_target", 37)
+                    soft_min = constraints.get("soft_min", self.cfg.line_length_soft_min)
+                    over_scale = constraints.get(
+                        "soft_over_penalty_scale", self.cfg.line_length_overflow_scale
+                    )
+                    under_scale = constraints.get(
+                        "soft_under_penalty_scale", self.cfg.line_length_underflow_scale
+                    )
+                    leniency = max(1e-6, self.line_len_leniency)
+                    line_len_penalty = 0.0
+                    if new_line_len > soft_target:
+                        overage = new_line_len - soft_target
+                        line_len_penalty += ((overage ** 2) * over_scale) / leniency
+                    if soft_min and new_line_len < soft_min:
+                        shortfall = soft_min - new_line_len
+                        line_len_penalty += ((shortfall ** 2) * under_scale) / leniency
+                    score = state.score + transition_scores["O"] - line_len_penalty
+                    candidates.append(
+                        PathState(
+                            score=score,
+                            line_num=state.line_num,
+                            line_len=new_line_len,
+                            block_start_idx=state.block_start_idx,
+                            breaks=state.breaks + ("O",),
                         )
-                        under_scale = constraints.get(
-                            "soft_under_penalty_scale", self.cfg.line_length_underflow_scale
-                        )
-                        leniency = max(1e-6, self.line_len_leniency)
-                        line_len_penalty = 0.0
-                        if new_line_len > soft_target:
-                            overage = new_line_len - soft_target
-                            line_len_penalty += ((overage ** 2) * over_scale) / leniency
-                        if soft_min and new_line_len < soft_min:
-                            shortfall = soft_min - new_line_len
-                            line_len_penalty += ((shortfall ** 2) * under_scale) / leniency
-                        score = state.score + transition_scores["O"] - line_len_penalty
-                        candidates.append(PathState(score=score, line_num=state.line_num, line_len=new_line_len, block_start_idx=state.block_start_idx, breaks=state.breaks + ("O",)))
+                    )
 
                 # Candidate: 'LB' (Line Break)
                 if nxt and self._is_hard_ok_LB(state, i):
@@ -165,25 +273,49 @@ class Segmenter:
                     elif i + 1 < len(self.tokens) and self.tokens[i + 1].is_sentence_final:
                         orphan_penalty = 5.0
                     score = state.score + transition_scores["LB"] - (orphan_penalty * self.orphan_leniency)
-                    candidates.append(PathState(score=score, line_num=2, line_len=len(nxt.w), block_start_idx=state.block_start_idx, breaks=state.breaks + ("LB",)))
+                    candidates.append(
+                        PathState(
+                            score=score,
+                            line_num=2,
+                            line_len=len(nxt.w),
+                            block_start_idx=state.block_start_idx,
+                            breaks=state.breaks + ("LB",),
+                        )
+                    )
 
                 # Candidate: 'SB' (Block Break)
-                if self._is_hard_ok_SB(state.block_start_idx, i):
-                    block_token_dicts = [dict(t.__dict__) for t in self.tokens[state.block_start_idx : i + 1]]
-                    block_breaks = list(state.breaks[state.block_start_idx:]) + ["SB"]
+                if self._is_hard_ok_SB(state, i):
+                    block_tokens, block_breaks, _ = self._block_profiles(state, state.block_start_idx, i)
+                    block_token_dicts = [dict(t.__dict__) for t in block_tokens]
                     block_score = self.scorer.score_block(block_token_dicts, block_breaks)
                     score = state.score + transition_scores["SB"] + block_score
                     next_word_len = len(nxt.w) if nxt else 0
-                    candidates.append(PathState(score=score, line_num=1, line_len=next_word_len, block_start_idx=i + 1, breaks=state.breaks + ("SB",)))
+                    candidates.append(
+                        PathState(
+                            score=score,
+                            line_num=1,
+                            line_len=next_word_len,
+                            block_start_idx=i + 1,
+                            breaks=state.breaks + ("SB",),
+                        )
+                    )
 
             if not candidates and self.beam:
                 fallback_state = self.beam[0]
-                block_tokens = [dict(t.__dict__) for t in self.tokens[fallback_state.block_start_idx : i + 1]]
-                block_breaks = list(fallback_state.breaks[fallback_state.block_start_idx:]) + ["SB"]
-                block_score = self.scorer.score_block(block_tokens, block_breaks) if block_tokens else 0.0
+                fallback_context = self._build_transition_context(fallback_state, i)
+                fallback_scores = self._score_transition(row, fallback_context)
+                block_tokens, block_breaks, lines = self._block_profiles(
+                    fallback_state, fallback_state.block_start_idx, i
+                )
+                block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+                block_score = self.scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
                 next_word_len = len(nxt.w) if nxt else 0
+                violations = self._line_violations(lines)
+                if violations:
+                    per_violation_penalty = self.short_line_penalty or self.fallback_sb_penalty
+                    block_score -= per_violation_penalty * len(violations)
                 fallback_candidate = PathState(
-                    score=fallback_state.score + transition_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
+                    score=fallback_state.score + fallback_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
                     line_num=1,
                     line_len=next_word_len,
                     block_start_idx=i + 1,
@@ -347,27 +479,47 @@ def _score_segmentation(tokens: List[Token], breaks: List[BreakType], scorer: Sc
     mirrors the scoring performed during beam search by summing transition
     scores for every decision and block scores whenever an ``SB`` is emitted.
     """
+    if not tokens:
+        return 0.0
+
     total = 0.0
-    block_tokens: List[Token] = []
-    block_breaks: List[BreakType] = []
+    segmenter = Segmenter(tokens, scorer, cfg)
+    current_breaks: List[BreakType] = []
+    line_num = 1
+    line_len = len(tokens[0].w)
+    block_start_idx = 0
 
-    for idx, (token, br) in enumerate(zip(tokens, breaks)):
-        block_tokens.append(replace(token, break_type=br))
-        block_breaks.append(br)
-
-        nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
-        row = TokenRow(
-            token=_token_to_row_dict(token),
-            nxt=_token_to_row_dict(nxt) if nxt else None,
-            lookahead=_get_lookahead_slice(tokens, idx + 1, cfg.lookahead_width),
+    for idx, br in enumerate(breaks):
+        row = segmenter._token_rows[idx]
+        state = PathState(
+            score=0.0,
+            line_num=line_num,
+            line_len=line_len,
+            block_start_idx=block_start_idx,
+            breaks=tuple(current_breaks),
         )
-        transition_scores = scorer.score_transition(row)
+        context = segmenter._build_transition_context(state, idx)
+        transition_scores = segmenter._score_transition(row, context)
         total += transition_scores.get(br, 0.0)
 
         if br == "SB":
-            total += scorer.score_block([t.__dict__ for t in block_tokens], block_breaks)
-            block_tokens = []
-            block_breaks = []
+            block_tokens, block_breaks, _ = segmenter._block_profiles(state, block_start_idx, idx)
+            block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+            total += scorer.score_block(block_token_dicts, block_breaks)
+
+        current_breaks.append(br)
+
+        nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
+        if br == "O":
+            if nxt:
+                line_len = line_len + 1 + len(nxt.w)
+        elif br == "LB":
+            line_num = 2
+            line_len = len(nxt.w) if nxt else 0
+        elif br == "SB":
+            line_num = 1
+            line_len = len(nxt.w) if nxt else 0
+            block_start_idx = idx + 1
 
     return total
 

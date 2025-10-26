@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import Any, Literal, Optional
 
-__all__ = ["BreakType", "Token", "TokenRow", "Engineered"]
+__all__ = ["BreakType", "Token", "TokenRow", "TransitionContext", "Engineered"]
 
 BreakType = Literal["O", "LB", "SB"]
 
@@ -104,17 +104,28 @@ class Token:
 
 @dataclass(frozen=True)
 class TokenRow:
-    """A lightweight container describing a token boundary."""
+    """A lightweight container describing the local scoring context."""
 
     token: dict[str, Any]
     nxt: Optional[dict[str, Any]]
     feats: Any = None
-    lookahead: Optional[list[dict[str, Any]]] = None
+    lookahead: Optional[tuple[dict[str, Any], ...]] = None
 
     @property
     def has_lookahead(self) -> bool:
         """Returns True if the row has lookahead context."""
-        return self.lookahead is not None and len(self.lookahead) > 0
+        return bool(self.lookahead)
+
+
+@dataclass(frozen=True)
+class TransitionContext:
+    """Describes the partially written block when scoring a transition."""
+
+    pending_tokens: tuple[dict[str, Any], ...]
+    current_line_num: int
+    current_line_len: int
+    projected_second_line_chars: Optional[int] = None
+    projected_second_line_words: Optional[int] = None
 
 
 @dataclass(frozen=True)

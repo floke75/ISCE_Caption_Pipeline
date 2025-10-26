@@ -72,7 +72,7 @@ class Scorer:
         except (KeyError, AttributeError):
             return 0.0
 
-    def score_transition(self, row: TokenRow) -> Dict[str, float]:
+    def score_transition(self, row: TokenRow, ctx: TransitionContext | None = None) -> Dict[str, float]:
         """
         Calculates the scores for each possible break type after the current token.
 
@@ -84,6 +84,9 @@ class Scorer:
         Args:
             row: A `TokenRow` object containing the current token and the next
                  token, structured as dictionaries.
+            ctx: Optional :class:`TransitionContext` describing the partially
+                 written block so heuristics can reason about downstream line
+                 composition.
 
         Returns:
             A dictionary mapping each break type ('O', 'LB', 'SB') to its
@@ -149,8 +152,17 @@ class Scorer:
             scores["SB"] += self.structure_boost
             scores["O"] -= self.structure_boost
 
-        if row.has_lookahead:
-            self._apply_lookahead_heuristics(scores, row)
+        self._apply_lookahead_heuristics(scores, row)
+
+        if ctx and ctx.current_line_num == 1:
+            projected_words = ctx.projected_second_line_words
+            projected_chars = ctx.projected_second_line_chars or 0
+            if projected_words is not None and projected_words <= 1:
+                threshold = float(self.sl.get("fragment_char_threshold", 8.0))
+                penalty_strength = float(self.sl.get("fragment_penalty", 6.0))
+                deficit = max(0.0, threshold - projected_chars)
+                severity = 1.0 if projected_words == 0 else deficit / max(threshold, 1e-6)
+                scores["LB"] -= penalty_strength * severity
 
         return scores
 
@@ -300,18 +312,46 @@ class Scorer:
         return score
 
     def _apply_lookahead_heuristics(self, scores: Dict[str, float], row: TokenRow) -> None:
-        """
-        Applies heuristic penalties based on future token context.
-        """
-        if not row.lookahead:
+        """Apply forward-looking adjustments when future context is available."""
+
+        lookahead_tokens = list(row.lookahead) if row.lookahead else []
+        if not lookahead_tokens:
             return
 
-        # Penalize breaks that would create a very short next line
-        if len(row.lookahead) > 0:
-            next_line_len = sum(len(t['w']) for t in row.lookahead) + len(row.lookahead) - 1
-            if next_line_len < self.cfg.min_line_length_for_break:
-                scores["LB"] -= 5.0
+        speaker_idx = next((idx for idx, future in enumerate(lookahead_tokens) if future.get("speaker_change")), None)
+        if speaker_idx is not None:
+            distance = speaker_idx + 1
+            structural_bonus = self.structure_boost / max(1, distance + 1)
+            scores["SB"] += structural_bonus
+            scores["LB"] += structural_bonus * 0.5
+            scores["O"] -= structural_bonus
 
-        # Penalize breaks where the last word of the line is very short
-        if len(row.token['w']) < self.cfg.min_last_word_len_for_break:
+        comma_idx = next((idx for idx, future in enumerate(lookahead_tokens) if punct_class(future) == "p:comma"), None)
+        if comma_idx is not None:
+            closeness = comma_idx + 1
+            flow_bonus = self.sl.get("flow", 1.0) * (0.6 / closeness)
+            scores["LB"] += flow_bonus
+            scores["O"] -= flow_bonus * 0.5
+
+        final_idx = next((idx for idx, future in enumerate(lookahead_tokens) if punct_class(future) == "p:final"), None)
+        if final_idx is not None:
+            closeness = final_idx + 1
+            flow_bonus = self.sl.get("flow", 1.0) * (0.8 / closeness)
+            scores["SB"] += flow_bonus
+            scores["O"] -= flow_bonus * 0.5
+
+        upcoming_pause = max(
+            (future.get("pause_before_ms") or future.get("pause_after_ms") or 0)
+            for future in lookahead_tokens
+        )
+        if upcoming_pause >= 500:
+            pause_bonus = self.sl.get("flow", 1.0) * 0.5
+            scores["SB"] += pause_bonus
+            scores["LB"] += pause_bonus * 0.5
+
+        next_line_len = sum(len(tok.get("w", "")) for tok in lookahead_tokens) + len(lookahead_tokens) - 1
+        if next_line_len < self.cfg.min_line_length_for_break:
+            scores["LB"] -= 5.0
+
+        if len(row.token.get("w", "")) < self.cfg.min_last_word_len_for_break:
             scores["LB"] -= 5.0
