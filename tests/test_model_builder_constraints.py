@@ -13,8 +13,21 @@ def make_config() -> Config:
         min_block_duration_s=1.0,
         max_block_duration_s=8.0,
         line_length_constraints={
-            "line1": {"soft_target": 37, "hard_limit": 42},
-            "line2": {"soft_target": 37, "hard_limit": 42},
+            "line1": {
+                "soft_target": 37,
+                "hard_limit": 42,
+                "soft_min": 0,
+                "soft_over_penalty_scale": 0.1,
+                "soft_under_penalty_scale": 0.05,
+            },
+            "line2": {
+                "soft_target": 37,
+                "hard_limit": 42,
+                "soft_min": 0,
+                "soft_over_penalty_scale": 0.1,
+                "soft_under_penalty_scale": 0.05,
+            },
+            "block": {"min_total_chars": 0, "min_last_line_chars": 0},
         },
         min_chars_for_single_word_block=10,
         sliders={},
@@ -29,6 +42,15 @@ def make_config() -> Config:
         enable_refinement_pass=False,
         min_block_length_char=1,
         min_line_length_char=1,
+        line_length_soft_min=0,
+        line_length_overflow_scale=0.1,
+        line_length_underflow_scale=0.05,
+        min_total_chars_per_block=0,
+        min_last_line_chars=0,
+        short_block_penalty=0.0,
+        short_line_penalty=0.0,
+        extreme_balance_threshold=3.0,
+        allowed_single_word_proper_nouns=set(),
     )
 
 

@@ -92,9 +92,15 @@ class Segmenter:
             return False
         num_words_in_block = (current_idx - block_start_idx) + 1
         if num_words_in_block == 1:
-            word = start_token.w.rstrip('.,?!')
-            if len(word) < self.cfg.min_chars_for_single_word_block and start_token.pos != "PROPN":
-                return False
+            word = start_token.w.rstrip('.,?!;:"')
+            if len(word) < self.cfg.min_chars_for_single_word_block:
+                normalized = word.lower()
+                is_allowed_propn = (
+                    start_token.pos == "PROPN"
+                    and normalized in self.cfg.allowed_single_word_proper_nouns
+                )
+                if not is_allowed_propn:
+                    return False
         return True
 
     def run(self) -> List[BreakType]:
@@ -129,11 +135,23 @@ class Segmenter:
                     if self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
                         new_line_len = state.line_len + 1 + len(nxt.w)
                         limit_key = f"line{state.line_num}"
-                        soft_target = self.cfg.line_length_constraints.get(limit_key, {}).get("soft_target", 37)
+                        constraints = self.cfg.line_length_constraints.get(limit_key, {})
+                        soft_target = constraints.get("soft_target", 37)
+                        soft_min = constraints.get("soft_min", self.cfg.line_length_soft_min)
+                        over_scale = constraints.get(
+                            "soft_over_penalty_scale", self.cfg.line_length_overflow_scale
+                        )
+                        under_scale = constraints.get(
+                            "soft_under_penalty_scale", self.cfg.line_length_underflow_scale
+                        )
+                        leniency = max(1e-6, self.line_len_leniency)
                         line_len_penalty = 0.0
                         if new_line_len > soft_target:
                             overage = new_line_len - soft_target
-                            line_len_penalty = ((overage ** 2) * 0.1) / self.line_len_leniency
+                            line_len_penalty += ((overage ** 2) * over_scale) / leniency
+                        if soft_min and new_line_len < soft_min:
+                            shortfall = soft_min - new_line_len
+                            line_len_penalty += ((shortfall ** 2) * under_scale) / leniency
                         score = state.score + transition_scores["O"] - line_len_penalty
                         candidates.append(PathState(score=score, line_num=state.line_num, line_len=new_line_len, block_start_idx=state.block_start_idx, breaks=state.breaks + ("O",)))
 

@@ -27,7 +27,8 @@ class Config:
         min_block_duration_s: The minimum duration a subtitle block can have, in seconds.
         max_block_duration_s: The maximum duration a subtitle block can have, in seconds.
         line_length_constraints: A nested dictionary defining the soft and hard character
-                                 limits for each line of a subtitle block.
+                                 limits for each line of a subtitle block, including
+                                 soft minimum targets and penalty scales.
         min_chars_for_single_word_block: The minimum character length required for a
                                          block that contains only a single word.
         sliders: A dictionary of user-adjustable floating-point values that tune the
@@ -42,8 +43,25 @@ class Config:
         single_word_line_penalty: Penalty for a line with a single word.
         extreme_balance_penalty: Penalty for extremely unbalanced lines.
         enable_refinement_pass: If True, enables a refinement pass for low-quality cues.
-        min_block_length_char: Minimum character length for a block.
-        min_line_length_char: Minimum character length for a line.
+        min_block_length_char: Minimum character length for a block (legacy fallback when
+                               short block penalties are disabled).
+        min_line_length_char: Minimum character length for a line (legacy fallback when
+                              short line penalties are disabled).
+        line_length_soft_min: Preferred minimum character count for each line before
+                              underflow penalties are applied.
+        line_length_overflow_scale: Quadratic penalty scale applied when a line exceeds
+                                    the soft target.
+        line_length_underflow_scale: Quadratic penalty scale applied when a line falls
+                                     short of the soft minimum.
+        min_total_chars_per_block: Preferred minimum character count for a block when
+                                   applying the short block penalty slider.
+        min_last_line_chars: Preferred minimum character count for the final line.
+        short_block_penalty: Penalty multiplier for under-filled blocks.
+        short_line_penalty: Penalty multiplier for under-filled final lines.
+        extreme_balance_threshold: Ratio threshold where the extreme balance penalty
+                                   begins to escalate.
+        allowed_single_word_proper_nouns: Lower-cased set of proper nouns that are
+                                          exempt from single-word penalties.
     """
     beam_width: int
     min_block_duration_s: float
@@ -62,6 +80,15 @@ class Config:
     enable_refinement_pass: bool
     min_block_length_char: int
     min_line_length_char: int
+    line_length_soft_min: int
+    line_length_overflow_scale: float
+    line_length_underflow_scale: float
+    min_total_chars_per_block: int
+    min_last_line_chars: int
+    short_block_penalty: float
+    short_line_penalty: float
+    extreme_balance_threshold: float
+    allowed_single_word_proper_nouns: set[str]
 
 def load_config(path: str = "config.yaml") -> Config:
     """
@@ -99,6 +126,13 @@ def load_config(path: str = "config.yaml") -> Config:
     constraints_yaml = y.get("constraints", {})
     line1_soft = int(constraints_yaml.get("line_length_soft_target", 37))
     line1_hard = int(constraints_yaml.get("line_length_hard_limit", 42))
+    soft_min = int(constraints_yaml.get("line_length_soft_min", 0))
+    over_scale = float(constraints_yaml.get("line_length_overflow_scale", 0.1))
+    under_scale = float(constraints_yaml.get("line_length_underflow_scale", 0.05))
+    min_total_chars_per_block = int(constraints_yaml.get("min_total_chars_per_block", 0))
+    min_last_line_chars = int(constraints_yaml.get("min_last_line_chars", 0))
+
+    sliders_yaml = y.get("sliders", {})
     
     # Attempt to load the learned constraints.json file
     constraints_json = {}
@@ -111,25 +145,58 @@ def load_config(path: str = "config.yaml") -> Config:
         else:
             print(f"Warning: Could not load constraints file from {full_constraints_path}. Using fallbacks from config.yaml.")
 
+    line_defaults = {
+        "soft_target": line1_soft,
+        "hard_limit": line1_hard,
+        "soft_min": soft_min,
+        "soft_over_penalty_scale": over_scale,
+        "soft_under_penalty_scale": under_scale,
+    }
+    line1_constraints = dict(line_defaults)
+    line1_constraints.update(constraints_json.get("line1", {}))
+    line2_constraints = dict(line_defaults)
+    line2_constraints.update(constraints_json.get("line2", {}))
+    block_constraints = {
+        "min_total_chars": min_total_chars_per_block,
+        "min_last_line_chars": min_last_line_chars,
+    }
+    block_constraints.update(constraints_json.get("block", {}))
+
+    allowed_single_words = {
+        str(item).strip().lower()
+        for item in y.get("allowed_single_word_proper_nouns", [])
+        if str(item).strip()
+    }
+
     return Config(
         beam_width=int(y.get("beam_width", 7)),
         min_block_duration_s=float(constraints_json.get("min_block_duration_s", constraints_yaml.get("min_block_duration_s", 1.0))),
         max_block_duration_s=float(constraints_json.get("max_block_duration_s", constraints_yaml.get("max_block_duration_s", 8.0))),
         line_length_constraints={
-            "line1": constraints_json.get("line1", {"soft_target": line1_soft, "hard_limit": line1_hard}),
-            "line2": constraints_json.get("line2", {"soft_target": line1_soft, "hard_limit": line1_hard})
+            "line1": line1_constraints,
+            "line2": line2_constraints,
+            "block": block_constraints,
         },
         min_chars_for_single_word_block=int(constraints_yaml.get("min_chars_for_single_word_block", 10)),
-        sliders=dict(y.get("sliders", {})),
+        sliders=dict(sliders_yaml),
         paths=dict(y.get("paths", {})),
         enable_bidirectional_pass=bool(y.get("enable_bidirectional_pass", False)),
         lookahead_width=int(y.get("lookahead_width", 0)),
         enable_reflow=bool(y.get("enable_reflow", False)),
         min_line_length_for_break=int(constraints_yaml.get("min_line_length_for_break", 15)),
         min_last_word_len_for_break=int(constraints_yaml.get("min_last_word_len_for_break", 5)),
-        single_word_line_penalty=float(y.get("sliders", {}).get("single_word_line_penalty", 10.0)),
-        extreme_balance_penalty=float(y.get("sliders", {}).get("extreme_balance_penalty", 20.0)),
+        single_word_line_penalty=float(sliders_yaml.get("single_word_line_penalty", 10.0)),
+        extreme_balance_penalty=float(sliders_yaml.get("extreme_balance_penalty", 20.0)),
         enable_refinement_pass=bool(y.get("enable_refinement_pass", False)),
         min_block_length_char=int(constraints_yaml.get("min_block_length_char", 10)),
         min_line_length_char=int(constraints_yaml.get("min_line_length_char", 5)),
+        line_length_soft_min=soft_min,
+        line_length_overflow_scale=over_scale,
+        line_length_underflow_scale=under_scale,
+        min_total_chars_per_block=min_total_chars_per_block,
+        min_last_line_chars=min_last_line_chars,
+        short_block_penalty=float(sliders_yaml.get("short_block_penalty", 0.0)),
+        short_line_penalty=float(sliders_yaml.get("short_line_penalty", 0.0)),
+        extreme_balance_threshold=float(sliders_yaml.get("extreme_balance_threshold", 2.5)),
+        allowed_single_word_proper_nouns=allowed_single_words,
     )

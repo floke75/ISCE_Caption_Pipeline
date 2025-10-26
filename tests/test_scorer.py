@@ -8,14 +8,27 @@ def approx_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
     return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
 
-def _make_cfg() -> Config:
-    return Config(
+def _make_cfg(**overrides) -> Config:
+    cfg = Config(
         beam_width=5,
         min_block_duration_s=1.0,
         max_block_duration_s=8.0,
         line_length_constraints={
-            "line1": {"soft_target": 37, "hard_limit": 42},
-            "line2": {"soft_target": 37, "hard_limit": 42},
+            "line1": {
+                "soft_target": 37,
+                "hard_limit": 42,
+                "soft_min": 0,
+                "soft_over_penalty_scale": 0.1,
+                "soft_under_penalty_scale": 0.05,
+            },
+            "line2": {
+                "soft_target": 37,
+                "hard_limit": 42,
+                "soft_min": 0,
+                "soft_over_penalty_scale": 0.1,
+                "soft_under_penalty_scale": 0.05,
+            },
+            "block": {"min_total_chars": 0, "min_last_line_chars": 0},
         },
         min_chars_for_single_word_block=10,
         sliders={},
@@ -30,7 +43,36 @@ def _make_cfg() -> Config:
         enable_refinement_pass=False,
         min_block_length_char=1,
         min_line_length_char=1,
+        line_length_soft_min=0,
+        line_length_overflow_scale=0.1,
+        line_length_underflow_scale=0.05,
+        min_total_chars_per_block=0,
+        min_last_line_chars=0,
+        short_block_penalty=0.0,
+        short_line_penalty=0.0,
+        extreme_balance_threshold=3.0,
+        allowed_single_word_proper_nouns=set(),
     )
+
+    for key, value in overrides.items():
+        setattr(cfg, key, value)
+
+    return cfg
+
+
+def _make_scorer(cfg: Config | None = None, sliders: dict | None = None) -> Scorer:
+    cfg = cfg or _make_cfg()
+    base_constraints = {
+        "ideal_cps_iqr": [8.0, 16.0],
+        "ideal_cps_median": 12.0,
+        "ideal_balance_iqr": [0.8, 1.2],
+        "min_block_duration_s": 0.5,
+        "max_block_duration_s": 5.0,
+    }
+    effective_sliders = dict(cfg.sliders)
+    if sliders:
+        effective_sliders.update(sliders)
+    return Scorer({}, base_constraints, effective_sliders, cfg)
 
 
 def test_score_transition_applies_weights_and_structure_boost():
@@ -91,15 +133,8 @@ def test_score_transition_applies_weights_and_structure_boost():
 
 
 def test_score_block_balances_density_and_duration():
-    constraints = {
-        "ideal_cps_iqr": [8.0, 16.0],
-        "ideal_cps_median": 12.0,
-        "ideal_balance_iqr": [0.8, 1.2],
-        "min_block_duration_s": 0.5,
-        "max_block_duration_s": 5.0,
-    }
-
-    scorer = Scorer({}, constraints, {}, _make_cfg())
+    cfg = _make_cfg()
+    scorer = _make_scorer(cfg)
 
     block_tokens = [
         {"w": "Hello", "start": 0.0, "end": 0.5, "pause_after_ms": 100},
@@ -111,3 +146,66 @@ def test_score_block_balances_density_and_duration():
     score = scorer.score_block(block_tokens, block_breaks)
 
     assert approx_equal(score, 0.5)
+
+
+def test_single_word_penalty_respects_whitelist():
+    cfg = _make_cfg(
+        single_word_line_penalty=5.0,
+        allowed_single_word_proper_nouns={"nasa"},
+    )
+    baseline = _make_scorer(cfg).score_block(
+        [{"w": "NASA", "start": 0.0, "end": 0.5, "pos": "PROPN"}],
+        ["SB"],
+    )
+
+    score = _make_scorer(cfg).score_block(
+        [{"w": "NASA", "start": 0.0, "end": 0.5, "pos": "PROPN"}],
+        ["SB"],
+    )
+
+    assert approx_equal(score, baseline)
+
+    penalized = _make_scorer(cfg).score_block(
+        [{"w": "Hi", "start": 0.0, "end": 0.5, "pos": "INTJ"}],
+        ["SB"],
+    )
+
+    assert penalized < baseline
+
+
+def test_short_block_penalty_applies_for_nonfinal_block():
+    cfg = _make_cfg(short_block_penalty=2.0, min_total_chars_per_block=12)
+    scorer = _make_scorer(cfg, {"short_block_penalty": 2.0})
+
+    nonfinal_tokens = [
+        {"w": "Hi", "start": 0.0, "end": 0.3, "pause_after_ms": 0, "is_sentence_final": False},
+        {"w": "there", "start": 0.3, "end": 0.6, "pause_after_ms": 0, "is_sentence_final": False},
+    ]
+    block_breaks = ["O", "SB"]
+
+    nonfinal_score = scorer.score_block(nonfinal_tokens, block_breaks)
+
+    sentence_final_tokens = [
+        {"w": "Hi", "start": 0.0, "end": 0.3, "pause_after_ms": 0, "is_sentence_final": False},
+        {"w": "there", "start": 0.3, "end": 0.6, "pause_after_ms": 0, "is_sentence_final": True},
+    ]
+
+    final_score = scorer.score_block(sentence_final_tokens, block_breaks)
+
+    assert nonfinal_score < final_score
+
+
+def test_short_last_line_penalty_triggers():
+    cfg = _make_cfg(short_line_penalty=1.5, min_last_line_chars=6)
+    scorer = _make_scorer(cfg, {"short_line_penalty": 1.5})
+
+    block_tokens = [
+        {"w": "This", "start": 0.0, "end": 0.3, "pause_after_ms": 0},
+        {"w": "is", "start": 0.3, "end": 0.5, "pause_after_ms": 0},
+        {"w": "fine", "start": 0.5, "end": 0.8, "pause_after_ms": 0},
+    ]
+    block_breaks = ["O", "LB", "SB"]
+
+    score = scorer.score_block(block_tokens, block_breaks)
+
+    assert score < 0.0

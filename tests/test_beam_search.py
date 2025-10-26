@@ -48,6 +48,57 @@ def make_token(word: str, start: float) -> Token:
     return Token(w=word, start=start, end=start + 0.2, speaker="A")
 
 
+def make_cfg(**overrides) -> Config:
+    base_constraints = {
+        "line1": {
+            "soft_target": 37,
+            "hard_limit": 42,
+            "soft_min": 0,
+            "soft_over_penalty_scale": 0.1,
+            "soft_under_penalty_scale": 0.05,
+        },
+        "line2": {
+            "soft_target": 37,
+            "hard_limit": 42,
+            "soft_min": 0,
+            "soft_over_penalty_scale": 0.1,
+            "soft_under_penalty_scale": 0.05,
+        },
+        "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+    }
+
+    cfg_kwargs = dict(
+        beam_width=1,
+        min_block_duration_s=1.0,
+        max_block_duration_s=8.0,
+        line_length_constraints=base_constraints,
+        min_chars_for_single_word_block=1,
+        sliders={},
+        paths={},
+        enable_bidirectional_pass=False,
+        lookahead_width=0,
+        enable_reflow=False,
+        min_line_length_for_break=1,
+        min_last_word_len_for_break=1,
+        single_word_line_penalty=0.0,
+        extreme_balance_penalty=0.0,
+        enable_refinement_pass=False,
+        min_block_length_char=1,
+        min_line_length_char=1,
+        line_length_soft_min=0,
+        line_length_overflow_scale=0.1,
+        line_length_underflow_scale=0.05,
+        min_total_chars_per_block=0,
+        min_last_line_chars=0,
+        short_block_penalty=0.0,
+        short_line_penalty=0.0,
+        extreme_balance_threshold=3.0,
+        allowed_single_word_proper_nouns=set(),
+    )
+    cfg_kwargs.update(overrides)
+    return Config(**cfg_kwargs)
+
+
 class TestBeamSearch(unittest.TestCase):
     def test_fallback_candidate_keeps_beam_alive(self):
         tokens = [
@@ -57,27 +108,26 @@ class TestBeamSearch(unittest.TestCase):
             make_token("DDDDD3", 0.6),
         ]
 
-        cfg = Config(
-            beam_width=1,
+        cfg = make_cfg(
             min_block_duration_s=10.0,
             max_block_duration_s=10.0,
             line_length_constraints={
-                "line1": {"soft_target": 5, "hard_limit": 5},
-                "line2": {"soft_target": 5, "hard_limit": 5},
+                "line1": {
+                    "soft_target": 5,
+                    "hard_limit": 5,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 5,
+                    "hard_limit": 5,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
             },
-            min_chars_for_single_word_block=1,
-            sliders={},
-            paths={},
-            enable_bidirectional_pass=False,
-            lookahead_width=0,
-            enable_reflow=False,
-            min_line_length_for_break=1,
-            min_last_word_len_for_break=1,
-            single_word_line_penalty=0.0,
-            extreme_balance_penalty=0.0,
-            enable_refinement_pass=False,
-            min_block_length_char=1,
-            min_line_length_char=1,
         )
 
         segmented = segment(tokens, DummyScorer(), cfg)
@@ -94,27 +144,27 @@ class TestBeamSearch(unittest.TestCase):
             make_token("veryveryveryverylongline", 0.8),
         ]
 
-        cfg = Config(
-            beam_width=1,
+        cfg = make_cfg(
             min_block_duration_s=0.1,
             max_block_duration_s=10.0,
             line_length_constraints={
-                "line1": {"soft_target": 10, "hard_limit": 30},
-                "line2": {"soft_target": 10, "hard_limit": 30},
+                "line1": {
+                    "soft_target": 10,
+                    "hard_limit": 30,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 10,
+                    "hard_limit": 30,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
             },
-            min_chars_for_single_word_block=1,
-            sliders={},
-            paths={},
             enable_bidirectional_pass=True,
-            lookahead_width=0,
-            enable_reflow=False,
-            min_line_length_for_break=1,
-            min_last_word_len_for_break=1,
-            single_word_line_penalty=0.0,
-            extreme_balance_penalty=0.0,
-            enable_refinement_pass=False,
-            min_block_length_char=1,
-            min_line_length_char=1,
         )
 
         segmented = segment(tokens, DummyScorer(), cfg)
@@ -144,27 +194,28 @@ class TestBeamSearch(unittest.TestCase):
         for idx, (word, br) in enumerate(words):
             tokens.append(Token(w=word, start=idx * 0.5, end=idx * 0.5 + 0.4, speaker="A", break_type=br))
 
-        cfg = Config(
+        cfg = make_cfg(
             beam_width=2,
             min_block_duration_s=0.1,
             max_block_duration_s=10.0,
             line_length_constraints={
-                "line1": {"soft_target": 50, "hard_limit": 60},
-                "line2": {"soft_target": 50, "hard_limit": 60},
+                "line1": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
             },
-            min_chars_for_single_word_block=1,
-            sliders={},
-            paths={},
-            enable_bidirectional_pass=False,
-            lookahead_width=0,
-            enable_reflow=False,
-            min_line_length_for_break=1,
-            min_last_word_len_for_break=1,
-            single_word_line_penalty=0.0,
-            extreme_balance_penalty=0.0,
             enable_refinement_pass=True,
-            min_block_length_char=1,
-            min_line_length_char=1,
         )
 
         refined = _refine_blocks(tokens, scorer, cfg)

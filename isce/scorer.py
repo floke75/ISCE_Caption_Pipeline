@@ -177,21 +177,33 @@ class Scorer:
             A float representing the overall quality score for the block. A higher
             score is better. Penalties are applied for violating constraints.
         """
-        if not block_tokens: return 0.0
+        if not block_tokens:
+            return 0.0
         score = 0.0
-        
+
         def count_chars(token_slice: List[dict]) -> int:
-            if not token_slice: return 0
-            return sum(len(t.get("w", "")) for t in token_slice) + (len(token_slice) - 1)
-        
-        lb_idx = next((i for i, br in enumerate(block_breaks) if br == "LB"), -1)
-        if lb_idx != -1:
-            len1 = count_chars(block_tokens[:lb_idx + 1])
-            len2 = count_chars(block_tokens[lb_idx + 1:])
-            total_chars = len1 + len2
-            balance = (len1 / max(1, len2)) if len1 and len2 else 1.0
+            if not token_slice:
+                return 0
+            return sum(len(t.get("w", "")) for t in token_slice) + max(0, len(token_slice) - 1)
+
+        lines: List[List[dict]] = []
+        current_line: List[dict] = []
+        for idx, token in enumerate(block_tokens):
+            current_line.append(token)
+            break_type = block_breaks[idx] if idx < len(block_breaks) else "SB"
+            if break_type in ("LB", "SB"):
+                lines.append(list(current_line))
+                current_line = []
+        if current_line:
+            lines.append(list(current_line))
+
+        line_char_counts = [count_chars(line) for line in lines]
+        total_chars = sum(line_char_counts)
+
+        if len(line_char_counts) >= 2:
+            first, second = line_char_counts[:2]
+            balance = (first / max(1, second)) if first and second else 1.0
         else:
-            total_chars = count_chars(block_tokens)
             balance = 1.0
 
         gross_duration = max(1e-6, block_tokens[-1].get("end", 0.0) - block_tokens[0].get("start", 0.0))
@@ -212,37 +224,78 @@ class Scorer:
             distance = abs(cps - median) / max(1e-6, median)
             score -= self.sl.get("density", 1.0) * (1.0 + distance)
 
-        if lb_idx != -1:
+        if len(line_char_counts) >= 2:
             bal_lo, bal_hi = self.c.get("ideal_balance_iqr", [0.7, 1.4])
             if bal_lo <= balance <= bal_hi:
                 score += self.sl.get("balance", 1.0) * 0.5
             else:
                 score -= self.sl.get("balance", 1.0) * 0.5
-        
-        if gross_duration < self.c.get("min_block_duration_s", 1.0): score -= 10.0
-        if gross_duration > self.c.get("max_block_duration_s", 8.0): score -= 2.0
+        if gross_duration < self.c.get("min_block_duration_s", 1.0):
+            score -= 10.0
+        if gross_duration > self.c.get("max_block_duration_s", 8.0):
+            score -= 2.0
 
-        if len(block_tokens) == 1 and len(block_tokens[0]['w']) < self.cfg.min_chars_for_single_word_block:
-            score -= self.cfg.single_word_line_penalty
+        if lines:
+            penalty_lines = 0
+            min_chars = self.cfg.min_chars_for_single_word_block
+            for line_tokens, char_count in zip(lines, line_char_counts):
+                if not line_tokens:
+                    continue
+                is_single_word = len(line_tokens) == 1
+                token = line_tokens[0] if is_single_word else None
+                allowed_single = False
+                if is_single_word and token:
+                    stripped = token.get("w", "").rstrip(".,!?;:\"")
+                    normalized = stripped.lower()
+                    allowed_single = (
+                        token.get("pos") == "PROPN"
+                        and normalized in self.cfg.allowed_single_word_proper_nouns
+                    )
+                if is_single_word and not allowed_single:
+                    penalty_lines += 1
+                    continue
+                if char_count < min_chars and not allowed_single:
+                    penalty_lines += 1
+            if penalty_lines and self.cfg.single_word_line_penalty > 0:
+                score -= self.cfg.single_word_line_penalty * penalty_lines
 
-        if lb_idx != -1:
-            len1 = count_chars(block_tokens[:lb_idx + 1])
-            len2 = count_chars(block_tokens[lb_idx + 1:])
-            if len1 > 0 and len2 > 0:
-                ratio = max(len1, len2) / min(len1, len2)
-                if ratio > 3.0:
-                    score -= self.cfg.extreme_balance_penalty
+        extreme_threshold = self.cfg.extreme_balance_threshold
+        extreme_penalty = self.cfg.extreme_balance_penalty
+        if len(line_char_counts) >= 2 and extreme_penalty > 0 and extreme_threshold > 0:
+            len1, len2 = line_char_counts[:2]
+            smaller = min(len1, len2)
+            larger = max(len1, len2)
+            if smaller == 0:
+                severity = 1.0
+            else:
+                ratio = larger / smaller
+                severity = None if ratio <= extreme_threshold else (ratio - extreme_threshold) / extreme_threshold
+            if severity is not None:
+                score -= extreme_penalty * (1.0 + max(0.0, severity))
 
-        if total_chars < self.cfg.min_block_length_char:
+        if self.cfg.short_block_penalty > 0 and self.cfg.min_total_chars_per_block:
+            if total_chars < self.cfg.min_total_chars_per_block:
+                last_token = block_tokens[-1]
+                if not last_token.get("is_sentence_final", False):
+                    deficit = self.cfg.min_total_chars_per_block - total_chars
+                    score -= self.cfg.short_block_penalty * deficit
+
+        if self.cfg.short_line_penalty > 0 and self.cfg.min_last_line_chars and line_char_counts:
+            last_line_len = line_char_counts[-1]
+            if last_line_len < self.cfg.min_last_line_chars:
+                deficit = self.cfg.min_last_line_chars - last_line_len
+                score -= self.cfg.short_line_penalty * deficit
+
+        if self.cfg.short_block_penalty <= 0 and total_chars < self.cfg.min_block_length_char:
             score -= (self.cfg.min_block_length_char - total_chars) * 0.5
-        if lb_idx != -1:
-            len1 = count_chars(block_tokens[:lb_idx + 1])
-            len2 = count_chars(block_tokens[lb_idx + 1:])
-            if len1 < self.cfg.min_line_length_char:
-                score -= (self.cfg.min_line_length_char - len1) * 0.5
-            if len2 < self.cfg.min_line_length_char:
-                score -= (self.cfg.min_line_length_char - len2) * 0.5
 
+        if (
+            self.cfg.short_line_penalty <= 0
+            and len(line_char_counts) >= 2
+        ):
+            for char_count in line_char_counts[:2]:
+                if char_count < self.cfg.min_line_length_char:
+                    score -= (self.cfg.min_line_length_char - char_count) * 0.5
 
         return score
 
