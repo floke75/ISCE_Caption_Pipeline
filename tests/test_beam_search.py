@@ -1,10 +1,17 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from isce.beam_search import Segmenter, PathState, segment, _prepare_transition_overrides
+from isce.beam_search import (
+    Segmenter,
+    PathState,
+    _prepare_transition_overrides,
+    refine_blocks,
+    segment,
+)
 from isce.config import Config
 from isce.scorer import Scorer
 from isce.types import Token
@@ -412,6 +419,74 @@ class TestBeamSearch(unittest.TestCase):
         with_overrides = override_segmenter.run(overrides)
 
         self.assertEqual(baseline, with_overrides)
+
+    def test_refinement_baseline_respects_transition_overrides(self):
+        class OverrideAwareScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                }
+
+            def score_transition(self, row, ctx=None):
+                if ctx is None:
+                    return {"O": 0.0, "LB": 10.0, "SB": 0.0}
+                return {"O": 0.0, "LB": -5.0, "SB": 0.0}
+
+            def score_block(self, block_tokens, block_breaks):
+                return -1.0
+
+        tokens = [
+            Token(w="one", start=0.0, end=0.5, speaker="A"),
+            Token(w="two", start=0.5, end=1.0, speaker="A"),
+        ]
+        initial_breaks = ["LB", "SB"]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            enable_bidirectional_pass=True,
+        )
+
+        overrides_table = [
+            {"O": 0.0, "LB": 10.0, "SB": 0.0},
+            {"O": 0.0, "LB": 0.0, "SB": 0.0},
+        ]
+        candidate_breaks = ["O", "SB"]
+
+        def fake_run(self, transition_overrides=None):
+            self.last_path_score = 0.0
+            return list(candidate_breaks)
+
+        scorer = OverrideAwareScorer()
+
+        with patch("isce.beam_search._prepare_transition_overrides", return_value=overrides_table):
+            with patch.object(Segmenter, "run", new=fake_run):
+                refined = refine_blocks(tokens, initial_breaks, scorer, cfg)
+
+        self.assertEqual(refined, initial_breaks)
 
 
 if __name__ == "__main__":
