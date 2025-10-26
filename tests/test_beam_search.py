@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from isce.beam_search import Segmenter, PathState, segment
+from isce.beam_search import Segmenter, PathState, segment, _prepare_transition_overrides
 from isce.config import Config
 from isce.scorer import Scorer
 from isce.types import Token
@@ -367,6 +367,51 @@ class TestBeamSearch(unittest.TestCase):
         breaks = [token.break_type for token in segment(tokens, RefinementScorer(), cfg)]
 
         self.assertEqual(breaks, ["O", "SB", "O", "SB"])
+
+    def test_transition_overrides_replace_base_scores(self):
+        tokens = [
+            make_token("alpha0", 0.0),
+            make_token("beta1", 0.2),
+            make_token("gamma2", 0.4),
+            make_token("delta3", 0.6),
+        ]
+
+        cfg = Config(
+            beam_width=3,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 20,
+                    "hard_limit": 25,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 20,
+                    "hard_limit": 25,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+        )
+
+        scorer = DummyScorer()
+        base_segmenter = Segmenter(list(tokens), scorer, cfg)
+        baseline = base_segmenter.run()
+
+        overrides = _prepare_transition_overrides(tokens, scorer, cfg)
+        override_segmenter = Segmenter(list(tokens), scorer, cfg)
+        with_overrides = override_segmenter.run(overrides)
+
+        self.assertEqual(baseline, with_overrides)
 
 
 if __name__ == "__main__":
