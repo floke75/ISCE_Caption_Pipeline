@@ -223,14 +223,24 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     return final_breaks
 
 
-def _score_segmentation(tokens: List[Token], breaks: List[BreakType], scorer: Scorer) -> float:
+def _score_segmentation(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config) -> float:
     total = 0.0
     block_tokens: List[Token] = []
     block_breaks: List[BreakType] = []
 
-    for token, br in zip(tokens, breaks):
+    for idx, (token, br) in enumerate(zip(tokens, breaks)):
         block_tokens.append(replace(token, break_type=br))
         block_breaks.append(br)
+
+        nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
+        row = TokenRow(
+            token=_token_to_row_dict(token),
+            nxt=_token_to_row_dict(nxt) if nxt else None,
+            lookahead=_get_lookahead_slice(tokens, idx + 1, cfg.lookahead_width),
+        )
+        transition_scores = scorer.score_transition(row)
+        total += transition_scores.get(br, 0.0)
+
         if br == "SB":
             total += scorer.score_block([t.__dict__ for t in block_tokens], block_breaks)
             block_tokens = []
@@ -239,13 +249,19 @@ def _score_segmentation(tokens: List[Token], breaks: List[BreakType], scorer: Sc
     return total
 
 
-def _reconcile_bidirectional_breaks(forward_breaks: List[BreakType], backward_breaks: List[BreakType], scorer: Scorer, tokens: List[Token]) -> List[BreakType]:
+def _reconcile_bidirectional_breaks(
+    forward_breaks: List[BreakType],
+    backward_breaks: List[BreakType],
+    scorer: Scorer,
+    tokens: List[Token],
+    cfg: Config,
+) -> List[BreakType]:
     """
     Reconciles conflicting break decisions from forward and backward passes.
     """
     reconciled = list(forward_breaks)
-    current_score = _score_segmentation(tokens, reconciled, scorer)
-    tie_priority = {"LB": 3, "O": 2, "SB": 1}
+    current_score = _score_segmentation(tokens, reconciled, scorer, cfg)
+    tie_priority = {"LB": 3, "SB": 2, "O": 1}
 
     for i in range(len(tokens)):
         candidate_break = backward_breaks[i]
@@ -254,7 +270,7 @@ def _reconcile_bidirectional_breaks(forward_breaks: List[BreakType], backward_br
 
         candidate_breaks = list(reconciled)
         candidate_breaks[i] = candidate_break
-        candidate_score = _score_segmentation(tokens, candidate_breaks, scorer)
+        candidate_score = _score_segmentation(tokens, candidate_breaks, scorer, cfg)
 
         if candidate_score > current_score + 1e-6 or (
             abs(candidate_score - current_score) <= 1e-6
@@ -291,7 +307,7 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
         backward_segmenter = Segmenter(reversed_tokens, scorer, cfg)
         backward_raw_breaks = backward_segmenter.run()
         backward_breaks = _map_reversed_breaks(backward_raw_breaks)
-        final_breaks = _reconcile_bidirectional_breaks(final_breaks, backward_breaks, scorer, tokens)
+        final_breaks = _reconcile_bidirectional_breaks(final_breaks, backward_breaks, scorer, tokens, cfg)
 
     segmented_tokens = [replace(token, break_type=final_breaks[i]) for i, token in enumerate(tokens)]
 
