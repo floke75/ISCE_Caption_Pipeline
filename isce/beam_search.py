@@ -662,13 +662,14 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     if not reversed_breaks:
         return []
 
-    mirrored = list(reversed(reversed_breaks))
+    has_terminal_sb = reversed_breaks[-1] == "SB"
+    core = reversed_breaks[:-1] if has_terminal_sb else reversed_breaks
+    mirrored = list(reversed(core))
 
-    if mirrored and mirrored[0] == "SB":
-        mirrored = mirrored[1:]
-
-    if mirrored:
+    if has_terminal_sb:
         mirrored.append("SB")
+    elif mirrored:
+        mirrored[-1] = "SB"
     else:
         mirrored = ["SB"]
 

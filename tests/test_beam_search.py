@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from isce.beam_search import (
     PathState,
     Segmenter,
+    _map_reversed_breaks,
     _prepare_transition_overrides,
     _reconcile_bidirectional_breaks,
     _reverse_tokens_for_bidirectional,
@@ -208,6 +209,14 @@ class TestBeamSearch(unittest.TestCase):
             breaks=(),
         )
         self.assertTrue(segmenter._is_hard_ok_SB(state, 0))
+
+    def test_map_reversed_breaks_preserves_interior_sb(self):
+        mapped = _map_reversed_breaks(["O", "SB", "SB"])
+        self.assertEqual(mapped, ["SB", "O", "SB"])
+
+    def test_map_reversed_breaks_handles_missing_terminal_sb(self):
+        mapped = _map_reversed_breaks(["SB", "LB"])
+        self.assertEqual(mapped, ["LB", "SB"])
 
     def test_reverse_tokens_shift_boundary_features(self):
         tokens = [
