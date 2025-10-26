@@ -304,10 +304,14 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
     reversed_tokens: List[Token] = []
     total_tokens = len(tokens)
     for offset, token in enumerate(reversed(tokens)):
+        relative_position = 1.0 - token.relative_position if token.relative_position is not None else None
+        if relative_position is None:
+            relative_position = 0.0
+        else:
+            relative_position = max(0.0, min(1.0, relative_position))
 
-        prior_idx = total_tokens - offset - 2
         if offset < total_tokens - 1:
-            prior_token = tokens[prior_idx]
+            prior_token = tokens[total_tokens - offset - 2]
             speaker_change = prior_token.speaker_change
             starts_with_dialogue_dash = prior_token.starts_with_dialogue_dash
             num_unit_glue = prior_token.num_unit_glue
@@ -320,23 +324,6 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
             is_llm_structural_break = False
             is_dangling_eos = False
 
-                speaker_change=speaker_change,
-                starts_with_dialogue_dash=starts_with_dialogue_dash,
-                num_unit_glue=num_unit_glue,
-                is_llm_structural_break=is_llm_structural_break,
-                is_dangling_eos=is_dangling_eos,
-    for offset, token in enumerate(reversed(tokens)):
-        relative_position = 1.0 - token.relative_position if token.relative_position is not None else None
-        if relative_position is None:
-            relative_position = 0.0
-        else:
-            relative_position = max(0.0, min(1.0, relative_position))
-
-        if offset < total_tokens - 1:
-            speaker_change = tokens[total_tokens - offset - 2].speaker_change
-        else:
-            speaker_change = False
-
         reversed_tokens.append(
             replace(
                 token,
@@ -348,6 +335,10 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
                 is_sentence_final=token.is_sentence_initial,
                 relative_position=relative_position,
                 speaker_change=speaker_change,
+                starts_with_dialogue_dash=starts_with_dialogue_dash,
+                num_unit_glue=num_unit_glue,
+                is_llm_structural_break=is_llm_structural_break,
+                is_dangling_eos=is_dangling_eos,
                 break_type=None,
             )
         )
@@ -635,32 +626,32 @@ def refine_blocks(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, 
 
     refined_breaks = list(breaks)
 
-    def _compute_block_boundaries() -> List[tuple[int, int]]:
-        boundaries: List[tuple[int, int]] = []
-        start = 0
-        for j, br in enumerate(refined_breaks):
-            if br == "SB":
-                boundaries.append((start, j))
-                start = j + 1
-        return boundaries
+    total_tokens = len(tokens)
+    block_start = 0
 
-    block_boundaries = _compute_block_boundaries()
+    while block_start < total_tokens:
+        block_end = block_start
+        while block_end < total_tokens and refined_breaks[block_end] != "SB":
+            block_end += 1
+        if block_end >= total_tokens:
+            break
 
-    idx = 0
-    while idx < len(block_boundaries):
-        block_start, block_end = block_boundaries[idx]
         block_tokens = tokens[block_start : block_end + 1]
         block_breaks = list(refined_breaks[block_start:block_end]) + ["SB"]
         block_token_dicts = [dict(t.__dict__) for t in block_tokens]
         block_score = scorer.score_block(block_token_dicts, block_breaks)
 
         if _should_refine(block_tokens, block_breaks, block_score):
-            window_end_block_idx = idx
-            if len(block_tokens) == 1 and idx + 1 < len(block_boundaries):
-                window_end_block_idx += 1
+            window_start = block_start
+            window_end = block_end
 
-            window_start = block_boundaries[idx][0]
-            window_end = block_boundaries[window_end_block_idx][1]
+            if len(block_tokens) == 1 and block_end + 1 < total_tokens:
+                next_end = block_end + 1
+                while next_end < total_tokens and refined_breaks[next_end] != "SB":
+                    next_end += 1
+                if next_end < total_tokens:
+                    window_end = next_end
+
             window_tokens = tokens[window_start : window_end + 1]
             window_breaks = refined_breaks[window_start : window_end + 1]
 
@@ -678,15 +669,11 @@ def refine_blocks(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, 
                 current_slice = refined_breaks[window_start : window_end + 1]
                 if list(current_slice) != list(local_breaks):
                     refined_breaks[window_start : window_end + 1] = list(local_breaks)
-                    block_boundaries = _compute_block_boundaries()
-                    idx = 0
-                    for j, (start, end) in enumerate(block_boundaries):
-                        if start <= window_start <= end:
-                            idx = j
-                            break
+                    # Re-evaluate starting from the cue that changed so nearby
+                    # blocks are reconsidered with the updated segmentation.
                     continue
 
-        idx += 1
+        block_start = block_end + 1
 
     return refined_breaks
 

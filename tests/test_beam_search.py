@@ -1,7 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, call, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -356,11 +356,20 @@ class TestBeamSearch(unittest.TestCase):
         second_segmenter.run.return_value = ["LB", "SB"]
         second_segmenter.last_path_score = 5.0
 
+        scorer = RefinementScorer()
+
         with patch("isce.beam_search.Segmenter", side_effect=[first_segmenter, second_segmenter]) as mock_segmenter:
-            refined = refine_blocks(tokens, breaks, RefinementScorer(), cfg)
+            refined = refine_blocks(tokens, breaks, scorer, cfg)
 
         self.assertEqual(refined, ["SB", "LB", "SB"])
         self.assertEqual(mock_segmenter.call_count, 2)
+        self.assertEqual(
+            mock_segmenter.call_args_list,
+            [
+                call(tokens, scorer, ANY),
+                call(tokens[1:], scorer, ANY),
+            ],
+        )
 
 
 if __name__ == "__main__":
