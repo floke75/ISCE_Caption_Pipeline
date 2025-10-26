@@ -431,9 +431,9 @@ class Segmenter:
             for state in self.beam:
                 context = self._build_transition_context(state, i)
                 base_scores = self.scorer.score_transition(scorer_row, context)
-                if override_scores:
+                if override_scores is not None:
                     transition_scores = {
-                        outcome: base_scores[outcome] + override_scores.get(outcome, 0.0)
+                        outcome: override_scores.get(outcome, base_scores[outcome])
                         for outcome in base_scores
                     }
                 else:
@@ -499,9 +499,9 @@ class Segmenter:
                 fallback_state = self.beam[0]
                 fallback_context = self._build_transition_context(fallback_state, i)
                 fallback_scores = self.scorer.score_transition(scorer_row, fallback_context)
-                if override_scores:
+                if override_scores is not None:
                     fallback_scores = {
-                        outcome: fallback_scores.get(outcome, 0.0) + override_scores.get(outcome, 0.0)
+                        outcome: override_scores.get(outcome, fallback_scores.get(outcome, 0.0))
                         for outcome in fallback_scores
                     }
                 block_tokens, block_breaks, lines = self._block_profiles(
