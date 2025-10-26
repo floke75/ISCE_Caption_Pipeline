@@ -605,14 +605,16 @@ def refine_blocks(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, 
 
     refined_breaks = list(breaks)
 
-    block_boundaries: List[tuple[int, int]] = []
-    # Identify the (start, end) index for every cue in the current segmentation
-    # so that we can reason about the surrounding context when re-scoring.
-    start_idx = 0
-    for i, br in enumerate(refined_breaks):
-        if br == "SB":
-            block_boundaries.append((start_idx, i))
-            start_idx = i + 1
+    def _compute_block_boundaries() -> List[tuple[int, int]]:
+        boundaries: List[tuple[int, int]] = []
+        start = 0
+        for j, br in enumerate(refined_breaks):
+            if br == "SB":
+                boundaries.append((start, j))
+                start = j + 1
+        return boundaries
+
+    block_boundaries = _compute_block_boundaries()
 
     idx = 0
     while idx < len(block_boundaries):
@@ -643,11 +645,22 @@ def refine_blocks(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, 
             )
 
             if local_score > original_score + 1e-6:
-                refined_breaks[window_start : window_end + 1] = local_breaks
+                current_slice = refined_breaks[window_start : window_end + 1]
+                if list(current_slice) != list(local_breaks):
+                    refined_breaks[window_start : window_end + 1] = list(local_breaks)
+                    block_boundaries = _compute_block_boundaries()
+                    idx = 0
+                    revisit_idx = 0
+                    for j, (start, end) in enumerate(block_boundaries):
+                        if start <= window_start <= end:
+                            # Re-run the updated cue and its predecessor so that
+                            # downstream merges can see the revised context.
+                            revisit_idx = max(0, j - 1)
+                            break
+                    idx = revisit_idx
+                    continue
 
-            idx = window_end_block_idx + 1
-        else:
-            idx += 1
+        idx += 1
 
     return refined_breaks
 

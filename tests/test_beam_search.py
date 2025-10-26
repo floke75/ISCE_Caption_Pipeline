@@ -1,10 +1,11 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from isce.beam_search import PathState, Segmenter, segment
+from isce.beam_search import PathState, Segmenter, refine_blocks, segment
 from isce.config import Config
 from isce.scorer import Scorer
 from isce.types import Token
@@ -242,6 +243,137 @@ class TestBeamSearch(unittest.TestCase):
         breaks = [token.break_type for token in segmented]
 
         self.assertEqual(breaks, ["O", "SB", "O", "SB"])
+
+    def test_refinement_retries_next_block_after_failed_merge(self):
+        class RefinementScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                    "fallback_sb_penalty": 25.0,
+                }
+
+            def score_transition(self, row):
+                return {"O": 0.0, "LB": 0.0, "SB": 0.0}
+
+            def score_block(self, block_tokens, block_breaks):
+                if len(block_tokens) == 1:
+                    return -2.0
+                if "LB" in block_breaks:
+                    return 5.0
+                return -1.0
+
+        tokens = [
+            make_token("Hi", 0.0, end=0.2, speaker="A"),
+            make_token("there", 0.2, end=0.6, speaker="A"),
+            make_token("friend", 0.6, end=1.2, speaker="A"),
+        ]
+        breaks = ["SB", "O", "SB"]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 42, "hard_limit": 42},
+                "line2": {"soft_target": 42, "hard_limit": 42},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            enable_refinement_pass=True,
+        )
+
+        first_segmenter = MagicMock()
+        first_segmenter.run.return_value = ["SB", "O", "SB"]
+        first_segmenter.last_path_score = 0.0
+
+        second_segmenter = MagicMock()
+        second_segmenter.run.return_value = ["LB", "SB"]
+        second_segmenter.last_path_score = 5.0
+
+        third_segmenter = MagicMock()
+        third_segmenter.run.return_value = ["SB", "LB", "SB"]
+        third_segmenter.last_path_score = 5.0
+
+        with patch(
+            "isce.beam_search.Segmenter",
+            side_effect=[first_segmenter, second_segmenter, third_segmenter],
+        ) as mock_segmenter:
+            refined = refine_blocks(tokens, breaks, RefinementScorer(), cfg)
+
+        self.assertEqual(refined, ["SB", "LB", "SB"])
+        self.assertEqual(mock_segmenter.call_count, 3)
+
+    def test_refinement_revisits_previous_block_after_successful_merge(self):
+        class RefinementScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                    "fallback_sb_penalty": 0.0,
+                }
+
+            def score_transition(self, row):
+                return {"O": 0.0, "LB": 0.0, "SB": 0.0}
+
+            def score_block(self, block_tokens, block_breaks):
+                words = [token["w"] for token in block_tokens]
+                if words == ["one"]:
+                    return -2.0
+                if words == ["two"]:
+                    return -2.0
+                if words == ["three"]:
+                    return 0.0
+                if words == ["two", "three"]:
+                    return 4.0
+                if words == ["one", "two", "three"]:
+                    return 8.0
+                return 0.0
+
+        tokens = [
+            make_token("one", 0.0),
+            make_token("two", 0.4),
+            make_token("three", 0.8),
+        ]
+        breaks = ["SB", "SB", "SB"]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 42, "hard_limit": 42},
+                "line2": {"soft_target": 42, "hard_limit": 42},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            enable_refinement_pass=True,
+        )
+
+        first_segmenter = MagicMock()
+        first_segmenter.run.return_value = ["SB", "SB"]
+        first_segmenter.last_path_score = -4.0
+
+        second_segmenter = MagicMock()
+        second_segmenter.run.return_value = ["O", "SB"]
+        second_segmenter.last_path_score = 4.0
+
+        third_segmenter = MagicMock()
+        third_segmenter.run.return_value = ["O", "O", "SB"]
+        third_segmenter.last_path_score = 8.0
+
+        with patch(
+            "isce.beam_search.Segmenter",
+            side_effect=[first_segmenter, second_segmenter, third_segmenter],
+        ) as mock_segmenter:
+            refined = refine_blocks(tokens, breaks, RefinementScorer(), cfg)
+
+        self.assertEqual(refined, ["O", "O", "SB"])
+        self.assertEqual(mock_segmenter.call_count, 3)
 
 
 if __name__ == "__main__":
