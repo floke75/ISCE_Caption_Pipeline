@@ -116,6 +116,10 @@ class Segmenter:
     lookahead_width:
         Number of future tokens to pass to the scorer when computing transition
         scores.
+    last_path_score:
+        Score of the best path returned by the most recent :meth:`run` call.
+        This is cached so that refinement helpers can compare alternate
+        segmentations without re-scoring from scratch.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -129,6 +133,7 @@ class Segmenter:
         self.short_line_penalty = float(self.scorer.sl.get("single_word_line_penalty", 0.0))
         allowed_proper_nouns = getattr(self.cfg, "allowed_single_word_proper_nouns", tuple())
         self.allowed_proper_nouns = {noun.strip().lower() for noun in allowed_proper_nouns}
+        self.last_path_score: float | None = None
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
         """Checks if continuing a line (`O`) violates hard length constraints."""
@@ -265,7 +270,10 @@ class Segmenter:
             A list of `BreakType` enums representing the best-scoring
             segmentation path found.
         """
+        self.last_path_score = None
+
         if not self.tokens:
+            self.last_path_score = 0.0
             return []
 
         initial_state = PathState(score=0.0, line_num=1, line_len=len(self.tokens[0].w), block_start_idx=0, breaks=())
@@ -375,6 +383,7 @@ class Segmenter:
         if final_breaks:
             final_breaks[-1] = "SB"
 
+        self.last_path_score = best_path.score
         return final_breaks
 
 
@@ -645,7 +654,9 @@ def refine_blocks(
         refine_cfg = replace(cfg, beam_width=refine_beam, enable_refinement_pass=False)
         candidate_segmenter = Segmenter(window_tokens, scorer, refine_cfg)
         candidate_breaks = candidate_segmenter.run()
-        candidate_score = _score_path(window_tokens, candidate_breaks, scorer, cfg)
+        candidate_score = candidate_segmenter.last_path_score
+        if candidate_score is None:
+            candidate_score = _score_path(window_tokens, candidate_breaks, scorer, cfg)
 
         if candidate_score >= baseline_score + LOCAL_REFINEMENT_IMPROVEMENT:
             refined[window_start : window_end + 1] = candidate_breaks

@@ -10,6 +10,7 @@ from isce.beam_search import (
     PathState,
     _map_reversed_breaks,
     _reconcile_bidirectional_breaks,
+    _score_path,
     segment,
 )
 from isce.config import Config
@@ -105,6 +106,52 @@ def make_token(word: str, start: float, **overrides) -> Token:
 
 
 class TestBeamSearch(unittest.TestCase):
+    def test_segmenter_records_last_path_score(self):
+        class ConstantScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                    "extreme_balance_penalty": 0.0,
+                    "extreme_balance_threshold": 2.5,
+                }
+
+            def score_transition(self, row, ctx=None):
+                return {"O": -1.0, "LB": 4.0, "SB": 0.0}
+
+            def score_block(self, block_tokens, block_breaks):
+                return 0.0
+
+        tokens = [
+            make_token("alpha", 0.0, pos="PROPN"),
+            make_token("beta", 0.4, pos="PROPN"),
+        ]
+
+        cfg = Config(
+            beam_width=2,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 20, "hard_limit": 30},
+                "line2": {"soft_target": 20, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=("alpha", "beta"),
+        )
+
+        scorer = ConstantScorer()
+        segmenter = Segmenter(list(tokens), scorer, cfg)
+        breaks = segmenter.run()
+
+        self.assertEqual(breaks, ["LB", "SB"])
+        self.assertIsNotNone(segmenter.last_path_score)
+        rescored = _score_path(tokens, breaks, scorer, cfg)
+        self.assertAlmostEqual(segmenter.last_path_score, rescored)
+
     def test_fallback_candidate_keeps_beam_alive(self):
         tokens = [
             make_token("AAAAA0", 0.0),
