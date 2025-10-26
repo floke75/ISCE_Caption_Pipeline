@@ -108,9 +108,9 @@ class Segmenter:
     fallback_sb_penalty:
         Penalty applied when we are forced to emit an ``SB`` because every
         other decision violates a hard constraint.
-    short_line_penalty:
+    single_word_line_penalty:
         Optional override letting the scorer fine-tune penalties for sub-minimal
-        or single-word lines.
+        or single-word lines when the fallback escape hatch is triggered.
     allowed_proper_nouns:
         Normalised set of proper nouns that may appear as single-word captions
         without being considered violations.
@@ -131,7 +131,7 @@ class Segmenter:
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
         self.lookahead_width = getattr(cfg, "lookahead_width", 0)
-        self.short_line_penalty = float(self.scorer.sl.get("single_word_line_penalty", 0.0))
+        self.single_word_line_penalty = float(self.scorer.sl.get("single_word_line_penalty", 0.0))
         allowed_proper_nouns = getattr(self.cfg, "allowed_single_word_proper_nouns", tuple())
         self.allowed_proper_nouns = {noun.strip().lower() for noun in allowed_proper_nouns}
         self.last_path_score: float | None = None
@@ -374,7 +374,9 @@ class Segmenter:
                 violations = self._line_violations(lines)
                 if violations:
                     per_violation_penalty = (
-                        self.short_line_penalty if self.short_line_penalty > 0 else self.fallback_sb_penalty
+                        self.single_word_line_penalty
+                        if self.single_word_line_penalty > 0
+                        else self.fallback_sb_penalty
                     )
                     violating_lines = violations.get("single_word", 0)
                     if violating_lines:
