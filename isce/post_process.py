@@ -136,37 +136,35 @@ def reflow_tokens(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[
                     and next_token.speaker is not None
                     and boundary_token.speaker != next_token.speaker
                 )
-                if boundary_token.speaker_change or speakers_differ:
-                    continue
+                if not (boundary_token.speaker_change or speakers_differ):
+                    next_breaks = _block_breaks(next_tokens)
+                    next_dicts = _tokens_to_dicts(next_tokens)
+                    base_score = block_score + scorer.score_block(next_dicts, next_breaks)
 
-                next_breaks = _block_breaks(next_tokens)
-                next_dicts = _tokens_to_dicts(next_tokens)
-                base_score = block_score + scorer.score_block(next_dicts, next_breaks)
+                    best_bridge: BreakType | None = None
+                    best_score = base_score
 
-                best_bridge: BreakType | None = None
-                best_score = base_score
+                    for bridge in ("O", "LB"):
+                        if bridge == "LB" and lb_idx != -1:
+                            # Avoid emitting two line breaks within the same block.
+                            continue
+                        combined_breaks = block_breaks[:-1] + [bridge] + next_breaks
+                        combined_tokens = block_tokens + next_tokens
+                        combined_dicts = _tokens_to_dicts(combined_tokens)
+                        combined_score = scorer.score_block(combined_dicts, combined_breaks)
+                        if combined_score > best_score + epsilon:
+                            best_score = combined_score
+                            best_bridge = bridge
 
-                for bridge in ("O", "LB"):
-                    if bridge == "LB" and lb_idx != -1:
-                        # Avoid emitting two line breaks within the same block.
+                    if best_bridge:
+                        refined[end] = replace(refined[end], break_type=best_bridge)
+                        block_tokens = refined[start : _find_block_end(refined, start) + 1]
+                        block_breaks = _block_breaks(block_tokens)
+                        block_dicts = _tokens_to_dicts(block_tokens)
+                        block_score = scorer.score_block(block_dicts, block_breaks)
+                        merged = True
+                        # Re-run the loop for the expanded block.
                         continue
-                    combined_breaks = block_breaks[:-1] + [bridge] + next_breaks
-                    combined_tokens = block_tokens + next_tokens
-                    combined_dicts = _tokens_to_dicts(combined_tokens)
-                    combined_score = scorer.score_block(combined_dicts, combined_breaks)
-                    if combined_score > best_score + epsilon:
-                        best_score = combined_score
-                        best_bridge = bridge
-
-                if best_bridge:
-                    refined[end] = replace(refined[end], break_type=best_bridge)
-                    block_tokens = refined[start : _find_block_end(refined, start) + 1]
-                    block_breaks = _block_breaks(block_tokens)
-                    block_dicts = _tokens_to_dicts(block_tokens)
-                    block_score = scorer.score_block(block_dicts, block_breaks)
-                    merged = True
-                    # Re-run the loop for the expanded block.
-                    continue
 
         if not merged and is_imbalanced and lb_idx != -1:
             candidate_positions: List[int] = []
