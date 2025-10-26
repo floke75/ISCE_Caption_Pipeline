@@ -162,6 +162,35 @@ def test_single_word_penalty_ignored_for_whitelist():
     assert score == pytest.approx(baseline)
 
 
+def test_short_multi_word_line_not_penalized():
+    cfg = _make_cfg()
+    constraints = {
+        "ideal_cps_iqr": [10.0, 18.0],
+        "ideal_cps_median": 14.0,
+        "ideal_balance_iqr": [0.7, 1.4],
+        "min_block_duration_s": 0.5,
+        "max_block_duration_s": 8.0,
+    }
+
+    baseline = Scorer(weights={}, constraints=constraints, sliders={}, cfg=cfg)
+    penalized = Scorer(
+        weights={},
+        constraints=constraints,
+        sliders={"single_word_line_penalty": 5.0},
+        cfg=cfg,
+    )
+
+    block_tokens = [
+        {"w": "Go", "start": 0.0, "end": 0.3, "pos": "VERB"},
+        {"w": "now", "start": 0.3, "end": 0.6, "pos": "ADV"},
+    ]
+    block_breaks = ["O", "SB"]
+
+    assert penalized.score_block(block_tokens, block_breaks) == pytest.approx(
+        baseline.score_block(block_tokens, block_breaks)
+    )
+
+
 def test_extreme_balance_penalty_applies():
     cfg = _make_cfg()
     base_sliders = {

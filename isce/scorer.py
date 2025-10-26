@@ -324,12 +324,14 @@ class Scorer:
             for line_tokens, char_count in zip(lines, line_char_counts):
                 if not line_tokens:
                     continue
-                is_single = len(line_tokens) == 1
-                allowed_single = is_single and is_allowed_single_word(line_tokens[0])
-                if is_single and not allowed_single:
-                    penalty_lines += 1
+                if len(line_tokens) != 1:
                     continue
-                if char_count < min_chars and not allowed_single:
+
+                token = line_tokens[0]
+                if is_allowed_single_word(token):
+                    continue
+
+                if char_count < min_chars:
                     penalty_lines += 1
             if penalty_lines:
                 score -= single_word_penalty * penalty_lines
