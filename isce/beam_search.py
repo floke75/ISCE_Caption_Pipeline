@@ -1,11 +1,18 @@
-"""Beam search segmentation with lookahead-aware heuristics.
+"""Beam search segmentation with lookahead, refinement, and guardrails.
 
 This module hosts the core implementation of ISCE's beam search. The logic has
 accumulated a number of heuristics over the years, so we keep the code heavily
-documented to make the data flow and motivations explicit. In particular, the
-scorer now receives a transition context describing the partially written block
-in order to penalize prospective line breaks that would leave unreasonably short
-orphan lines.
+documented to make the data flow and motivations explicit. In particular:
+
+* the scorer receives a :class:`~isce.types.TransitionContext` so transition
+  scores can consider partially written lines and projected second-line space;
+* optional lookahead exposes a shallow copy of the next ``N`` tokens so the
+  scorer can anticipate speaker changes or punctuation while keeping the hot
+  path side-effect free;
+* fallback penalties and single-word guardrails ensure forced ``SB`` decisions
+  still surface problematic cues for operators; and
+* bidirectional reconciliation plus a targeted refinement pass revisit weak
+  blocks without forcing a full rerun of the global search.
 """
 from __future__ import annotations
 from collections import Counter
@@ -520,7 +527,16 @@ def _score_segmentation(
     return total
 
 
-def _split_block_lines(block_tokens: Sequence[Token], block_breaks: Sequence[BreakType]) -> List[List[Token]]:
+def _split_block_lines(
+    block_tokens: Sequence[Token], block_breaks: Sequence[BreakType]
+) -> List[List[Token]]:
+    """Return per-line token lists reconstructed from ``block_breaks``.
+
+    ``Segmenter`` and the refinement pass both need a rendered view of the
+    current block to reason about line balance or short-line guardrails.  The
+    scorer already consumes dictionary payloads, so this helper simply
+    rebuilds the dataclass representation grouped by line decisions.
+    """
     lines: List[List[Token]] = []
     current: List[Token] = []
     for token, decision in zip(block_tokens, block_breaks):
@@ -576,6 +592,8 @@ def _score_path(
     scorer: Scorer,
     cfg: Config,
 ) -> float:
+    """Convenience wrapper mirroring :func:`_score_segmentation` for slices."""
+
     return _score_segmentation(list(tokens), list(breaks), scorer, cfg)
 
 
@@ -647,7 +665,15 @@ def refine_blocks(
     scorer: Scorer,
     cfg: Config,
 ) -> List[BreakType]:
-    """Re-run targeted refinement over low-scoring or lopsided blocks."""
+    """Re-run targeted refinement over low-scoring or lopsided blocks.
+
+    The primary beam search occasionally emits awkward captions when hard
+    constraints paint the search into a corner.  The refinement pass gives the
+    model a second chance by expanding a local window with a wider beam and
+    replaying the search.  Only blocks that look suspicious—single-token cues,
+    negative scorer feedback, or severe balance ratios—are reconsidered so the
+    routine stays fast enough for interactive use.
+    """
 
     if not tokens or not breaks:
         return list(breaks)
@@ -710,20 +736,32 @@ def refine_blocks(
 
 
 def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
-    """
-    High-level wrapper to perform beam search segmentation.
+    """Execute segmentation with optional bidirectional and refinement passes.
 
-    This function instantiates the `Segmenter` class, runs the beam search
-    algorithm, and applies the resulting break types to the input tokens.
+    ``segment`` is the high-level entry point used by :mod:`main` and the UI
+    backend.  It wires together the primary :class:`Segmenter` beam search,
+    optional bidirectional reconciliation, and the refinement pass that
+    revisits weak captions with a wider beam.  The returned tokens always carry
+    the winning break decisions in their ``break_type`` field so downstream
+    consumers (SRT writers, diagnostics, post-processing) operate on a common
+    shape.
 
-    Args:
-        tokens: The list of `Token` objects to segment.
-        scorer: The `Scorer` instance to use for evaluating breaks.
-        cfg: The main configuration object.
+    Parameters
+    ----------
+    tokens:
+        Ordered :class:`~isce.types.Token` sequence to segment.
+    scorer:
+        Active :class:`~isce.scorer.Scorer` configured with weights, sliders,
+        and guardrail penalties.
+    cfg:
+        Loaded :class:`~isce.config.Config` object describing beam width,
+        optional lookahead, and post-search safeguards.
 
-    Returns:
-        A new list of `Token` objects with the `break_type` attribute set
-        according to the segmentation result.
+    Returns
+    -------
+    list[Token]
+        Tokens with their ``break_type`` attributes updated to reflect the best
+        segmentation discovered by the configured passes.
     """
     if not tokens:
         return []

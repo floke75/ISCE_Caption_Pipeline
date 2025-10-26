@@ -36,7 +36,10 @@ class Config:
                                          block that contains only a single word.
                                          Multi-word cues are exempt from this guardrail.
         sliders: A dictionary of user-adjustable floating-point values that tune the
-                 behavior of the scoring model.
+                 behavior of the scoring model.  Recent sliders expose guardrail
+                 penalties such as ``single_word_line_penalty``,
+                 ``extreme_balance_penalty``, ``short_block_penalty``, and
+                 ``short_line_penalty`` in addition to lookahead fragment controls.
         paths: A dictionary containing the relative paths to model files like weights
                and constraints.
         enable_bidirectional_pass: When true, run both forward and reverse beam search
@@ -72,7 +75,10 @@ def load_config(path: str = "config.yaml") -> Config:
     It reads the base settings from the user--editable `config.yaml` file. It then
     intelligently loads the `constraints.json` file (which is generated during
     model training) and merges its values, prioritizing the learned constraints
-    over the fallback values in the YAML file.
+    over the fallback values in the YAML file. The resulting :class:`Config`
+    object exposes every runtime safeguard introduced in this repository,
+    including lookahead width, the optional refinement and reflow passes, the
+    single-word allowlist, and guardrail penalty sliders surfaced in the UI.
 
     Args:
         path: The path to the main `config.yaml` file.

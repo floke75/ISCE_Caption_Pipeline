@@ -96,8 +96,10 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
     *   Set `enable_bidirectional_pass: true` to run both forward and backward beam searches and reconcile their boundaries, which can rescue missed opportunities the forward pass alone would skip.
     *   Set `enable_reflow: true` if you want an additional post-processing pass that reflows short or imbalanced cues after the beam search without merging across speaker changes.
     *   Enable `enable_refinement_pass` to let the segmenter revisit low-scoring or single-word cues with a wider beam before post-processing so awkward captions can be rebalanced automatically.
+    *   Increase `lookahead_width` when you want the scorer to peek a few tokens ahead and proactively react to upcoming speaker changes or punctuation.
     *   Adjust `min_chars_for_single_word_block` to control when genuinely single-word cues require manual review. Multi-word lines ignore this threshold so normal short phrases remain eligible.
     *   Configure block-level guardrails with `min_total_chars_per_block` / `min_last_line_chars` and the matching `short_block_penalty` / `short_line_penalty` sliders to discourage under-filled captions or vanishingly short final lines.
+    *   Tune the guardrail sliders surfaced in the UI—`single_word_line_penalty`, `extreme_balance_penalty`, `short_block_penalty`, and `short_line_penalty`—to match your house style. These penalties only fire when the associated thresholds are breached, letting you spotlight risky cues without retraining the model.
     *   Adjust the `fragment_penalty` / `fragment_char_threshold` sliders to suppress cues whose projected second line would collapse to an empty or ultra-short fragment.
 
 ## Web Control Center

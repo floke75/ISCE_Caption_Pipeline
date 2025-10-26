@@ -5,7 +5,10 @@ This module is central to the beam search process. The scorer combines learned
 weights, corpus-derived constraints, and operator-controlled "sliders" to
 evaluate potential break decisions. Beyond the legacy statistical features, the
 implementation now understands lookahead context, block-level guardrails, and
-fallback penalties that keep short or orphaned cues in check.
+fallback penalties that keep short or orphaned cues in check. The sliders cover
+production toggles such as ``single_word_line_penalty``,
+``extreme_balance_penalty``, ``short_block_penalty``, and the projected-second
+line fragment controls so operators can dial in safeguards without retraining.
 
 The scoring is divided into two main components:
 
@@ -34,7 +37,10 @@ class Scorer:
     set of learned weights from a trained model, corpus-derived constraints,
     and user-adjustable sliders to calculate scores. Newer guardrail sliders
     expose production toggles for discouraging single-word lines, weak final
-    lines, and under-filled blocks without retraining the statistical model.
+    lines, under-filled blocks, and extreme balance ratios without retraining
+    the statistical model. Fragment thresholds also discourage projected
+    second lines that would collapse into vanishingly small cues when the
+    fallback escape hatch is forced.
 
     Attributes
     ----------
@@ -104,7 +110,11 @@ class Scorer:
         punctuation, syntax, etc.) and applies structural boosts for strong
         hints such as speaker changes. When :class:`TransitionContext` is
         provided we also consider how much room remains for the second line so
-        the beam can avoid creating vanishingly small fragments.
+        the beam can avoid creating vanishingly small fragments. The
+        ``fragment_penalty`` and ``fragment_char_threshold`` sliders determine
+        how aggressively those projected-fragment checks influence ``LB``
+        decisions whenever the fallback escape hatch would otherwise force a
+        short cue.
 
         Parameters
         ----------
@@ -263,8 +273,11 @@ class Scorer:
         * Characters per second (CPS) to ensure the subtitle is neither too
           dense nor too sparse.
         * Line balance so two-line captions stay evenly distributed.
-        * Guardrail penalties that discourage under-filled blocks, vanishingly
-          short final lines, and single-word cues unless explicitly whitelisted.
+        * Guardrail penalties (``single_word_line_penalty``,
+          ``extreme_balance_penalty``, ``short_block_penalty``,
+          ``short_line_penalty``) that discourage under-filled blocks,
+          vanishingly short final lines, and single-word cues unless explicitly
+          whitelisted.
         * Gross duration to keep blocks on screen for a reasonable amount of
           time.
 

@@ -26,9 +26,12 @@ def main():
     1.  Loads the main configuration file (`config.yaml`), the statistical model
         weights, and the corpus constraints.
     2.  Loads the enriched tokens from the input JSON file.
-    3.  Initializes the `Scorer` with the loaded models and configuration.
+    3.  Initializes the `Scorer` with the loaded models and configuration,
+        including guardrail sliders and lookahead width.
     4.  Runs the beam search segmentation algorithm (`segment`) to determine the
-        optimal break points (`SB`, `LB`, `O`).
+        optimal break points (`SB`, `LB`, `O`), optionally invoking bidirectional
+        reconciliation and the refinement pass when the configuration enables
+        those safeguards.
     5.  Optionally runs a lightweight reflow pass to smooth short or imbalanced cues.
     6.  Formats the segmented tokens into the standard SRT file format.
     7.  Writes the final output to the specified SRT file.
