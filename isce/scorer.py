@@ -180,7 +180,7 @@ class Scorer:
             scores["O"] -= self.structure_boost
 
         # --- Step 3: Optional lookahead heuristics ---
-        self._apply_lookahead_heuristics(scores, lookahead)
+        self._apply_lookahead_heuristics(scores, row, lookahead)
 
         if ctx and ctx.current_line_num == 1:
             projected_words = ctx.projected_second_line_words
@@ -194,7 +194,9 @@ class Scorer:
 
         return scores
 
-    def _apply_lookahead_heuristics(self, scores: Dict[str, float], lookahead: List[dict]) -> None:
+    def _apply_lookahead_heuristics(
+        self, scores: Dict[str, float], row: TokenRow, lookahead: List[dict]
+    ) -> None:
         """Apply forward-looking adjustments when future context is available.
 
         The transition scorer operates primarily on local features, but when the
@@ -207,18 +209,24 @@ class Scorer:
         * strong punctuation (comma or sentence-final mark) is approaching, or
         * a long pause is about to occur.
 
+        It also guards against fragile line breaks by discouraging choices that
+        would create extremely short second lines or leave dangling one- or
+        two-character fragments on the first line.
+
         These heuristics are intentionally gentle—they scale by the distance to
         the future event so that remote hints do not overwhelm learned weights.
 
         Args:
             scores: The mutable transition score dictionary produced by
                 :meth:`score_transition`.
+            row: The token row currently under evaluation.
             lookahead: A list of dictionary-style token payloads describing the
-                upcoming words. An empty list leaves ``scores`` unchanged.
+                upcoming words. An empty list still triggers fragment guards
+                using the current token.
         """
 
         if not lookahead:
-            return
+            lookahead = []
 
         # Speaker changes are a strong cue for starting a new subtitle block.
         speaker_idx = next((idx for idx, future in enumerate(lookahead) if future.get("speaker_change")), None)
@@ -246,11 +254,30 @@ class Scorer:
             scores["O"] -= flow_bonus * 0.5
 
         # Extended pauses should not straddle a subtitle boundary; favor a break.
-        upcoming_pause = max((future.get("pause_before_ms") or future.get("pause_after_ms") or 0) for future in lookahead)
+        upcoming_pause = max(
+            (future.get("pause_before_ms") or future.get("pause_after_ms") or 0) for future in lookahead
+        ) if lookahead else 0
         if upcoming_pause >= 500:
             pause_bonus = self.sl.get("flow", 1.0) * 0.5
             scores["SB"] += pause_bonus
             scores["LB"] += pause_bonus * 0.5
+
+        # Discourage line breaks that would produce extremely short second lines.
+        min_line_for_break = getattr(self.cfg, "min_line_length_for_break", 0)
+        if min_line_for_break and lookahead:
+            projected_len = sum(len(tok.get("w", "")) for tok in lookahead)
+            projected_len += max(0, len(lookahead) - 1)
+            deficit = min_line_for_break - projected_len
+            if deficit > 0:
+                scores["LB"] -= min(5.0, deficit * 0.75)
+
+        # Avoid dangling very short tokens at the end of the first line.
+        last_word_threshold = getattr(self.cfg, "min_last_word_len_for_break", 0)
+        if last_word_threshold:
+            raw_word = row.token.get("w", "")
+            stripped = raw_word.rstrip(".,?!;:\"'…")
+            if stripped and len(stripped) < last_word_threshold:
+                scores["LB"] -= 5.0
 
     def score_block(self, block_tokens: List[dict], block_breaks: List[BreakType]) -> float:
         """
@@ -304,6 +331,10 @@ class Scorer:
         line_char_counts = [count_chars(line) for line in lines]
         total_chars = sum(line_char_counts)
 
+        min_block_chars = getattr(self.cfg, "min_block_length_char", 0)
+        if min_block_chars and total_chars < min_block_chars:
+            score -= 0.5 * (min_block_chars - total_chars)
+
         if len(lines) == 2:
             len1, len2 = line_char_counts
             balance = (len1 / max(1, len2)) if len1 and len2 else 1.0
@@ -334,6 +365,12 @@ class Scorer:
                 score += self.sl.get("balance", 1.0) * 0.5
             else:
                 score -= self.sl.get("balance", 1.0) * 0.5
+
+        min_line_chars = getattr(self.cfg, "min_line_length_char", 0)
+        if min_line_chars:
+            for chars in line_char_counts:
+                if chars and chars < min_line_chars:
+                    score -= 0.5 * (min_line_chars - chars)
 
         single_word_penalty = float(self.sl.get("single_word_line_penalty", 0.0))
         if single_word_penalty:

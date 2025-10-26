@@ -9,6 +9,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from isce.config import Config
 from isce.scorer import Scorer
+from isce.types import TokenRow
 
 
 def _base_config(**overrides) -> Config:
@@ -42,6 +43,10 @@ def _base_config(**overrides) -> Config:
         },
         paths={},
         allowed_single_word_proper_nouns=(),
+        min_line_length_for_break=0,
+        min_last_word_len_for_break=0,
+        min_block_length_char=0,
+        min_line_length_char=0,
     )
     defaults.update(overrides)
     return Config(**defaults)
@@ -184,3 +189,56 @@ def test_short_last_line_penalty_triggers():
     score = scorer.score_block(block_tokens, block_breaks)
 
     assert score < 0.0
+
+
+def test_lookahead_penalizes_short_second_line():
+    cfg = _base_config(min_line_length_for_break=10)
+    scorer = _make_scorer(cfg)
+
+    generous_lookahead = TokenRow(
+        token={"w": "Hello"},
+        nxt={"w": "world"},
+        lookahead=(
+            {"w": "lengthy"},
+            {"w": "phrase"},
+        ),
+    )
+    cramped_lookahead = TokenRow(
+        token={"w": "Hello"},
+        nxt={"w": "world"},
+        lookahead=(
+            {"w": "hi"},
+        ),
+    )
+
+    lb_generous = scorer.score_transition(generous_lookahead)["LB"]
+    lb_cramped = scorer.score_transition(cramped_lookahead)["LB"]
+
+    assert lb_cramped < lb_generous
+
+
+def test_short_last_word_discourages_break():
+    cfg = _base_config(min_last_word_len_for_break=4)
+    scorer = _make_scorer(cfg)
+
+    acceptable = TokenRow(token={"w": "talk"}, nxt={"w": "now"})
+    dangling = TokenRow(token={"w": "to"}, nxt={"w": "go"})
+
+    assert scorer.score_transition(dangling)["LB"] < scorer.score_transition(acceptable)["LB"]
+
+
+def test_min_block_length_penalty_applies():
+    cfg = _base_config(min_block_length_char=12)
+    scorer = _make_scorer(cfg, {"short_block_penalty": 0.0})
+
+    short_block = [
+        {"w": "Hi", "start": 0.0, "end": 0.4},
+        {"w": "!", "start": 0.4, "end": 0.5},
+    ]
+    breaks = ["O", "SB"]
+
+    neutral_cfg = _base_config(min_block_length_char=0)
+    neutral = _make_scorer(neutral_cfg, {"short_block_penalty": 0.0}).score_block(short_block, breaks)
+    penalised = scorer.score_block(short_block, breaks)
+
+    assert penalised < neutral

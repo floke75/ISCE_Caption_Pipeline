@@ -170,6 +170,10 @@ ISCE uses two main configuration files stored in the repository root. The UI bac
         preserve legacy behavior or increase it if your corpora benefit from deeper lookahead.
     *   `allowed_single_word_proper_nouns`: Optional allowlist of proper nouns that are permitted to stand alone without
         triggering hard single-word penalties.
+    *   `constraints.min_line_length_for_break`, `constraints.min_last_word_len_for_break`, `constraints.min_block_length_char`,
+        and `constraints.min_line_length_char`: Safety rails inspired by PR #58 that keep second lines from being too short,
+        discourage breaks after dangling particles, and apply gentle penalties to ultra-short cues even when slider penalties
+        are disabled.
     *   `sliders`: User-adjustable weights to fine-tune the importance of different features in the scoring model. The defaults
         now include penalties for under-filled captions (`short_block_penalty`, `short_line_penalty`), balance safety rails
         (`extreme_balance_penalty`, `extreme_balance_threshold`), and fallback leniency knobs (`line_length_leniency`,

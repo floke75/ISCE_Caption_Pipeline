@@ -23,6 +23,10 @@ constraints:
   min_total_chars_per_block: 14
   min_last_line_chars: 8
   min_chars_for_single_word_block: 10
+  min_line_length_for_break: 15
+  min_last_word_len_for_break: 5
+  min_block_length_char: 10
+  min_line_length_char: 5
 
 # --- Exceptions ---
 allowed_single_word_proper_nouns:

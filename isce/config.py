@@ -58,6 +58,22 @@ class Config:
         allowed_single_word_proper_nouns:
             Tuple of proper nouns that may appear as single-word captions
             without triggering hard rejections.
+        min_line_length_for_break:
+            Minimum number of characters required in the projected second line
+            before the scorer will encourage inserting a manual line break. A
+            value of ``0`` disables the guard for manually constructed configs;
+            :func:`load_config` hydrates it from ``config.yaml``.
+        min_last_word_len_for_break:
+            Minimum length of the final word on a line before a manual break is
+            considered—helps discourage dangling prepositions or particles.
+        min_block_length_char:
+            Baseline character count a cue should meet before incurring soft
+            penalties for being too short. Defaults to ``0`` (disabled) when
+            constructing configs by hand.
+        min_line_length_char:
+            Baseline character count each line should meet before soft penalties
+            are applied for under-filled captions. Defaults to ``0`` (disabled)
+            unless loaded from ``config.yaml``.
     """
     beam_width: int
     min_block_duration_s: float
@@ -71,6 +87,10 @@ class Config:
     enable_reflow: bool = False
     enable_refinement_pass: bool = False
     allowed_single_word_proper_nouns: tuple[str, ...] = ()
+    min_line_length_for_break: int = 0
+    min_last_word_len_for_break: int = 0
+    min_block_length_char: int = 0
+    min_line_length_char: int = 0
 
 def load_config(path: str = "config.yaml") -> Config:
     """
@@ -131,6 +151,10 @@ def load_config(path: str = "config.yaml") -> Config:
     allowed_single_word_proper_nouns = tuple(
         str(item) for item in y.get("allowed_single_word_proper_nouns", [])
     )
+    min_line_length_for_break = int(constraints_yaml.get("min_line_length_for_break", 15))
+    min_last_word_len_for_break = int(constraints_yaml.get("min_last_word_len_for_break", 5))
+    min_block_length_char = int(constraints_yaml.get("min_block_length_char", 10))
+    min_line_length_char = int(constraints_yaml.get("min_line_length_char", 5))
 
     line_defaults = {
         "soft_target": line1_soft,
@@ -174,4 +198,8 @@ def load_config(path: str = "config.yaml") -> Config:
         enable_reflow=bool(y.get("enable_reflow", False)),
         enable_refinement_pass=bool(y.get("enable_refinement_pass", False)),
         allowed_single_word_proper_nouns=allowed_single_word_proper_nouns,
+        min_line_length_for_break=min_line_length_for_break,
+        min_last_word_len_for_break=min_last_word_len_for_break,
+        min_block_length_char=min_block_length_char,
+        min_line_length_char=min_line_length_char,
     )
