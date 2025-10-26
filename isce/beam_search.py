@@ -208,11 +208,13 @@ class Segmenter:
                 continue
 
             single_word_token = line_tokens[0]
-            allowed_single = self._is_allowed_single_word(single_word_token)
-            if not allowed_single:
+            if self._is_allowed_single_word(single_word_token):
+                continue
+
+            char_count = self._count_chars(line_tokens)
+            if char_count < min_chars_single:
                 violations["single_word"] += 1
-                if self._count_chars(line_tokens) < min_chars_single:
-                    violations["short_line"] += 1
+                violations["short_line"] += 1
         return violations
 
     def _is_hard_ok_SB(self, state: PathState, current_idx: int) -> bool:

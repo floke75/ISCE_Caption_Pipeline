@@ -266,8 +266,8 @@ class TestBeamSearch(unittest.TestCase):
         self.assertIn(lookahead_breaks[0], {"LB", "SB"})
         self.assertNotEqual(base_breaks, lookahead_breaks)
 
-    def test_single_word_line_rejected_without_whitelist(self):
-        tokens = [make_token("Hello", 0.0), make_token("world", 0.2)]
+    def test_short_single_word_line_rejected_without_whitelist(self):
+        tokens = [make_token("Go", 0.0), make_token("now", 0.2)]
         cfg = Config(
             beam_width=1,
             min_block_duration_s=0.1,
@@ -276,7 +276,7 @@ class TestBeamSearch(unittest.TestCase):
                 "line1": {"soft_target": 12, "hard_limit": 20},
                 "line2": {"soft_target": 12, "hard_limit": 20},
             },
-            min_chars_for_single_word_block=2,
+            min_chars_for_single_word_block=4,
             sliders={},
             paths={},
             lookahead_width=0,
@@ -285,6 +285,26 @@ class TestBeamSearch(unittest.TestCase):
         segmenter = Segmenter(tokens, DummyScorer(), cfg)
         state = PathState(score=0.0, line_num=1, line_len=len(tokens[0].w), block_start_idx=0, breaks=())
         self.assertFalse(segmenter._is_hard_ok_SB(state, 0))
+
+    def test_single_word_above_threshold_allowed_without_whitelist(self):
+        tokens = [make_token("Wonderful", 0.0)]
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=6,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+        segmenter = Segmenter(tokens, DummyScorer(), cfg)
+        state = PathState(score=0.0, line_num=1, line_len=len(tokens[0].w), block_start_idx=0, breaks=())
+        self.assertTrue(segmenter._is_hard_ok_SB(state, 0))
 
     def test_multi_word_short_line_allowed(self):
         tokens = [make_token("Go", 0.0), make_token("now", 0.2)]
@@ -493,6 +513,28 @@ class TestLineViolations(unittest.TestCase):
             paths={},
             lookahead_width=0,
             allowed_single_word_proper_nouns=("NASA",),
+        )
+
+        segmenter = Segmenter(tokens, DummyScorer(), cfg)
+        violations = segmenter._line_violations([tokens])
+
+        assert violations == Counter()
+
+    def test_allows_long_single_word_without_whitelist(self):
+        tokens = [make_token("Outstanding", 0.0, pos="ADJ")]
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=6,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
         )
 
         segmenter = Segmenter(tokens, DummyScorer(), cfg)
