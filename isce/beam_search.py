@@ -208,12 +208,19 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     if n == 0:
         return []
 
-    # Reverse the breaks and handle the sentinel "SB"
-    mapped = reversed(reversed_breaks)
-    final_breaks = [b if b != "SB" else "O" for b in mapped]
-    if final_breaks:
-        final_breaks[-1] = "SB"
-    return final_breaks
+    # Start from the legacy mapping (simple reversal) so non-SB decisions keep
+    # their historical behavior. Then project any interior "SB" markers from
+    # the backward pass onto the corresponding forward indices.
+    mapped = list(reversed(reversed_breaks))
+    mapped = ["O" if br == "SB" else br for br in mapped]
+    mapped[-1] = "SB"
+
+    for j, br in enumerate(reversed_breaks[:-1]):
+        if br == "SB":
+            i = n - 2 - j
+            mapped[i] = "SB"
+
+    return mapped
 
 
 def _score_segmentation(tokens: List[Token], breaks: List[BreakType], scorer: Scorer) -> float:
