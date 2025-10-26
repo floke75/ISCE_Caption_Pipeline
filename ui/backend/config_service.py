@@ -548,6 +548,20 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             description="Penalty applied when a cue would end with a single word or sub-minimal line.",
         ),
         ConfigField(
+            path=["sliders", "fragment_penalty"],
+            section="Stylistic sliders",
+            label="Fragment penalty",
+            field_type="number",
+            description="Penalty applied when the projected second line would be an orphan fragment.",
+        ),
+        ConfigField(
+            path=["sliders", "fragment_char_threshold"],
+            section="Stylistic sliders",
+            label="Fragment character threshold",
+            field_type="number",
+            description="Minimum characters expected on the projected second line before fragment penalties activate.",
+        ),
+        ConfigField(
             path=["sliders", "extreme_balance_penalty"],
             section="Stylistic sliders",
             label="Extreme balance penalty",

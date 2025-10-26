@@ -59,6 +59,8 @@ sliders:
   # Penalties for under-filled captions and dangling short lines
   short_block_penalty: 1.5  # Penalty per missing character when the block closes too soon.
   short_line_penalty: 1.0   # Penalty per missing character when the last line is too short.
+  fragment_penalty: 8.0     # Penalty applied when the projected second line would be a fragment.
+  fragment_char_threshold: 6.0  # Minimum characters expected when only one word would land on the second line.
 
   # Leniency controls for dynamic penalties
   line_length_leniency: 1.0 # >1.0 allows longer lines to avoid bad breaks.

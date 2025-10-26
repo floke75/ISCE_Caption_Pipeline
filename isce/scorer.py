@@ -57,6 +57,8 @@ class Scorer:
             "extreme_balance_threshold": 2.5,
             "short_block_penalty": 0.0,
             "short_line_penalty": 0.0,
+            "fragment_penalty": 6.0,
+            "fragment_char_threshold": 8.0,
         }
         self.sl.update(sliders)
         self.structure_boost = self.sl.get("structure_boost", 15.0)
