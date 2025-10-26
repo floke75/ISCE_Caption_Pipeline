@@ -14,7 +14,7 @@ from .scorer import Scorer
 
 def _block_ranges(tokens: List[Token]) -> List[Tuple[int, int]]:
     """Identifies the start and end indices of each subtitle block."""
-    ranges = []
+    ranges: List[Tuple[int, int]] = []
     start_idx = 0
     for i, token in enumerate(tokens):
         if token.break_type == "SB":
@@ -33,6 +33,21 @@ def _block_breaks(block: List[Token]) -> List[BreakType]:
     return [t.break_type for t in block]
 
 
+def _line_balance_cost(block: List[Token], lb_idx: int) -> float:
+    """Returns the absolute character difference between the two lines."""
+    if lb_idx < 0 or lb_idx >= len(block) - 1:
+        return float("inf")
+
+    def _count_chars(slice_tokens: List[Token]) -> int:
+        if not slice_tokens:
+            return 0
+        return sum(len(t.w) for t in slice_tokens) + max(0, len(slice_tokens) - 1)
+
+    line1 = block[: lb_idx + 1]
+    line2 = block[lb_idx + 1 :]
+    return abs(_count_chars(line1) - _count_chars(line2))
+
+
 def _rebalance_line_breaks(tokens: List[Token], scorer: Scorer) -> List[Token]:
     """Adjusts line breaks within blocks to improve line balance."""
     output = list(tokens)
@@ -43,7 +58,12 @@ def _rebalance_line_breaks(tokens: List[Token], scorer: Scorer) -> List[Token]:
             continue
 
         best_lb_idx = breaks.index("LB")
+        original_lb_idx = best_lb_idx
         current_score = scorer.score_block(_as_dicts(block, breaks), breaks)
+        best_balance = _line_balance_cost(block, best_lb_idx)
+        improved = False
+        balance_threshold = 2.0
+        early_move_min_gain = 1.25
 
         for i in range(len(block) - 1):
             if i == best_lb_idx:
@@ -54,9 +74,19 @@ def _rebalance_line_breaks(tokens: List[Token], scorer: Scorer) -> List[Token]:
             new_breaks[-1] = "SB"
 
             new_score = scorer.score_block(_as_dicts(block, new_breaks), new_breaks)
-            if new_score > current_score:
+            gain = new_score - current_score
+            if gain > 1e-6:
+                if i < original_lb_idx and gain <= early_move_min_gain:
+                    continue
                 current_score = new_score
                 best_lb_idx = i
+                best_balance = _line_balance_cost(block, best_lb_idx)
+                improved = True
+            elif not improved and abs(new_score - current_score) <= 1e-6:
+                balance = _line_balance_cost(block, i)
+                if (best_balance - balance) > balance_threshold:
+                    best_lb_idx = i
+                    best_balance = balance
 
         final_breaks = ["O"] * len(block)
         final_breaks[best_lb_idx] = "LB"
@@ -71,50 +101,81 @@ def _rebalance_line_breaks(tokens: List[Token], scorer: Scorer) -> List[Token]:
 def _merge_short_blocks(tokens: List[Token], scorer: Scorer) -> List[Token]:
     """Merges short, single-word blocks into adjacent blocks."""
     output = list(tokens)
+
+    def _score_block(tokens_slice: List[Token]) -> float:
+        breaks = _block_breaks(tokens_slice)
+        return scorer.score_block(_as_dicts(tokens_slice, breaks), breaks)
+
+    def _combined_breaks(block_a: List[Token], block_b: List[Token]) -> List[BreakType]:
+        combined: List[BreakType] = []
+        for offset, token in enumerate(block_a + block_b):
+            if offset == len(block_a + block_b) - 1:
+                combined.append("SB")
+            else:
+                br = token.break_type or "O"
+                combined.append("O" if br == "SB" else br)
+        return combined
+
     changed = True
     while changed:
         changed = False
         block_ranges = list(_block_ranges(output))
-        for idx in range(len(block_ranges) - 1):
-            start1, end1 = block_ranges[idx]
-            start2, end2 = block_ranges[idx + 1]
-            block1 = output[start1 : end1 + 1]
-            block2 = output[start2 : end2 + 1]
 
-            if len(block1) != 1:
+        for idx, (start, end) in enumerate(block_ranges):
+            block = output[start : end + 1]
+
+            if len(block) != 1:
                 continue
 
-            word = block1[0].w.rstrip(".,?!¡¿…")
+            word = block[0].w.rstrip(".,?!¡¿…")
             if len(word) > 6:
                 continue
 
-            # Prevent merging across speaker changes
-            if block1[-1].speaker != block2[0].speaker:
+            neighbors: List[Tuple[str, Tuple[int, int], List[Token]]] = []
+            if idx > 0:
+                prev_range = block_ranges[idx - 1]
+                prev_block = output[prev_range[0] : prev_range[1] + 1]
+                if prev_block[-1].speaker == block[0].speaker:
+                    neighbors.append(("prev", prev_range, prev_block))
+            if idx + 1 < len(block_ranges):
+                next_range = block_ranges[idx + 1]
+                next_block = output[next_range[0] : next_range[1] + 1]
+                if block[-1].speaker == next_block[0].speaker:
+                    neighbors.append(("next", next_range, next_block))
+
+            if not neighbors:
                 continue
 
-            current_score = (
-                scorer.score_block(_as_dicts(block1, _block_breaks(block1)), _block_breaks(block1))
-                + scorer.score_block(_as_dicts(block2, _block_breaks(block2)), _block_breaks(block2))
-            )
+            block_score = _score_block(block)
+            best_choice: Tuple[str, Tuple[int, int], List[BreakType], float] | None = None
 
-            combined_tokens = block1 + block2
-            combined_breaks: List[BreakType] = []
-            for offset, token in enumerate(combined_tokens):
-                if offset == len(combined_tokens) - 1:
-                    combined_breaks.append("SB")
+            for direction, rng, neighbor in neighbors:
+                neighbor_score = _score_block(neighbor)
+                if direction == "prev":
+                    combined_tokens = neighbor + block
+                    start_idx = rng[0]
                 else:
-                    br = token.break_type or "O"
-                    combined_breaks.append("O" if br == "SB" else br)
+                    combined_tokens = block + neighbor
+                    start_idx = start
 
-            combined_score = scorer.score_block(
-                _as_dicts(combined_tokens, combined_breaks), combined_breaks
-            )
+                combined_breaks = _combined_breaks(neighbor if direction == "prev" else block,
+                                                   block if direction == "prev" else neighbor)
+                combined_score = scorer.score_block(
+                    _as_dicts(combined_tokens, combined_breaks), combined_breaks
+                )
+                baseline = neighbor_score + block_score
+                if combined_score >= baseline - 1e-6:
+                    if not best_choice or combined_score > best_choice[3] + 1e-6:
+                        best_choice = (direction, (start_idx, start_idx + len(combined_tokens) - 1), combined_breaks, combined_score)
 
-            if combined_score >= current_score - 1e-6:
-                for offset, br in enumerate(combined_breaks):
-                    output[start1 + offset] = replace(output[start1 + offset], break_type=br)
-                changed = True
-                break
+            if not best_choice:
+                continue
+
+            direction, (merged_start, merged_end), final_breaks, _ = best_choice
+            for offset, br in enumerate(final_breaks):
+                output[merged_start + offset] = replace(output[merged_start + offset], break_type=br)
+            changed = True
+            break
     return output
 
 def reflow_tokens(tokens: List[Token], scorer: Scorer) -> List[Token]:

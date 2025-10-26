@@ -17,6 +17,7 @@ from .types import Token, BreakType, TokenRow
 from .scorer import Scorer
 from .config import Config
 from .utils import _token_to_row_dict, _compute_transition_scores, _get_lookahead_slice
+from .post_process import _block_ranges
 
 FALLBACK_SB_PENALTY = 25.0
 
@@ -215,18 +216,46 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     return final_breaks
 
 
+def _score_segmentation(tokens: List[Token], breaks: List[BreakType], scorer: Scorer) -> float:
+    total = 0.0
+    block_tokens: List[Token] = []
+    block_breaks: List[BreakType] = []
+
+    for token, br in zip(tokens, breaks):
+        block_tokens.append(replace(token, break_type=br))
+        block_breaks.append(br)
+        if br == "SB":
+            total += scorer.score_block([t.__dict__ for t in block_tokens], block_breaks)
+            block_tokens = []
+            block_breaks = []
+
+    return total
+
+
 def _reconcile_bidirectional_breaks(forward_breaks: List[BreakType], backward_breaks: List[BreakType], scorer: Scorer, tokens: List[Token]) -> List[BreakType]:
     """
     Reconciles conflicting break decisions from forward and backward passes.
     """
     reconciled = list(forward_breaks)
+    current_score = _score_segmentation(tokens, reconciled, scorer)
+    tie_priority = {"LB": 3, "O": 2, "SB": 1}
+
     for i in range(len(tokens)):
-        if forward_breaks[i] != backward_breaks[i]:
-            # Simple reconciliation: prefer SB over LB, and LB over O
-            if backward_breaks[i] == "SB":
-                reconciled[i] = "SB"
-            elif backward_breaks[i] == "LB" and forward_breaks[i] == "O":
-                reconciled[i] = "LB"
+        candidate_break = backward_breaks[i]
+        if reconciled[i] == candidate_break:
+            continue
+
+        candidate_breaks = list(reconciled)
+        candidate_breaks[i] = candidate_break
+        candidate_score = _score_segmentation(tokens, candidate_breaks, scorer)
+
+        if candidate_score > current_score + 1e-6 or (
+            abs(candidate_score - current_score) <= 1e-6
+            and tie_priority.get(candidate_break, 0) > tie_priority.get(reconciled[i], 0)
+        ):
+            reconciled = candidate_breaks
+            current_score = candidate_score
+
     return reconciled
 
 def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
