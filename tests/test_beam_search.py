@@ -102,6 +102,25 @@ class RefinementScorer:
         return 0.0
 
 
+class RecordingScorer:
+    def __init__(self, single_word_line_penalty: float = 0.0):
+        self.sl = {
+            "line_length_leniency": 1.0,
+            "orphan_leniency": 1.0,
+            "single_word_line_penalty": single_word_line_penalty,
+            "extreme_balance_penalty": 0.0,
+            "extreme_balance_threshold": 2.5,
+        }
+        self.lookahead_payloads: list[tuple[dict, ...] | None] = []
+
+    def score_transition(self, row, ctx=None):
+        self.lookahead_payloads.append(row.lookahead)
+        return {"O": 0.0, "LB": 0.0, "SB": 0.0}
+
+    def score_block(self, block_tokens, block_breaks):
+        return 0.0
+
+
 def make_token(word: str, start: float, **overrides) -> Token:
     defaults = dict(w=word, start=start, end=start + 0.2, speaker="A")
     defaults.update(overrides)
@@ -168,6 +187,118 @@ class TestBeamSearch(unittest.TestCase):
         self.assertIsNotNone(segmenter.last_path_score)
         rescored = _score_path(tokens, breaks, scorer, cfg)
         self.assertAlmostEqual(segmenter.last_path_score, rescored)
+
+    def test_transition_context_projects_second_line_from_first_line(self):
+        tokens = [
+            make_token("alpha", 0.0),
+            make_token("beta", 0.2),
+            make_token("gamma", 0.4),
+        ]
+
+        cfg = Config(
+            beam_width=2,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 20, "hard_limit": 30},
+                "line2": {"soft_target": 20, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        segmenter = Segmenter(tokens, DummyScorer(), cfg)
+        first_line_state = PathState(
+            score=0.0,
+            line_num=1,
+            line_len=len(tokens[0].w) + 1 + len(tokens[1].w),
+            block_start_idx=0,
+            breaks=("O",),
+        )
+        context = segmenter._build_transition_context(first_line_state, 1)
+        self.assertEqual(context.current_line_num, 1)
+        self.assertEqual(context.current_line_len, len(tokens[0].w) + 1 + len(tokens[1].w))
+        self.assertIsNotNone(context.projected_second_line_chars)
+        self.assertIsNotNone(context.projected_second_line_words)
+
+        second_line_state = PathState(
+            score=0.0,
+            line_num=2,
+            line_len=len(tokens[2].w),
+            block_start_idx=0,
+            breaks=("O", "LB"),
+        )
+        second_context = segmenter._build_transition_context(second_line_state, 2)
+        self.assertIsNone(second_context.projected_second_line_chars)
+        self.assertIsNone(second_context.projected_second_line_words)
+
+    def test_score_path_exposes_lookahead(self):
+        tokens = [
+            make_token("alpha", 0.0),
+            make_token("beta", 0.2),
+            make_token("gamma", 0.4),
+        ]
+
+        cfg = Config(
+            beam_width=2,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 20, "hard_limit": 30},
+                "line2": {"soft_target": 20, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=2,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        scorer = RecordingScorer()
+        breaks = ["O", "O", "SB"]
+        _score_path(tokens, breaks, scorer, cfg)
+
+        self.assertEqual(len(scorer.lookahead_payloads), 3)
+        self.assertIsNone(scorer.lookahead_payloads[-1])
+        self.assertIsNotNone(scorer.lookahead_payloads[0])
+        self.assertEqual(len(scorer.lookahead_payloads[0]), 2)
+
+    def test_fallback_uses_single_word_slider_penalty(self):
+        tokens = [make_token("Hi", 0.0)]
+        base_cfg = Config(
+            beam_width=1,
+            min_block_duration_s=5.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 5, "hard_limit": 10},
+                "line2": {"soft_target": 5, "hard_limit": 10},
+            },
+            min_chars_for_single_word_block=4,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        zero_slider = RecordingScorer(single_word_line_penalty=0.0)
+        slider_segmenter = Segmenter(tokens, zero_slider, base_cfg)
+        zero_breaks = slider_segmenter.run()
+        self.assertEqual(zero_breaks, ["SB"])
+        zero_score = slider_segmenter.last_path_score
+
+        custom_slider = RecordingScorer(single_word_line_penalty=7.0)
+        custom_segmenter = Segmenter(tokens, custom_slider, base_cfg)
+        custom_breaks = custom_segmenter.run()
+        self.assertEqual(custom_breaks, ["SB"])
+        custom_score = custom_segmenter.last_path_score
+
+        self.assertIsNotNone(zero_score)
+        self.assertIsNotNone(custom_score)
+        self.assertGreater(custom_score, zero_score)
+        self.assertAlmostEqual(custom_score - zero_score, 18.0, places=3)
 
     def test_fallback_candidate_keeps_beam_alive(self):
         tokens = [

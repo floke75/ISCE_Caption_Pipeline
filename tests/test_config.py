@@ -61,3 +61,39 @@ def test_load_config_rejects_non_dict_yaml(tmp_path: Path) -> None:
 
     with pytest.raises(TypeError):
         load_config(str(config_path))
+
+
+def test_load_config_populates_feature_toggles(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+beam_width: 4
+constraints:
+  min_block_duration_s: 0.6
+  max_block_duration_s: 6.5
+  line_length_soft_target: 32
+  line_length_hard_limit: 38
+min_chars_for_single_word_block: 8
+enable_bidirectional_pass: true
+enable_refinement_pass: true
+enable_reflow: true
+lookahead_width: 3
+allowed_single_word_proper_nouns:
+  - NASA
+  - ESA
+sliders:
+  single_word_line_penalty: 4.0
+paths:
+  constraints: missing.json
+        """.strip(),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(str(config_path))
+
+    assert cfg.enable_bidirectional_pass is True
+    assert cfg.enable_refinement_pass is True
+    assert cfg.enable_reflow is True
+    assert cfg.lookahead_width == 3
+    assert cfg.allowed_single_word_proper_nouns == ("NASA", "ESA")
+    assert cfg.sliders["single_word_line_penalty"] == 4.0
