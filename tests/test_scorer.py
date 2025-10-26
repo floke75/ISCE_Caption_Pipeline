@@ -82,6 +82,36 @@ def test_score_transition_applies_weights_and_structure_boost():
     assert scores["SB"] == pytest.approx(12.05)
 
 
+def test_score_transition_handles_missing_spacy_payload():
+    weights = {
+        "lemma": {"lb:none|none": {"O": 0.5}},
+        "tag": {"tb:none|none": {"LB": 0.4}},
+        "morphology": {"mb:none|none": {"SB": 0.3}},
+        "dependency": {
+            "db:none|none": {"O": 0.1},
+            "head_pos:unknown": {"LB": 0.2},
+            "dep_link:none": {"SB": 0.05},
+        },
+    }
+
+    constraints = {
+        "ideal_cps_iqr": [8.0, 16.0],
+        "ideal_cps_median": 12.0,
+        "ideal_balance_iqr": [0.8, 1.2],
+        "min_block_duration_s": 1.0,
+        "max_block_duration_s": 6.0,
+    }
+
+    scorer = Scorer(weights, constraints, {}, _make_cfg())
+    row = TokenRow(token={"w": "Hi"}, nxt={"w": "there"})
+
+    scores = scorer.score_transition(row)
+
+    assert scores["O"] == pytest.approx(0.6)
+    assert scores["LB"] == pytest.approx(0.6)
+    assert scores["SB"] == pytest.approx(0.35)
+
+
 def test_score_block_balances_density_and_duration():
     constraints = {
         "ideal_cps_iqr": [8.0, 16.0],

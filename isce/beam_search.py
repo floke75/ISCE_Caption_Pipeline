@@ -38,12 +38,28 @@ LOCAL_REFINEMENT_IMPROVEMENT = 0.5
 BALANCE_RATIO_THRESHOLD = 2.5
 
 
-def _token_to_row_dict(token: Optional[Token]) -> Optional[dict[str, Any]]:
-    """Project a token dataclass into the dictionary payload expected by ``Scorer``."""
+def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[int] = None) -> Optional[dict[str, Any]]:
+    """Project a token payload into the dictionary structure expected by ``Scorer``.
+
+    When the caller supplies an index (or the source payload already carries a
+    ``token_index`` field) we preserve it so dependency-based feature helpers can
+    compute stable keys.  This keeps bidirectional reconciliation and
+    post-hoc scoring aligned with the forward beam, which always assigns
+    ``token_index`` values before invoking the scorer.
+    """
 
     if token is None:
         return None
-    return dict(token.__dict__)
+
+    if isinstance(token, dict):
+        payload: dict[str, Any] = dict(token)
+    else:
+        payload = dict(token.__dict__)
+
+    if idx is not None and "token_index" not in payload:
+        payload["token_index"] = idx
+
+    return payload
 
 
 def _get_lookahead_slice(tokens: Sequence[Token], start: int, width: int) -> Optional[tuple[dict[str, Any], ...]]:
@@ -54,7 +70,10 @@ def _get_lookahead_slice(tokens: Sequence[Token], start: int, width: int) -> Opt
     future = tokens[start : start + width]
     if not future:
         return None
-    return tuple(dict(token.__dict__) for token in future)
+    return tuple(
+        _token_to_row_dict(tokens[idx], idx) or {}
+        for idx in range(start, start + len(future))
+    )
 
 
 def _estimate_second_line_window(tokens: Sequence[Token], current_idx: int, cfg: Config) -> tuple[int, int]:
@@ -502,14 +521,15 @@ def _score_segmentation(
 
         nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
         row = TokenRow(
-            token=_token_to_row_dict(token) or {},
-            nxt=_token_to_row_dict(nxt),
+            token=_token_to_row_dict(token, idx) or {},
+            nxt=_token_to_row_dict(nxt, idx + 1),
             feats=None,
             lookahead=_get_lookahead_slice(tokens, idx + 1, cfg.lookahead_width),
         )
 
         pending_tokens = tuple(
-            dict(t.__dict__) for t in tokens[block_start : idx + 1]
+            _token_to_row_dict(t, block_start + offset) or {}
+            for offset, t in enumerate(tokens[block_start : idx + 1])
         )
         projected_chars: Optional[int]
         projected_words: Optional[int]
