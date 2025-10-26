@@ -304,6 +304,14 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
     reversed_tokens: List[Token] = []
     total_tokens = len(tokens)
     for offset, token in enumerate(reversed(tokens)):
+
+        if offset < total_tokens - 1:
+            speaker_change = tokens[total_tokens - offset - 2].speaker_change
+        else:
+            speaker_change = False
+
+                speaker_change=speaker_change,
+    for offset, token in enumerate(reversed(tokens)):
         relative_position = 1.0 - token.relative_position if token.relative_position is not None else None
         if relative_position is None:
             relative_position = 0.0
