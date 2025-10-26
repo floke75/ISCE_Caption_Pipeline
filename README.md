@@ -169,6 +169,28 @@ ISCE uses two main configuration files stored in the repository root. The UI bac
     *   `lookahead_width`: Enables a forward-looking pass in the segmenter so the transition scorer can see upcoming pauses,
         punctuation, or speaker changes. Set this to `0` to preserve legacy behavior or increase it (e.g., `2`) to help the
         beam search anticipate rapid clause endings and speaker turns.
+    *   `enable_bidirectional_pass`, `enable_refinement_pass`, and `enable_reflow`: Toggle the optional safeguard passes that
+        reconcile backward decisions, locally re-run wider beams for awkward cues, and reflow the finished captions without
+        crossing speaker boundaries.
+    *   Guardrail sliders such as `single_word_line_penalty`, `short_block_penalty`, and `short_line_penalty`: These encourage
+        operators to keep captions well-filled without banning legitimate multi-word short cues. Pair them with
+        `min_total_chars_per_block`, `min_last_line_chars`, and `min_chars_for_single_word_block` to tune what counts as
+        under-filled content.
+
+### Segmentation safeguards at a glance
+
+Several lightweight passes work together to keep the generated subtitles clean without sacrificing operator control:
+
+* **Lookahead-aware beam search:** The segmenter now forwards a small window of future tokens to the scorer so it can anticipate
+  upcoming pauses, punctuation, or speaker changes before committing to a break.
+* **Bidirectional reconciliation:** When enabled, the pipeline runs the beam search forward and backward, then blends the
+  decisions while keeping whichever side produces the higher-scoring segmentation.
+* **Local refinement pass:** Particularly lopsided or low-scoring blocks are revisited with a wider beam and cached path scores,
+  letting the system rebalance awkward cues without rerunning the full search.
+* **Reflow heuristics:** After segmentation finishes, `reflow_tokens` can merge extremely short cues or slide a line break to
+  produce a more balanced two-line caption, always respecting speaker changes to avoid misattribution.
+* **Guardrail penalties:** The scorer exposes sliders for discouraging single-word lines (with proper-noun exceptions), short
+  final lines, and under-filled blocks so teams can dial in their house style while keeping multi-word short cues viable.
 
 ## Usage
 

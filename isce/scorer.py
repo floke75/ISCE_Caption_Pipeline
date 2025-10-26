@@ -1,18 +1,23 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\scorer.py
-"""Provides the Scorer class for evaluating segmentation decisions.
+"""Provides the :class:`Scorer` class for evaluating segmentation decisions.
 
-This module is central to the beam search process. The `Scorer` class takes
-the trained model weights, derived corpus constraints, and user-configurable
-"sliders" to evaluate the quality of potential break decisions.
+This module is central to the beam search process. The scorer combines learned
+weights, corpus-derived constraints, and operator-controlled "sliders" to
+evaluate potential break decisions. Beyond the legacy statistical features, the
+implementation now understands lookahead context, block-level guardrails, and
+fallback penalties that keep short or orphaned cues in check.
 
 The scoring is divided into two main components:
-1.  **Transition Scoring**: `score_transition` evaluates the quality of placing
-    a break (`O`, `LB`, `SB`) *between* two tokens. This score is based on
-    local linguistic and prosodic features.
-2.  **Block Scoring**: `score_block` evaluates the quality of a *completed*
-    subtitle block. This score is based on holistic properties like
-    characters-per-second (CPS), line balance, and total duration, ensuring
-    the final output is readable and well-formed.
+
+1. **Transition Scoring** – :meth:`Scorer.score_transition` evaluates the
+   quality of placing a break (``O``, ``LB``, ``SB``) *between* two tokens. The
+   method can optionally ingest a :class:`~isce.types.TransitionContext`
+   describing the partially written line so heuristics can discourage
+   pathological second lines.
+2. **Block Scoring** – :meth:`Scorer.score_block` evaluates a *completed*
+   subtitle block. The scorer inspects holistic properties such as characters
+   per second (CPS), line balance, and configurable guardrail thresholds so the
+   final output remains readable and evenly shaped.
 """
 from __future__ import annotations
 from typing import Dict, List, Optional
@@ -22,26 +27,33 @@ from .config import Config
 from .types import BreakType, TokenRow, TransitionContext
 
 class Scorer:
-    """
-    Calculates scores for captioning decisions based on a statistical model.
+    """Calculate scores for captioning decisions based on a hybrid model.
 
-    The Scorer is responsible for evaluating the quality of different break
-    types (`O`, `LB`, `SB`) at each potential decision point in the token
-    sequence. It uses a set of learned weights from a trained model, corpus-
-    derived constraints, and user-adjustable sliders to calculate scores.
+    The scorer evaluates the quality of different break types (``O``, ``LB``,
+    ``SB``) at each potential decision point in the token sequence. It uses a
+    set of learned weights from a trained model, corpus-derived constraints,
+    and user-adjustable sliders to calculate scores. Newer guardrail sliders
+    expose production toggles for discouraging single-word lines, weak final
+    lines, and under-filled blocks without retraining the statistical model.
 
-    The scoring process is divided into two main parts:
-    1.  `score_transition`: Scores the decision to place a break *after* a
-        given token, based on local features.
-    2.  `score_block`: Scores a *completed* subtitle block holistically, based
-        on aggregate features like CPS and line balance.
-
-    Attributes:
-        w: A dictionary of learned weights for different features.
-        c: A dictionary of corpus-derived constraints (e.g., ideal CPS range).
-        sl: A dictionary of user-adjustable sliders to tune model behavior.
-        structure_boost: A powerful, non-statistical bonus applied to breaks
-                         that align with strong structural hints.
+    Attributes
+    ----------
+    w:
+        Dictionary of learned weights grouped by feature family.
+    c:
+        Corpus-derived constraints (for example the interquartile range for
+        CPS and line balance).
+    sl:
+        User-adjustable slider overrides pulled from configuration or the UI.
+    cfg:
+        The :class:`~isce.config.Config` object that exposes guardrail
+        thresholds and lookahead settings.
+    structure_boost:
+        A powerful, non-statistical bonus applied to breaks that align with
+        strong structural hints such as speaker changes.
+    allowed_single_word_proper_nouns:
+        Normalised set of proper nouns that may appear as single-word captions
+        without being penalised.
     """
     def __init__(self, weights: Dict, constraints: Dict, sliders: Dict, cfg: Config):
         self.w = weights
@@ -86,21 +98,27 @@ class Scorer:
             return 0.0
 
     def score_transition(self, row: TokenRow, ctx: Optional[TransitionContext] = None) -> Dict[str, float]:
-        """
-        Calculates the scores for each possible break type after the current token.
+        """Score each possible break type after the current token.
 
-        This is the core function for scoring local decisions. It aggregates
-        weights from various feature groups (prosody, syntax, etc.) and applies
-        strong boosts based on pre-engineered structural hints like speaker
-        changes or LLM-suggested breaks.
+        The scorer aggregates weights from several feature groups (prosody,
+        punctuation, syntax, etc.) and applies structural boosts for strong
+        hints such as speaker changes. When :class:`TransitionContext` is
+        provided we also consider how much room remains for the second line so
+        the beam can avoid creating vanishingly small fragments.
 
-        Args:
-            row: A `TokenRow` object containing the current token and the next
-                 token, structured as dictionaries.
+        Parameters
+        ----------
+        row:
+            The :class:`~isce.types.TokenRow` describing the current and next
+            tokens plus an optional lookahead window.
+        ctx:
+            Optional :class:`TransitionContext` describing the partially
+            written block. ``None`` preserves the legacy local-only scoring.
 
-        Returns:
-            A dictionary mapping each break type ('O', 'LB', 'SB') to its
-            calculated score.
+        Returns
+        -------
+        dict[str, float]
+            Map of break type to score contribution.
         """
         scores: Dict[str, float] = {"O": 0.0, "LB": 0.0, "SB": 0.0}
         token = row.token
@@ -237,27 +255,31 @@ class Scorer:
             scores["LB"] += pause_bonus * 0.5
 
     def score_block(self, block_tokens: List[dict], block_breaks: List[BreakType]) -> float:
-        """
-        Calculates a holistic quality score for a completed subtitle block.
+        """Calculate a holistic quality score for a completed subtitle block.
 
-        This function evaluates a finished block based on aggregate metrics
-        that are crucial for readability, such as:
-        -   Characters-Per-Second (CPS): How fast the subtitle appears.
-        -   Line Balance: The relative length of the two lines (if a line
-            break exists).
-        -   Total Duration: Whether the subtitle is on screen for too long
-            or too short a time.
+        The block score inspects aggregate metrics that are crucial for
+        readability:
 
-        Scores are calculated by comparing these metrics against ideal ranges
-        defined in the corpus constraints.
+        * Characters per second (CPS) to ensure the subtitle is neither too
+          dense nor too sparse.
+        * Line balance so two-line captions stay evenly distributed.
+        * Guardrail penalties that discourage under-filled blocks, vanishingly
+          short final lines, and single-word cues unless explicitly whitelisted.
+        * Gross duration to keep blocks on screen for a reasonable amount of
+          time.
 
-        Args:
-            block_tokens: A list of token dictionaries within the completed block.
-            block_breaks: The list of break types corresponding to the `block_tokens`.
+        Parameters
+        ----------
+        block_tokens:
+            Token dictionaries contained in the block being closed.
+        block_breaks:
+            Break sequence associated with ``block_tokens``.
 
-        Returns:
-            A float representing the overall quality score for the block. A higher
-            score is better. Penalties are applied for violating constraints.
+        Returns
+        -------
+        float
+            Aggregate score contribution for the block. Larger values indicate
+            better-formed cues.
         """
         if not block_tokens:
             return 0.0

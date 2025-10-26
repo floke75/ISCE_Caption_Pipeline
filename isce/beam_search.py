@@ -151,11 +151,20 @@ class Segmenter:
         return "LB" not in recent_breaks
 
     def _count_chars(self, line_tokens: List[Token]) -> int:
+        """Return the rendered character length for ``line_tokens``.
+
+        The helper mirrors :func:`_count_chars` in :mod:`isce.post_process` so
+        that guardrail checks stay consistent between the beam search and the
+        optional reflow pass. A space is charged between adjacent tokens to
+        approximate how multi-word cues appear on screen.
+        """
+
         if not line_tokens:
             return 0
         return sum(len(token.w) for token in line_tokens) + (len(line_tokens) - 1)
 
     def _is_allowed_single_word(self, token: Token) -> bool:
+        """Return ``True`` when ``token`` is exempt from single-word penalties."""
         if token.pos != "PROPN":
             return False
         stripped = token.w.rstrip(".,!?;:\"")
@@ -260,18 +269,22 @@ class Segmenter:
         )
 
     def run(self) -> List[BreakType]:
-        """
-        Executes the main beam search algorithm.
+        """Execute the primary beam search and cache the best-path score.
 
-        This method iterates through each token in the input sequence. At each
-        step, it expands each hypothesis in the current beam by considering all
-        valid next break types ('O', 'LB', 'SB'). Each new potential path is
-        scored, and the beam is pruned to keep only the top N hypotheses, where
-        N is the beam width.
+        The segmenter iterates through each token, expanding every active
+        hypothesis with the three allowed break types (``O``, ``LB``, ``SB``).
+        Each candidate transition is scored, soft penalties are applied when
+        lines exceed their preferred length, and the beam is pruned back to the
+        configured width. The method also records :attr:`last_path_score` so
+        downstream refinement passes can compare alternate segmentations
+        without recomputing the entire search from scratch. When no legal
+        candidates exist we fall back to a forced ``SB`` decision and assess a
+        manual penalty, ensuring the search always terminates.
 
-        Returns:
-            A list of `BreakType` enums representing the best-scoring
-            segmentation path found.
+        Returns
+        -------
+        list[BreakType]
+            The highest scoring break sequence discovered by the beam.
         """
         self.last_path_score = None
 
@@ -519,6 +532,8 @@ def _split_block_lines(block_tokens: Sequence[Token], block_breaks: Sequence[Bre
 
 
 def _block_balance(block_tokens: Sequence[Token], block_breaks: Sequence[BreakType]) -> float:
+    """Return the ratio between the longest and shortest rendered lines."""
+
     if not block_tokens:
         return 1.0
     lines = _split_block_lines(block_tokens, block_breaks)
@@ -542,6 +557,8 @@ def _should_refine_block(
     block_breaks: Sequence[BreakType],
     block_score: float,
 ) -> bool:
+    """Return ``True`` when refinement heuristics should revisit the block."""
+
     if not block_tokens:
         return False
     if len(block_tokens) == 1:
@@ -607,10 +624,14 @@ def _reconcile_bidirectional_breaks(
 
 
 def _run_forward_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[BreakType]:
+    """Run a single forward beam-search pass over ``tokens``."""
+
     return Segmenter(tokens, scorer, cfg).run()
 
 
 def _run_bidirectional_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[BreakType]:
+    """Run forward/backward passes and reconcile the competing break sets."""
+
     forward_breaks = _run_forward_breaks(tokens, scorer, cfg)
     reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
     backward_reversed_breaks = Segmenter(reversed_tokens, scorer, cfg).run()
@@ -624,6 +645,8 @@ def refine_blocks(
     scorer: Scorer,
     cfg: Config,
 ) -> List[BreakType]:
+    """Re-run targeted refinement over low-scoring or lopsided blocks."""
+
     if not tokens or not breaks:
         return list(breaks)
 
