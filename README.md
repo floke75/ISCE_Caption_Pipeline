@@ -93,6 +93,7 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 1.  **Update `pipeline_config.yaml`:** This file lives in the repository root. Replace placeholder paths for `project_root` and `pipeline_root` with locations on your system and set an `hf_token` (or rely on the `HF_TOKEN` environment variable).
 
 2.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior.
+    *   Set `enable_bidirectional_pass: true` to run both forward and backward beam searches and reconcile their boundaries, which can rescue missed opportunities the forward pass alone would skip.
     *   Set `enable_reflow: true` if you want an additional post-processing pass that reflows short or imbalanced cues after the beam search without merging across speaker changes.
     *   Enable `enable_refinement_pass` to let the segmenter revisit low-scoring or single-word cues with a wider beam before post-processing so awkward captions can be rebalanced automatically.
     *   Adjust `min_chars_for_single_word_block` to control when genuinely single-word cues require manual review. Multi-word lines ignore this threshold so normal short phrases remain eligible.
