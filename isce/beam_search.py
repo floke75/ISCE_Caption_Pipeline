@@ -696,35 +696,64 @@ def _score_block(tokens: List[Token], breaks: List[BreakType], start: int, end: 
 def _reconcile_bidirectional_breaks(
     tokens: List[Token],
     scorer: Scorer,
+    cfg: Config,
     forward_breaks: List[BreakType],
     backward_breaks: List[BreakType],
+    transition_overrides: Optional[Sequence[Optional[Dict[str, float]]]] = None,
 ) -> List[BreakType]:
-    final_breaks = list(forward_breaks)
-    locked = [False] * len(tokens)
+    """Blend forward and backward break choices into a single sequence."""
 
-    for i in range(len(tokens) - 1):
-        if locked[i] or forward_breaks[i] == backward_breaks[i]:
+    reconciled = list(forward_breaks)
+    if not reconciled:
+        return reconciled
+
+    current_score = _score_path(
+        tokens,
+        reconciled,
+        scorer,
+        cfg,
+        transition_overrides=transition_overrides,
+    )
+    tie_priority = {"LB": 3, "SB": 2, "O": 1}
+
+    for idx, candidate_break in enumerate(backward_breaks):
+        if idx >= len(reconciled):
+            break
+        if reconciled[idx] == candidate_break:
             continue
-        if "SB" not in {forward_breaks[i], backward_breaks[i]}:
-            continue
 
-        f_start, f_end = _block_span(forward_breaks, i)
-        b_start, b_end = _block_span(backward_breaks, i)
-        f_score = _score_block(tokens, forward_breaks, f_start, f_end, scorer)
-        b_score = _score_block(tokens, backward_breaks, b_start, b_end, scorer)
+        candidate_breaks = list(reconciled)
+        candidate_breaks[idx] = candidate_break
+        candidate_score = _score_path(
+            tokens,
+            candidate_breaks,
+            scorer,
+            cfg,
+            transition_overrides=transition_overrides,
+        )
 
-        if b_score > f_score:
-            final_breaks[b_start : b_end + 1] = backward_breaks[b_start : b_end + 1]
-            for j in range(b_start, b_end + 1):
-                locked[j] = True
-        else:
-            final_breaks[f_start : f_end + 1] = forward_breaks[f_start : f_end + 1]
-            for j in range(f_start, f_end + 1):
-                locked[j] = True
+        prefer_candidate = False
+        if candidate_score > current_score + 1e-6:
+            prefer_candidate = True
+        elif abs(candidate_score - current_score) <= 1e-6:
+            delta = tie_priority.get(candidate_break, 0) - tie_priority.get(reconciled[idx], 0)
+            if delta > 0:
+                prefer_candidate = True
+            elif (
+                reconciled[idx] == "SB"
+                and candidate_break != "SB"
+                and idx + 1 < len(reconciled)
+                and reconciled[idx + 1] == "SB"
+            ):
+                prefer_candidate = True
 
-    if final_breaks:
-        final_breaks[-1] = "SB"
-    return final_breaks
+        if prefer_candidate:
+            reconciled = candidate_breaks
+            current_score = candidate_score
+
+    if reconciled:
+        reconciled[-1] = "SB"
+    return reconciled
 
 
 def _run_forward_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[BreakType]:
@@ -736,7 +765,15 @@ def _run_bidirectional_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) 
     reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
     backward_reversed_breaks = Segmenter(reversed_tokens, scorer, cfg).run()
     backward_breaks = _map_reversed_breaks(backward_reversed_breaks)
-    return _reconcile_bidirectional_breaks(tokens, scorer, forward_breaks, backward_breaks)
+    overrides = _prepare_transition_overrides(tokens, scorer, cfg)
+    return _reconcile_bidirectional_breaks(
+        tokens,
+        scorer,
+        cfg,
+        forward_breaks,
+        backward_breaks,
+        transition_overrides=overrides,
+    )
 
 
 def _count_chars(token_slice: List[Token]) -> int:

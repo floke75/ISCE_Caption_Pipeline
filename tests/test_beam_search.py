@@ -9,6 +9,7 @@ from isce.beam_search import (
     PathState,
     Segmenter,
     _prepare_transition_overrides,
+    _reconcile_bidirectional_breaks,
     _reverse_tokens_for_bidirectional,
     _score_path,
     refine_blocks,
@@ -591,6 +592,134 @@ class TestBeamSearch(unittest.TestCase):
                 call(tokens[1:], scorer, ANY),
             ],
         )
+
+    def test_reconcile_prefers_higher_priority_break_on_tie(self):
+        class FlatScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                    "short_line_penalty": 0.0,
+                    "fallback_sb_penalty": 25.0,
+                }
+
+            def score_transition(self, row, ctx=None):
+                return {"O": 0.0, "LB": 0.0, "SB": 0.0}
+
+            def score_block(self, block_tokens, block_breaks):
+                return 0.0
+
+        tokens = [
+            make_token("hello", 0.0, end=0.4),
+            make_token("world", 0.4, end=0.8),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 42,
+                    "hard_limit": 50,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.0,
+                    "soft_under_penalty_scale": 0.0,
+                },
+                "line2": {
+                    "soft_target": 42,
+                    "hard_limit": 50,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.0,
+                    "soft_under_penalty_scale": 0.0,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+        )
+
+        forward_breaks = ["SB", "SB"]
+        backward_breaks = ["LB", "SB"]
+        scorer = FlatScorer()
+
+        reconciled = _reconcile_bidirectional_breaks(
+            tokens,
+            scorer,
+            cfg,
+            forward_breaks,
+            backward_breaks,
+        )
+
+        self.assertEqual(reconciled, ["LB", "SB"])
+
+    def test_reconcile_avoids_double_sb_when_scores_match(self):
+        class FlatScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                    "short_line_penalty": 0.0,
+                    "fallback_sb_penalty": 25.0,
+                }
+
+            def score_transition(self, row, ctx=None):
+                return {"O": 0.0, "LB": 0.0, "SB": 0.0}
+
+            def score_block(self, block_tokens, block_breaks):
+                return 0.0
+
+        tokens = [
+            make_token("alpha", 0.0, end=0.3),
+            make_token("beta", 0.3, end=0.6),
+            make_token("gamma", 0.6, end=0.9),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 42,
+                    "hard_limit": 50,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.0,
+                    "soft_under_penalty_scale": 0.0,
+                },
+                "line2": {
+                    "soft_target": 42,
+                    "hard_limit": 50,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.0,
+                    "soft_under_penalty_scale": 0.0,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+        )
+
+        forward_breaks = ["SB", "SB", "SB"]
+        backward_breaks = ["O", "SB", "SB"]
+        scorer = FlatScorer()
+
+        reconciled = _reconcile_bidirectional_breaks(
+            tokens,
+            scorer,
+            cfg,
+            forward_breaks,
+            backward_breaks,
+        )
+
+        self.assertEqual(reconciled[0], "O")
+        self.assertEqual(reconciled[-1], "SB")
 
 
 if __name__ == "__main__":
