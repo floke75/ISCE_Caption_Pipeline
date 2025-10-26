@@ -639,6 +639,8 @@ def refine_blocks(
         return spans
 
     boundaries = _block_boundaries()
+    if not boundaries:
+        return refined
     idx = 0
 
     while idx < len(boundaries):
@@ -656,6 +658,7 @@ def refine_blocks(
         window_end_idx = idx
         if len(block_tokens) == 1 and idx + 1 < len(boundaries):
             window_end_idx += 1
+        window_end_idx = min(window_end_idx, len(boundaries) - 1)
         window_end = boundaries[window_end_idx][1]
 
         window_tokens = list(tokens[window_start : window_end + 1])

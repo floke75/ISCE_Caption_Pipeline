@@ -13,6 +13,7 @@ from isce.beam_search import (
     _reverse_tokens_for_bidirectional,
     _reconcile_bidirectional_breaks,
     _score_path,
+    refine_blocks,
     segment,
 )
 from isce.config import Config
@@ -451,6 +452,34 @@ class TestBeamSearch(unittest.TestCase):
             token.break_type for token in segment(make_tokens(), scorer, refined_cfg)
         ]
         self.assertEqual(refined_breaks, ["O", "SB"])
+
+    def test_refine_blocks_clamps_single_word_window(self):
+        tokens = [
+            make_token("alpha", 0.0, pos="PROPN"),
+            make_token("beta", 0.5),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=("alpha",),
+        )
+
+        scorer = RefinementScorer()
+        baseline_breaks = ["SB", "SB"]
+
+        refined = refine_blocks(tokens, baseline_breaks, scorer, cfg)
+
+        self.assertEqual(refined, ["O", "SB"])
 
 
 class TestLineViolations(unittest.TestCase):

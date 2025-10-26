@@ -123,6 +123,27 @@ class TestReflowTokens(unittest.TestCase):
 
         self.assertEqual([token.break_type for token in reflowed], ["SB", "O", "SB"])
 
+    def test_skips_merge_when_boundary_marks_speaker_change(self) -> None:
+        """Guardrails that flag speaker changes should not cause a loop."""
+
+        tokens = [
+            Token(
+                w="Hey",
+                start=0.0,
+                end=0.3,
+                speaker="A",
+                break_type="SB",
+                speaker_change=True,
+            ),
+            Token(w="again", start=0.3, end=0.6, speaker="A", break_type="O"),
+            Token(w="friend", start=0.6, end=0.9, speaker="A", break_type="SB"),
+        ]
+
+        cfg = _make_config()
+        reflowed = reflow_tokens(tokens, MergeFriendlyScorer(), cfg)
+
+        self.assertEqual([token.break_type for token in reflowed], ["SB", "O", "SB"])
+
 
 if __name__ == "__main__":
     unittest.main()
