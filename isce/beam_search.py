@@ -316,16 +316,26 @@ class Segmenter:
             nxt = self.tokens[i + 1] if not is_last_token else None
 
             token_dict = dict(token.__dict__)
-            nxt_dict = dict(nxt.__dict__) if nxt else None
+            token_dict["token_index"] = i
+            nxt_dict = None
+            if nxt:
+                nxt_dict = dict(nxt.__dict__)
+                nxt_dict["token_index"] = i + 1
 
             # Create the dictionary-based TokenRow required by the refactored scorer
             lookahead_tokens = None
             if self.lookahead_width > 0:
                 # Expose a shallow copy of the upcoming tokens so the scorer can
                 # apply lookahead heuristics without mutating the canonical list.
-                future_slice = self.tokens[i + 1 : i + 1 + self.lookahead_width]
-                if future_slice:
-                    lookahead_tokens = tuple(dict(t.__dict__) for t in future_slice)
+                future_end = i + 1 + self.lookahead_width
+                if i + 1 < len(self.tokens):
+                    lookahead_tokens = tuple(
+                        {
+                            **dict(self.tokens[idx].__dict__),
+                            "token_index": idx,
+                        }
+                        for idx in range(i + 1, min(future_end, len(self.tokens)))
+                    )
 
             scorer_row = TokenRow(
                 token=token_dict,
