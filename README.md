@@ -27,6 +27,7 @@ This pipeline is intended to replace the inefficient and error-prone step of usi
 *   **LLM Hint Integration:** Recognizes newlines in the input text file as a strong hint from an upstream LLM to insert a structural break.
 *   **Automated Workflow:** A master orchestrator script (`run_pipeline.py`) manages the entire process using a "hot folder" system.
 *   **Web UI:** A full-stack control center for running jobs, managing configuration, and monitoring progress.
+*   **Localized Refinement Pass:** Optionally re-scores low-quality cues with a wider beam so forced breaks and orphan fixes can be revisited using the same guardrail penalties as the primary search.
 
 ## Architecture Overview
 
@@ -92,7 +93,7 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 1.  **Update `pipeline_config.yaml`:** This file lives in the repository root. Replace placeholder paths for `project_root` and `pipeline_root` with locations on your system and set an `hf_token` (or rely on the `HF_TOKEN` environment variable).
 
-2.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior. Set `enable_reflow: true` once you are ready to run the optional post-processing pass that reflows short or imbalanced cues after the beam search.
+2.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior. Set `enable_refinement_pass: true` to revisit low-quality cues with the localized refinement window, and `enable_reflow: true` once you are ready to run the optional post-processing pass that reflows short or imbalanced cues after the beam search.
 
 ## Web Control Center
 
@@ -157,14 +158,15 @@ ISCE uses two main configuration files stored in the repository root. The UI bac
     *   `build_pair`: Settings for the data enrichment stage, including language, alignment tolerances, and whether to use SpaCy for linguistic features.
 
 *   **`config.yaml`:** This file configures the final segmentation engine. Key settings include:
-    *   `beam_width`: The width of the beam search algorithm. A larger number may yield better results but will be slower.
-    *   `lookahead_width`: Enables a forward-looking pass in the segmenter so the
+*   `beam_width`: The width of the beam search algorithm. A larger number may yield better results but will be slower.
+*   `lookahead_width`: Enables a forward-looking pass in the segmenter so the
         transition scorer can see upcoming pauses, punctuation, or speaker
         changes. Set this to `0` to preserve legacy behavior, or increase it
         (for example, `2`) to let the beam search anticipate rapid clause
         endings and speaker turns.
-    *   `sliders`: User-adjustable weights to fine-tune the importance of different features in the scoring model.
-    *   `paths`: The paths to your trained `model_weights.json` and `constraints.json` files.
+*   `enable_refinement_pass`: When `true`, run a localized follow-up search that re-segments single-word or imbalanced cues using the same penalty model as the main beam. Override this interactively with the CLI flags `--refine-blocks` / `--no-refine-blocks` or through the UI configuration editor.
+*   `sliders`: User-adjustable weights to fine-tune the importance of different features in the scoring model.
+*   `paths`: The paths to your trained `model_weights.json` and `constraints.json` files.
 
 ## Usage
 
@@ -194,7 +196,7 @@ Each major stage can be executed independently for testing or debugging.
 | `run_pipeline.py` | Watches the hot folders, invokes workers, and archives processed files. | `python run_pipeline.py` merges embedded defaults with overrides from `pipeline_config.yaml` (if present in the repo root). |
 | `align_make.py` | Extracts audio, runs WhisperX, and optionally diarizes speakers to create `*.asr.visual.words.diar.json`. | `python align_make.py --input-file path/to/media.mp4 --out-root path/to/_intermediate --config-file pipeline_config.yaml` |
 | `build_training_pair_standalone.py` | Aligns TXT/SRT text with the ASR reference, enriches tokens, and labels training examples. | `python build_training_pair_standalone.py --primary-input Transcript.txt --asr-reference MyClip.asr.visual.words.diar.json --config-file pipeline_config.yaml` plus optional `--out-training-dir`/`--out-inference-dir`. |
-| `main.py` | Runs the beam-search segmenter to produce the final `.srt` (and optional labeled JSON). | `python main.py --input MyClip.enriched.json --output MyClip.srt --config config.yaml` |
+| `main.py` | Runs the beam-search segmenter to produce the final `.srt` (and optional labeled JSON). | `python main.py --input MyClip.enriched.json --output MyClip.srt --config config.yaml [--refine-blocks|--no-refine-blocks] [--save-labeled-json]` |
 | `scripts/train_model.py` | Rebuilds the statistical model weights and constraints from `.train.words.json` files. | `python scripts/train_model.py --corpus path/to/_training --constraints models/v2/constraints.json --weights models/v2/model_weights.json --iterations 5` |
 
 All commands accept `-h/--help` for an exhaustive argument list.

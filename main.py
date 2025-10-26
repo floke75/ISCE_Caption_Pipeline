@@ -29,8 +29,11 @@ def main():
     3.  Initializes the `Scorer` with the loaded models and configuration.
     4.  Runs the beam search segmentation algorithm (`segment`) to determine the
         optimal break points (`SB`, `LB`, `O`).
-    5.  Formats the segmented tokens into the standard SRT file format.
-    6.  Writes the final output to the specified SRT file.
+    5.  Optionally re-scores low-quality cues with the localized refinement pass
+        when `--refine-blocks` is supplied or the configuration enables it.
+    6.  Formats the segmented tokens into the standard SRT file format.
+    7.  Writes the final output to the specified SRT file (and, optionally, a
+        labeled JSON file).
     """
     parser = argparse.ArgumentParser(
         description="Generate subtitles from enriched token files using the ISCE model.",

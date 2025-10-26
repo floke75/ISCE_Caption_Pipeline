@@ -69,6 +69,11 @@ class Segmenter:
     allowed_proper_nouns:
         Normalised set of proper nouns that may appear as single-word captions
         without being considered violations.
+    last_path_score:
+        The score of the best hypothesis produced by the most recent
+        :meth:`run` invocation.  Refinement helpers reuse this cached value so
+        they compare alternate segmentations against the exact metric used by
+        the beam search, including forced-break penalties.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -185,9 +190,11 @@ class Segmenter:
         scored, and the beam is pruned to keep only the top N hypotheses, where
         N is the beam width.
 
-        Returns:
-            A list of `BreakType` enums representing the best-scoring
-            segmentation path found.
+    Returns:
+        A list of `BreakType` enums representing the best-scoring
+        segmentation path found.  The method also caches the score of that path
+        in :attr:`last_path_score` so downstream refinement passes can compare
+        alternates using the identical metric.
         """
         if not self.tokens:
             return []
@@ -443,7 +450,9 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
     beam.  In order to determine whether those alternates actually improve the
     subtitle quality, we need a deterministic way to score the original
     segmentation with the same heuristics the beam search relies on.  This
-    function rebuilds that computation without mutating global state.
+    function rebuilds that computation without mutating global state while
+    mirroring the fallback penalties applied when the primary search is forced
+    to emit a structural break.
     """
 
     fallback_sb_penalty = float(scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
@@ -586,7 +595,9 @@ def refine_blocks(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, 
     that are suspect via ``_should_refine``, and then re-runs the beam search on
     a limited token window with a wider beam.  If the refined segmentation
     scores higher than the original by a tiny margin, we splice the alternate
-    decisions back into the final break sequence.
+    decisions back into the final break sequence.  Comparisons use the cached
+    :attr:`Segmenter.last_path_score` (or a re-scored fallback) so both paths
+    reflect the same forced-break penalties and guardrail deductions.
     """
 
     if not tokens or not breaks:
