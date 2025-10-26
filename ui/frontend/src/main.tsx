@@ -1,3 +1,11 @@
+/**
+ * @file The entry point for the React application.
+ *
+ * This file is responsible for initializing the React application and rendering the
+ * root `App` component into the DOM. It sets up the `QueryClientProvider` from
+ * `@tanstack/react-query` to enable application-wide data fetching and caching,
+ * and also includes the `Toaster` component for displaying global notifications.
+ */
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

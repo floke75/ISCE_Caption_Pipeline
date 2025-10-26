@@ -1,4 +1,3 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\model_builder.py
 """Core logic for training the statistical segmentation model.
 
 This module provides the functions necessary to train the ISCE model from a

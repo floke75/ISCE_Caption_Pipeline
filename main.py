@@ -1,5 +1,14 @@
-# C:\dev\Captions_Formatter\Formatter_machine\main.py
+"""Entry point for the ISCE segmentation and SRT generation engine.
 
+This script serves as the final stage of the ISCE pipeline, responsible for
+taking a feature-enriched token file and producing a broadcast-ready SRT
+subtitle file. It integrates the core components of the `isce` library,
+including the configuration loader, scoring engine, beam search algorithm,
+and SRT writer.
+
+It is designed to be executed as a command-line tool and is called by the main
+orchestrator (`run_pipeline.py`) during inference workflows.
+"""
 import argparse
 import json
 import sys
@@ -17,9 +26,9 @@ from isce.beam_search import segment
 from isce.srt_writer import tokens_to_srt
 from isce.postprocess import postprocess
 
+
 def main():
-    """
-    Main command-line interface for the ISCE captioning engine.
+    """Main command-line interface for the ISCE captioning engine.
 
     This script orchestrates the final segmentation and SRT generation process.
     It performs the following steps:

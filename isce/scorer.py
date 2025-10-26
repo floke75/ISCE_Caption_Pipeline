@@ -1,4 +1,3 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\scorer.py
 """Provides the :class:`Scorer` class for evaluating segmentation decisions.
 
 This module is central to the beam search process. The scorer combines learned
@@ -12,18 +11,18 @@ line fragment controls so operators can dial in safeguards without retraining.
 
 The scoring is divided into two main components:
 
-1. **Transition Scoring** – :meth:`Scorer.score_transition` evaluates the
-   quality of placing a break (``O``, ``LB``, ``SB``) *between* two tokens. The
-   method can optionally ingest a :class:`~isce.types.TransitionContext`
-   describing the partially written line so heuristics can discourage
-   pathological second lines.
-2. **Block Scoring** – :meth:`Scorer.score_block` evaluates a *completed*
-   subtitle block. The scorer inspects holistic properties such as characters
-   per second (CPS), line balance, and configurable guardrail thresholds so the
-   final output remains readable and evenly shaped.
+1.  **Transition Scoring**: :meth:`Scorer.score_transition` evaluates the
+    quality of placing a break (``O``, ``LB``, ``SB``) *between* two tokens.
+    The method can optionally ingest a :class:`~isce.types.TransitionContext`
+    describing the partially written line so heuristics can discourage
+    pathological second lines.
+2.  **Block Scoring**: :meth:`Scorer.score_block` evaluates a *completed*
+    subtitle block. The scorer inspects holistic properties such as characters
+    per second (CPS), line balance, and configurable guardrail thresholds so
+    the final output remains readable and evenly shaped.
 """
 from __future__ import annotations
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from .model_builder import bin_pause_z, punct_class, bin_rel_pos
 from .config import Config

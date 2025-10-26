@@ -1,3 +1,7 @@
+/**
+ * @file This file contains custom React Query hooks for fetching and updating
+ * the application's configuration from the backend API.
+ */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import client from '../api/client';
@@ -44,20 +48,38 @@ function useConfigMutation<TInput, TPayload>(
   });
 }
 
+/**
+ * A React Query hook for fetching the main pipeline configuration.
+ * @returns {QueryResult<ConfigSnapshot>} The result of the query.
+ */
 export function usePipelineConfig() {
   return useConfigQuery('pipeline');
 }
 
+/**
+ * A React Query hook for fetching the segmentation model configuration.
+ * @returns {QueryResult<ConfigSnapshot>} The result of the query.
+ */
 export function useSegmentationConfig() {
   return useConfigQuery('segmentation');
 }
 
+/**
+ * A React Query mutation hook for applying partial updates to a configuration.
+ * @param {ConfigResource} resource The type of configuration to update.
+ * @returns {MutationResult<ConfigSnapshot, unknown, Record<string, unknown>>} The result of the mutation.
+ */
 export function useUpdateConfig(resource: ConfigResource = 'pipeline') {
   return useConfigMutation(resource, '', `${RESOURCE_LABEL[resource]} updated`, (updates: Record<string, unknown>) => ({
     updates,
   }));
 }
 
+/**
+ * A React Query mutation hook for replacing the entire override set for a configuration.
+ * @param {ConfigResource} resource The type of configuration to replace.
+ * @returns {MutationResult<ConfigSnapshot, unknown, Record<string, unknown>>} The result of the mutation.
+ */
 export function useReplaceConfig(resource: ConfigResource = 'pipeline') {
   return useConfigMutation(
     resource,
@@ -67,6 +89,11 @@ export function useReplaceConfig(resource: ConfigResource = 'pipeline') {
   );
 }
 
+/**
+ * A React Query mutation hook for updating a configuration from a raw YAML string.
+ * @param {ConfigResource} resource The type of configuration to update.
+ * @returns {MutationResult<ConfigSnapshot, unknown, string>} The result of the mutation.
+ */
 export function useUpdateConfigYaml(resource: ConfigResource = 'pipeline') {
   return useConfigMutation(resource, '/raw', 'YAML overrides saved', (yaml: string) => ({ yaml }));
 }

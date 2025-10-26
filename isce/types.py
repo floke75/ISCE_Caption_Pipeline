@@ -1,4 +1,3 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\types.py
 """Defines the core data structures and type aliases for the ISCE pipeline.
 
 This module centralizes the key data structures used throughout the application,

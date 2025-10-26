@@ -1,4 +1,3 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\config.py
 """Manages the loading and validation of application configuration.
 
 This module defines the `Config` dataclass, which serves as a centralized,
@@ -13,46 +12,44 @@ import yaml
 import json
 from pathlib import Path
 
+
 @dataclass
 class Config:
-    """
-    A typed configuration object that holds all settings for the captioning engine.
+    """A typed configuration object that holds all settings for the captioning engine.
 
     This dataclass centralizes configuration parameters, ensuring that different
     parts of the application access settings in a consistent and type-safe way.
     It is typically instantiated by the `load_config` function.
 
     Attributes:
-        beam_width: The number of hypotheses to keep at each step of the beam search.
-        min_block_duration_s: The minimum duration a subtitle block can have, in seconds.
-        max_block_duration_s: The maximum duration a subtitle block can have, in seconds.
-        line_length_constraints: A nested dictionary defining the soft and hard character
-                                 limits for each line of a subtitle block. The dictionary
-                                 also contains a ``"block"`` entry with aggregate
-                                 constraints such as ``min_total_chars`` and
-                                 ``min_last_line_chars`` that are used by the scorer's
-                                 guardrails.
-        min_chars_for_single_word_block: The minimum character length required for a
-                                         block that contains only a single word.
-                                         Multi-word cues are exempt from this guardrail.
-        sliders: A dictionary of user-adjustable floating-point values that tune the
-                 behavior of the scoring model.  Recent sliders expose guardrail
-                 penalties such as ``single_word_line_penalty``,
-                 ``extreme_balance_penalty``, ``short_block_penalty``, and
-                 ``short_line_penalty`` in addition to lookahead fragment controls.
-        paths: A dictionary containing the relative paths to model files like weights
-               and constraints.
-        enable_bidirectional_pass: When true, run both forward and reverse beam search
-                                   passes and reconcile their boundaries.
-        lookahead_width: The number of future tokens to expose to the transition scorer.
-                          A value of 0 disables the lookahead pass.
-        enable_reflow: When true, run an additional post-processing pass to reflow
-                       awkward short or imbalanced cues.
-        enable_refinement_pass: Enables a second, wider-beam sweep over low scoring
-                       blocks so awkward cues can be rebalanced without rerunning the
-                       full pipeline.
-        allowed_single_word_proper_nouns: Proper nouns that are permitted as
-                       single-word lines without triggering orphan penalties.
+        beam_width: The number of hypotheses to keep at each step of the beam
+            search.
+        min_block_duration_s: The minimum duration a subtitle block can have,
+            in seconds.
+        max_block_duration_s: The maximum duration a subtitle block can have,
+            in seconds.
+        line_length_constraints: A nested dictionary defining the soft and hard
+            character limits for each line of a subtitle block. It also
+            contains a "block" entry with aggregate constraints used by the
+            scorer's guardrails.
+        min_chars_for_single_word_block: The minimum character length required
+            for a block that contains only a single word. Multi-word cues are
+            exempt from this guardrail.
+        sliders: A dictionary of user-adjustable floating-point values that
+            tune the behavior of the scoring model, including guardrail
+            penalties.
+        paths: A dictionary containing the relative paths to model files like
+            weights and constraints.
+        enable_bidirectional_pass: If true, run both forward and reverse beam
+            search passes and reconcile their boundaries.
+        lookahead_width: The number of future tokens to expose to the
+            transition scorer. A value of 0 disables the lookahead pass.
+        enable_reflow: If true, run an additional post-processing pass to
+            reflow awkward short or imbalanced cues.
+        enable_refinement_pass: If true, enables a second, wider-beam sweep
+            over low-scoring blocks to rebalance awkward cues.
+        allowed_single_word_proper_nouns: A tuple of proper nouns that are
+            permitted as single-word lines without triggering penalties.
     """
     beam_width: int
     min_block_duration_s: float

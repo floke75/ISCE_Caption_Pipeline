@@ -24,7 +24,6 @@ The application is structured to use several key services:
 -   `FileBrowser`: Enforces security for file system access.
 """
 from __future__ import annotations
-
 import os
 import time
 from pathlib import Path

@@ -21,7 +21,6 @@ The service uses a `ConfigField` catalog to define the metadata for each
 configurable parameter, making the system extensible and self-documenting.
 """
 from __future__ import annotations
-
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path

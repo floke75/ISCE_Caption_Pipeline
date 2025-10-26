@@ -1,4 +1,3 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\data_validation.py
 """Provides functions for validating the integrity of segmented token data.
 
 This module contains tools to perform post-segmentation sanity checks on the
@@ -13,9 +12,9 @@ from typing import List, Iterator, Dict, Any, Tuple
 from .types import Token
 from .config import Config
 
+
 def iter_blocks(tokens: List[Token]) -> Iterator[Tuple[int, int]]:
-    """
-    Yields the start and end indices for each subtitle block in a token list.
+    """Yields the start and end indices for each subtitle block in a token list.
 
     This generator iterates through a list of tokens that has already been
     segmented (i.e., has `break_type` assigned). A block is defined as a

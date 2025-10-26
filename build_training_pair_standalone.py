@@ -25,8 +25,16 @@ Key operations include:
 
 The output is a JSON file containing a list of enriched tokens, ready for
 either model training or inference by the final segmentation engine.
-"""
 
+This script is designed to be executable as a standalone command-line tool and
+is called by the main orchestrator (`run_pipeline.py`).
+
+Attributes:
+    DEFAULT_SETTINGS (Dict[str, Any]): A dictionary holding the default
+        configuration for the script, which can be overridden by an external
+        YAML file. This includes settings for alignment, feature engineering,
+        and speaker correction.
+"""
 import os
 import json
 import re

@@ -60,7 +60,32 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 ## Recent Enhancements & Where to Learn More
 - **Lookahead-aware beam search** – See `isce/beam_search.py` (helpers near `Segmenter.score_path`) and the configuration guidance in the README step 3 bullets for how `lookahead_width`, bidirectional reconciliation, and refinement toggles interact.
 - **Guardrail penalties for short/imbalanced cues** – Review `isce/scorer.py`, slider defaults in `config.yaml`, and the README bullet list under "Update `config.yaml`" to understand single-word, underfill, and fallback penalty tuning.
-- **Reflow safeguards and block profiling** – `isce/post_process.py` documents the merge heuristics; the same README section covers when to enable reflow and how it cooperates with speaker boundaries.
+- **Reflow safeguards and block profiling** – `isce/postprocess.py` documents the merge heuristics; the same README section covers when to enable reflow and how it cooperates with speaker boundaries.
 - **Backend config surface updates** – UI metadata lives under `ui/backend/config_service.py`. Cross-check with `config.yaml` and the README defaults to keep slider descriptions consistent when changing operator-facing labels.
+
+## Testing Environment
+
+The test suite is run using `pytest`. Due to issues with the `requirements.txt` file and the agent environment, it is recommended to install dependencies in batches.
+
+1.  **Install Core Dependencies**:
+    ```bash
+    pip install pyyaml pandas numpy rapidfuzz tqdm pysrt
+    ```
+2.  **Install Speech Recognition Dependencies (excluding whisperx)**:
+    ```bash
+    pip install pyannote.audio torch ffmpeg-python
+    ```
+3.  **Install NLP Dependencies**:
+    ```bash
+    pip install "spacy>=3.7,<4.0" && python -m spacy download sv_core_news_lg
+    ```
+4.  **Install Web and Test Dependencies**:
+    ```bash
+    pip install fastapi pydantic "uvicorn[standard]" pytest httpx
+    ```
+5.  **Run Tests**:
+    ```bash
+    pytest
+    ```
 
 This document should orient any agent before deeper changes—consult the referenced README and docs for operational details and historical context.

@@ -186,7 +186,7 @@ Several lightweight passes work together to keep the generated subtitles clean w
   decisions while keeping whichever side produces the higher-scoring segmentation.
 * **Local refinement pass:** Particularly lopsided or low-scoring blocks are revisited with a wider beam and cached path scores,
   letting the system rebalance awkward cues without rerunning the full search.
-* **Reflow heuristics:** After segmentation finishes, `reflow_tokens` can merge extremely short cues or slide a line break to
+* **Reflow heuristics:** After segmentation finishes, `postprocess` can merge extremely short cues or slide a line break to
   produce a more balanced two-line caption, always respecting speaker changes to avoid misattribution.
 * **Guardrail penalties:** The scorer exposes sliders for discouraging single-word lines (with proper-noun exceptions), short
   final lines, and under-filled blocks so teams can dial in their house style while keeping multi-word short cues viable.
@@ -236,6 +236,22 @@ Training is a manual step performed after you have prepared a sufficient amount 
     ```
 
 3.  **Update Configuration:** After training, remember to update your `config.yaml` file to point to your new `v2` model files.
+
+## Testing
+
+The repository includes a test suite to verify the correctness of the core
+logic. To run the tests, first install the development dependencies:
+
+```bash
+pip install -r requirements.txt
+pip install pytest
+```
+
+Then, run the test suite from the root of the repository:
+
+```bash
+pytest
+```
 
 
 ## Intermediate Artifacts & Data Contracts
