@@ -166,7 +166,7 @@ class Scorer:
             scores["O"] -= self.structure_boost
 
         # --- Step 3: Optional lookahead heuristics ---
-        self._apply_lookahead_heuristics(scores, lookahead)
+        self._apply_lookahead_heuristics(scores, row)
 
         if ctx and ctx.current_line_num == 1:
             projected_words = ctx.projected_second_line_words
@@ -180,7 +180,7 @@ class Scorer:
 
         return scores
 
-    def _apply_lookahead_heuristics(self, scores: Dict[str, float], lookahead: List[dict]) -> None:
+    def _apply_lookahead_heuristics(self, scores: Dict[str, float], row: TokenRow) -> None:
         """Apply forward-looking adjustments when future context is available.
 
         The transition scorer operates primarily on local features, but when the
@@ -199,10 +199,12 @@ class Scorer:
         Args:
             scores: The mutable transition score dictionary produced by
                 :meth:`score_transition`.
-            lookahead: A list of dictionary-style token payloads describing the
-                upcoming words. An empty list leaves ``scores`` unchanged.
+            row: Lightweight container describing the current token and any
+                exposed lookahead context. When :attr:`TokenRow.lookahead` is
+                empty the helper leaves ``scores`` unchanged.
         """
 
+        lookahead = list(row.lookahead) if row.lookahead else []
         if not lookahead:
             return
 
@@ -237,6 +239,25 @@ class Scorer:
             pause_bonus = self.sl.get("flow", 1.0) * 0.5
             scores["SB"] += pause_bonus
             scores["LB"] += pause_bonus * 0.5
+
+        min_line_len_break = getattr(self.cfg, "min_line_length_for_break", 0)
+        if min_line_len_break and lookahead:
+            projected_chars = sum(len(future.get("w", "")) for future in lookahead)
+            projected_chars += max(0, len(lookahead) - 1)
+            if projected_chars < min_line_len_break:
+                deficit = min_line_len_break - projected_chars
+                penalty_strength = 4.0
+                severity = deficit / max(min_line_len_break, 1)
+                scores["LB"] -= penalty_strength * (1.0 + severity * 0.5)
+
+        min_last_word = getattr(self.cfg, "min_last_word_len_for_break", 0)
+        if min_last_word:
+            current_word = row.token.get("w", "")
+            if len(current_word) < min_last_word:
+                shortfall = min_last_word - len(current_word)
+                penalty_strength = 3.5
+                severity = shortfall / max(min_last_word, 1)
+                scores["LB"] -= penalty_strength * (1.0 + severity * 0.5)
 
     def score_block(self, block_tokens: List[dict], block_breaks: List[BreakType]) -> float:
         """
@@ -291,6 +312,11 @@ class Scorer:
 
         line_char_counts = [count_chars(line) for line in lines]
         total_chars = sum(line_char_counts)
+
+        min_block_chars = getattr(self.cfg, "min_block_length_char", 0)
+        if min_block_chars and total_chars < min_block_chars:
+            deficit = min_block_chars - total_chars
+            score -= 0.5 * deficit
 
         if len(lines) == 2:
             len1, len2 = line_char_counts

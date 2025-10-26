@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from isce.config import Config
 from isce.scorer import Scorer
+from isce.types import TokenRow
 
 
 def _make_config(**overrides) -> Config:
@@ -23,6 +24,10 @@ def _make_config(**overrides) -> Config:
         sliders={},
         paths={},
         allowed_single_word_proper_nouns=(),
+        min_block_length_char=0,
+        min_line_length_char=0,
+        min_line_length_for_break=0,
+        min_last_word_len_for_break=0,
     )
     defaults.update(overrides)
     return Config(**defaults)
@@ -103,3 +108,61 @@ def test_extreme_balance_penalty_applies() -> None:
     ratio = max(len1, len2) / min(len1, len2)
     expected_penalty = 3.0 * (1.0 + (ratio - 1.5) / 1.5)
     assert math.isclose(baseline - penalised, expected_penalty, rel_tol=1e-6)
+
+
+def test_block_penalty_for_short_total_chars() -> None:
+    constraints = _make_constraints()
+    tokens = [
+        {"w": "Hi", "start": 0.0, "end": 0.3, "pos": "INTJ"},
+        {"w": "there", "start": 0.3, "end": 0.8, "pos": "PRON"},
+    ]
+    block_breaks = ["LB", "SB"]
+
+    base_cfg = _make_config()
+    tuned_cfg = _make_config(min_block_length_char=12)
+
+    baseline = Scorer({}, constraints, {}, base_cfg).score_block(tokens, block_breaks)
+    penalised = Scorer({}, constraints, {}, tuned_cfg).score_block(tokens, block_breaks)
+
+    assert penalised < baseline
+
+    def count_chars(token_slice: list[dict]) -> int:
+        if not token_slice:
+            return 0
+        return sum(len(t.get("w", "")) for t in token_slice) + (len(token_slice) - 1)
+
+    lines: list[list[dict]] = []
+    current: list[dict] = []
+    for idx, token in enumerate(tokens):
+        current.append(token)
+        if block_breaks[idx] in {"LB", "SB"}:
+            lines.append(current)
+            current = []
+    if current:
+        lines.append(current)
+
+    total_chars = sum(count_chars(line) for line in lines)
+    expected_penalty = 0.5 * (12 - total_chars)
+    assert pytest.approx(baseline - penalised, rel=1e-6) == expected_penalty
+
+
+def test_lookahead_penalises_short_projection_and_last_word() -> None:
+    constraints = _make_constraints()
+    base_cfg = _make_config()
+    tuned_cfg = _make_config(
+        min_line_length_for_break=10,
+        min_last_word_len_for_break=4,
+    )
+
+    row = TokenRow(
+        token={"w": "Hi", "pause_before_ms": 0, "pause_after_ms": 0, "pos": "INTJ"},
+        nxt={"w": "there"},
+        lookahead=(
+            {"w": "there", "pause_before_ms": 0, "pause_after_ms": 0},
+        ),
+    )
+
+    baseline = Scorer({}, constraints, {}, base_cfg).score_transition(row)
+    penalised = Scorer({}, constraints, {}, tuned_cfg).score_transition(row)
+
+    assert penalised["LB"] < baseline["LB"]

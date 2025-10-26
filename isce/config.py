@@ -16,36 +16,57 @@ from pathlib import Path
 
 @dataclass
 class Config:
-    """
-    A typed configuration object that holds all settings for the captioning engine.
+    """Typed configuration object holding all captioning settings.
 
-    This dataclass centralizes configuration parameters, ensuring that different
-    parts of the application access settings in a consistent and type-safe way.
-    It is typically instantiated by the `load_config` function.
+    The dataclass centralises configuration parameters so different parts of the
+    application consume a consistent, validated view of the settings.  It is
+    typically instantiated by :func:`load_config`.
 
-    Attributes:
-        beam_width: The number of hypotheses to keep at each step of the beam search.
-        min_block_duration_s: The minimum duration a subtitle block can have, in seconds.
-        max_block_duration_s: The maximum duration a subtitle block can have, in seconds.
-        line_length_constraints: A nested dictionary defining the soft and hard character
-                                 limits for each line of a subtitle block.
-        min_chars_for_single_word_block: The minimum character length required for a
-                                         block that contains only a single word.
-        sliders: A dictionary of user-adjustable floating-point values that tune the
-                 behavior of the scoring model.
-        paths: A dictionary containing the relative paths to model files like weights
-               and constraints.
-        lookahead_width: The number of future tokens to expose to the transition
-                          scorer. A value of 0 disables the lookahead pass.
-        enable_reflow: When true, run an additional post-processing pass to reflow
-                       awkward short or imbalanced cues.
-        enable_bidirectional_pass: When true, run both forward and reverse beam search
-                                   passes and reconcile their boundaries.
-        allowed_single_word_proper_nouns: Tuple of proper nouns that may appear as
-               single-word captions without triggering hard rejections.
-        enable_refinement_pass: Whether to run a localized follow-up search that
-                                re-scores low quality cues after the main beam
-                                search finishes.
+    Attributes
+    ----------
+    beam_width:
+        Number of hypotheses to keep at each step of the beam search.
+    min_block_duration_s / max_block_duration_s:
+        Permitted duration range for subtitle cues, in seconds.
+    line_length_constraints:
+        Nested mapping describing soft and hard character limits per line.
+    min_chars_for_single_word_block:
+        Minimum visual length required when a block contains only a single word.
+    min_block_length_char:
+        Minimum number of characters (including spaces) expected for any block.
+    min_line_length_char:
+        Minimum character count for each line when the configuration elects to
+        police multi-word lines as well as single-word captions.
+    min_line_length_for_break:
+        Threshold used by lookahead heuristics to discourage inserting a line
+        break if the projected next line would be extremely short.
+    min_last_word_len_for_break:
+        Threshold used by lookahead heuristics to avoid ending a line on a very
+        short final word.
+    sliders:
+        Dictionary of user-adjustable multipliers that tune the statistical
+        model's behaviour.
+    paths:
+        Mapping containing the relative paths to model assets such as weights and
+        constraints.
+    lookahead_width:
+        Number of future tokens the segmenter exposes to the scorer.  ``0``
+        disables lookahead heuristics entirely.
+    enable_reflow:
+        When ``True`` run an additional post-processing pass that reflows awkward
+        short or imbalanced cues.
+    enable_bidirectional_pass:
+        When ``True`` execute both forward and reverse beam searches and reconcile
+        their boundaries.
+    allowed_single_word_proper_nouns:
+        Tuple of proper nouns that may appear as single-word captions without
+        triggering hard rejections.
+    enable_refinement_pass:
+        Whether to run a localized follow-up search that re-scores low quality
+        cues after the main beam search finishes.
+    enforce_short_line_limit_for_multi_word_lines:
+        Optional guardrail that, when enabled, treats multi-word lines falling
+        below :attr:`min_line_length_char` as violations.
     """
 
     beam_width: int
@@ -60,6 +81,11 @@ class Config:
     enable_bidirectional_pass: bool = False
     allowed_single_word_proper_nouns: tuple[str, ...] = ()
     enable_refinement_pass: bool = False
+    min_line_length_for_break: int = 0
+    min_last_word_len_for_break: int = 0
+    min_block_length_char: int = 0
+    min_line_length_char: int = 0
+    enforce_short_line_limit_for_multi_word_lines: bool = False
 
 
 def load_config(path: str = "config.yaml") -> Config:
@@ -99,6 +125,13 @@ def load_config(path: str = "config.yaml") -> Config:
     constraints_yaml = y.get("constraints", {})
     line1_soft = int(constraints_yaml.get("line_length_soft_target", 37))
     line1_hard = int(constraints_yaml.get("line_length_hard_limit", 42))
+    min_line_length_for_break = int(constraints_yaml.get("min_line_length_for_break", 0))
+    min_last_word_len_for_break = int(constraints_yaml.get("min_last_word_len_for_break", 0))
+    min_block_length_char = int(constraints_yaml.get("min_block_length_char", 0))
+    min_line_length_char = int(constraints_yaml.get("min_line_length_char", 0))
+    enforce_multi_word_short_line = bool(
+        constraints_yaml.get("enforce_short_line_limit_for_multi_word_lines", False)
+    )
 
     # Attempt to load the learned constraints.json file
     constraints_json = {}
@@ -150,4 +183,26 @@ def load_config(path: str = "config.yaml") -> Config:
         enable_bidirectional_pass=bool(y.get("enable_bidirectional_pass", False)),
         allowed_single_word_proper_nouns=allowed_single_word_proper_nouns,
         enable_refinement_pass=bool(y.get("enable_refinement_pass", False)),
+        min_line_length_for_break=int(
+            constraints_json.get(
+                "min_line_length_for_break", min_line_length_for_break
+            )
+        ),
+        min_last_word_len_for_break=int(
+            constraints_json.get(
+                "min_last_word_len_for_break", min_last_word_len_for_break
+            )
+        ),
+        min_block_length_char=int(
+            constraints_json.get("min_block_length_char", min_block_length_char)
+        ),
+        min_line_length_char=int(
+            constraints_json.get("min_line_length_char", min_line_length_char)
+        ),
+        enforce_short_line_limit_for_multi_word_lines=bool(
+            constraints_json.get(
+                "enforce_short_line_limit_for_multi_word_lines",
+                enforce_multi_word_short_line,
+            )
+        ),
     )

@@ -18,6 +18,18 @@ constraints:
   line_length_soft_target: 37
   line_length_hard_limit: 42
   min_chars_for_single_word_block: 10
+  # Soft minimum total character count expected for any block.  The scorer will
+  # subtract a small penalty when cues fall below this length to encourage
+  # reflow or refinement without outright forbidding the option.
+  min_block_length_char: 10
+  # Optional guardrail for multi-word lines.  When enabled the scorer can apply
+  # gentle penalties to second lines that would otherwise be extremely short.
+  min_line_length_char: 0
+  enforce_short_line_limit_for_multi_word_lines: false
+  # Lookahead heuristics rely on these thresholds to avoid creating orphaned
+  # second lines or dangling short words.
+  min_line_length_for_break: 14
+  min_last_word_len_for_break: 3
 
 # --- Exceptions ---
 allowed_single_word_proper_nouns:
