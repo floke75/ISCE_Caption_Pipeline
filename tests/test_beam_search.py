@@ -165,6 +165,34 @@ class TestBeamSearch(unittest.TestCase):
         state = PathState(score=0.0, line_num=1, line_len=len(tokens[0].w), block_start_idx=0, breaks=())
         self.assertFalse(segmenter._is_hard_ok_SB(state, 0))
 
+    def test_multi_word_short_line_allowed(self):
+        tokens = [make_token("Go", 0.0), make_token("now", 0.2)]
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=10,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        segmenter = Segmenter(tokens, DummyScorer(), cfg)
+        state = PathState(
+            score=0.0,
+            line_num=1,
+            line_len=len(tokens[0].w) + 1 + len(tokens[1].w),
+            block_start_idx=0,
+            breaks=("O",),
+        )
+
+        self.assertTrue(segmenter._is_hard_ok_SB(state, 1))
+
     def test_whitelisted_proper_noun_allowed(self):
         tokens = [make_token("NASA", 0.0, pos="PROPN")]
         cfg = Config(
