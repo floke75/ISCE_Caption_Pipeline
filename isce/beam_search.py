@@ -285,9 +285,10 @@ def _reconcile_bidirectional_breaks(
 
     We accept the backward decision when it strictly improves the holistic
     score or, in the event of a tie, when its break type has higher priority
-    (``LB`` → ``SB`` → ``O``).  This preserves gains uncovered during the
-    reverse pass while continuing to respect preferences for line and subtitle
-    boundaries when both segmentations are equivalent.
+    (``LB`` → ``SB`` → ``O``).  When the scores match and both passes would
+    otherwise emit consecutive subtitle breaks, we keep the backward
+    continuation so the reconciliation does not reintroduce short trailing
+    blocks that the reverse search intentionally removed.
     """
     reconciled = list(forward_breaks)
     current_score = _score_segmentation(tokens, reconciled, scorer, cfg)
@@ -302,10 +303,26 @@ def _reconcile_bidirectional_breaks(
         candidate_breaks[i] = candidate_break
         candidate_score = _score_segmentation(tokens, candidate_breaks, scorer, cfg)
 
-        if candidate_score > current_score + 1e-6 or (
-            abs(candidate_score - current_score) <= 1e-6
-            and tie_priority.get(candidate_break, 0) > tie_priority.get(reconciled[i], 0)
-        ):
+        prefer_candidate = False
+        if candidate_score > current_score + 1e-6:
+            prefer_candidate = True
+        elif abs(candidate_score - current_score) <= 1e-6:
+            tie_delta = tie_priority.get(candidate_break, 0) - tie_priority.get(reconciled[i], 0)
+            if tie_delta > 0:
+                prefer_candidate = True
+            elif (
+                reconciled[i] == "SB"
+                and candidate_break != "SB"
+                and i + 1 < len(tokens)
+                and reconciled[i + 1] == "SB"
+            ):
+                # Avoid creating consecutive subtitle breaks when the backward
+                # pass suggests keeping the block open. This prevents the
+                # reconciliation stage from reintroducing short trailing blocks
+                # that the reverse search purposefully removed.
+                prefer_candidate = True
+
+        if prefer_candidate:
             reconciled = candidate_breaks
             current_score = candidate_score
 
