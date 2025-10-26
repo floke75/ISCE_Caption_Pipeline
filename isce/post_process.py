@@ -184,8 +184,12 @@ def reflow_tokens(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[
                         block_dicts = _tokens_to_dicts(block_tokens)
                         block_score = scorer.score_block(block_dicts, block_breaks)
                         merged = True
-                        # Re-run the loop for the expanded block.
-                        continue
+
+        if merged:
+            # Re-run the loop for the expanded block. ``start`` intentionally
+            # stays the same so we can reassess the longer cue before advancing
+            # to the next block.
+            continue
 
         if not merged and is_imbalanced and lb_idx != -1:
             candidate_positions: List[int] = []

@@ -106,6 +106,23 @@ class TestReflowTokens(unittest.TestCase):
 
         self.assertEqual(breaks, ["O", "LB", "SB"])
 
+    def test_skips_merge_when_speaker_changes(self) -> None:
+        """Short cues should not loop when the next block has a new speaker."""
+
+        tokens = [
+            Token(w="Hi", start=0.0, end=0.3, speaker="A", break_type="SB"),
+            Token(w="Hello", start=0.3, end=0.8, speaker="B", break_type="O"),
+            Token(w="there", start=0.8, end=1.3, speaker="B", break_type="SB"),
+        ]
+
+        cfg = _make_config()
+        # ``MergeFriendlyScorer`` would normally prefer to merge the first two
+        # cues. The speaker change should prevent that merge and, critically,
+        # should not trap ``reflow_tokens`` in an infinite loop.
+        reflowed = reflow_tokens(tokens, MergeFriendlyScorer(), cfg)
+
+        self.assertEqual([token.break_type for token in reflowed], ["SB", "O", "SB"])
+
 
 if __name__ == "__main__":
     unittest.main()
