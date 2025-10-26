@@ -73,11 +73,11 @@ class Segmenter:
         self.allowed_proper_nouns = {noun.strip().lower() for noun in allowed_proper_nouns}
         self._token_rows = _build_token_rows(self.tokens, self.cfg)
         signature = inspect.signature(self.scorer.score_transition)
-        params = list(signature.parameters.values())
+        parameters = signature.parameters
         self._transition_accepts_ctx = any(
             param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
-            for param in params
-        ) or len(params) >= 2
+            for param in parameters.values()
+        ) or any(name in parameters for name in ("ctx", "context", "transition_context"))
         self.last_path_score: float | None = None
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
@@ -198,7 +198,7 @@ class Segmenter:
             projected_second_line_words=projected_words,
         )
 
-    def _score_transition(self, row: TokenRow, context: TransitionContext) -> dict[str, float]:
+    def _score_transition(self, row: TokenRow, context: TransitionContext | None) -> dict[str, float]:
         if self._transition_accepts_ctx:
             return self.scorer.score_transition(row, context)
         return self.scorer.score_transition(row)
@@ -230,7 +230,7 @@ class Segmenter:
             row = self._token_rows[i]
 
             for state in self.beam:
-                context = self._build_transition_context(state, i)
+                context = self._build_transition_context(state, i) if self._transition_accepts_ctx else None
                 transition_scores = self._score_transition(row, context)
 
                 # Candidate: 'O' (No Break)
@@ -302,7 +302,9 @@ class Segmenter:
 
             if not candidates and self.beam:
                 fallback_state = self.beam[0]
-                fallback_context = self._build_transition_context(fallback_state, i)
+                fallback_context = (
+                    self._build_transition_context(fallback_state, i) if self._transition_accepts_ctx else None
+                )
                 fallback_scores = self._score_transition(row, fallback_context)
                 block_tokens, block_breaks, lines = self._block_profiles(
                     fallback_state, fallback_state.block_start_idx, i

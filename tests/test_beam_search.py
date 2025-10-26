@@ -44,6 +44,29 @@ class RefinementScorer:
         return 0.0
 
 
+class ContextAwareScorer:
+    def __init__(self):
+        self.sl = {
+            "line_length_leniency": 1.0,
+            "orphan_leniency": 1.0,
+            "fallback_sb_penalty": 25.0,
+        }
+        self.context_calls = []
+
+    def score_transition(self, row, ctx=None):
+        if ctx is not None:
+            self.context_calls.append(ctx)
+
+        word = row.token.get("w", "")
+        if word.endswith("0"):
+            return {"O": -5.0, "LB": 5.0, "SB": -5.0}
+        if word.endswith("2"):
+            return {"O": -5.0, "LB": 10.0, "SB": -1.0}
+        return {"O": -5.0, "LB": -5.0, "SB": -5.0}
+
+    def score_block(self, block_tokens, block_breaks):
+        return 0.0
+
 def make_token(word: str, start: float) -> Token:
     return Token(w=word, start=start, end=start + 0.2, speaker="A")
 
@@ -134,6 +157,20 @@ class TestBeamSearch(unittest.TestCase):
         breaks = [token.break_type for token in segmented]
 
         self.assertEqual(breaks, ["LB", "SB", "LB", "SB"])
+
+    def test_segmenter_supplies_transition_context_when_supported(self):
+        tokens = [
+            make_token("AAAAA0", 0.0),
+            make_token("BBBBB1", 0.2),
+            make_token("CCCCC2", 0.4),
+        ]
+
+        cfg = make_cfg(min_block_duration_s=0.1, max_block_duration_s=5.0)
+        scorer = ContextAwareScorer()
+
+        segment(tokens, scorer, cfg)
+
+        self.assertTrue(scorer.context_calls, "Expected context-aware scorer to receive context payloads")
 
     def test_bidirectional_pass_improves_segmentation(self):
         tokens = [

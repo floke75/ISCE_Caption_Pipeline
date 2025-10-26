@@ -19,7 +19,7 @@ from typing import Dict, List
 
 from .model_builder import bin_pause_z, punct_class, bin_rel_pos
 from .config import Config
-from .types import BreakType, TokenRow
+from .types import BreakType, TokenRow, TransitionContext
 
 class Scorer:
     """

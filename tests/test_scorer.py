@@ -2,7 +2,7 @@ import pytest
 
 from isce.scorer import Scorer
 from isce.config import Config
-from isce.types import TokenRow
+from isce.types import TokenRow, TransitionContext
 
 def approx_equal(a, b, rel_tol=1e-9, abs_tol=0.0):
     return abs(a-b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
@@ -193,6 +193,29 @@ def test_short_block_penalty_applies_for_nonfinal_block():
     final_score = scorer.score_block(sentence_final_tokens, block_breaks)
 
     assert nonfinal_score < final_score
+
+
+def test_transition_context_penalizes_projected_fragments():
+    cfg = _make_cfg()
+    sliders = {"fragment_penalty": 6.0, "fragment_char_threshold": 8.0}
+    scorer = _make_scorer(cfg, sliders)
+
+    row = TokenRow(
+        token={"w": "Hello", "pause_z": 0.0, "relative_position": 0.5, "pos": "INTJ"},
+        nxt={"w": "world", "pos": "NOUN", "is_sentence_initial": False},
+    )
+
+    baseline_lb = scorer.score_transition(row)["LB"]
+    context = TransitionContext(
+        pending_tokens=(),
+        current_line_num=1,
+        current_line_len=5,
+        projected_second_line_chars=4,
+        projected_second_line_words=1,
+    )
+    penalized_lb = scorer.score_transition(row, context)["LB"]
+
+    assert penalized_lb < baseline_lb
 
 
 def test_short_last_line_penalty_triggers():
