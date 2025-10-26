@@ -55,6 +55,8 @@ class Scorer:
             "single_word_line_penalty": 0.0,
             "extreme_balance_penalty": 0.0,
             "extreme_balance_threshold": 2.5,
+            "short_block_penalty": 0.0,
+            "short_line_penalty": 0.0,
         }
         self.sl.update(sliders)
         self.structure_boost = self.sl.get("structure_boost", 15.0)
@@ -354,6 +356,29 @@ class Scorer:
                 severity = None if ratio <= extreme_threshold else (ratio - extreme_threshold) / extreme_threshold
             if severity is not None:
                 score -= extreme_balance_penalty * (1.0 + max(0.0, severity))
+
+        block_constraints = self.cfg.line_length_constraints.get("block", {})
+        min_total_chars = int(block_constraints.get("min_total_chars", 0))
+        min_last_line_chars = int(block_constraints.get("min_last_line_chars", 0))
+
+        short_block_penalty = float(self.sl.get("short_block_penalty", 0.0))
+        if short_block_penalty and min_total_chars:
+            if total_chars < min_total_chars:
+                last_token = block_tokens[-1]
+                if not last_token.get("is_sentence_final", False):
+                    deficit = min_total_chars - total_chars
+                    score -= short_block_penalty * deficit
+
+        short_line_penalty = float(self.sl.get("short_line_penalty", 0.0))
+        if short_line_penalty and min_last_line_chars and lines:
+            last_line_tokens = lines[-1]
+            last_line_len = line_char_counts[-1]
+            allowed_last_single = (
+                len(last_line_tokens) == 1 and is_allowed_single_word(last_line_tokens[0])
+            )
+            if last_line_len < min_last_line_chars and not allowed_last_single:
+                deficit = min_last_line_chars - last_line_len
+                score -= short_line_penalty * deficit
 
         if gross_duration < self.c.get("min_block_duration_s", 1.0):
             score -= 10.0

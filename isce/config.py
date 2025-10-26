@@ -27,7 +27,11 @@ class Config:
         min_block_duration_s: The minimum duration a subtitle block can have, in seconds.
         max_block_duration_s: The maximum duration a subtitle block can have, in seconds.
         line_length_constraints: A nested dictionary defining the soft and hard character
-                                 limits for each line of a subtitle block.
+                                 limits for each line of a subtitle block. The dictionary
+                                 also contains a ``"block"`` entry with aggregate
+                                 constraints such as ``min_total_chars`` and
+                                 ``min_last_line_chars`` that are used by the scorer's
+                                 guardrails.
         min_chars_for_single_word_block: The minimum character length required for a
                                          block that contains only a single word.
                                          Multi-word cues are exempt from this guardrail.
@@ -92,6 +96,8 @@ def load_config(path: str = "config.yaml") -> Config:
     constraints_yaml = y.get("constraints", {})
     line1_soft = int(constraints_yaml.get("line_length_soft_target", 37))
     line1_hard = int(constraints_yaml.get("line_length_hard_limit", 42))
+    min_total_chars = int(constraints_yaml.get("min_total_chars_per_block", 0))
+    min_last_line_chars = int(constraints_yaml.get("min_last_line_chars", 0))
     
     # Attempt to load the learned constraints.json file
     constraints_json = {}
@@ -119,12 +125,19 @@ def load_config(path: str = "config.yaml") -> Config:
             )
         ),
         line_length_constraints={
-            "line1": constraints_json.get(
-                "line1", {"soft_target": line1_soft, "hard_limit": line1_hard}
-            ),
-            "line2": constraints_json.get(
-                "line2", {"soft_target": line1_soft, "hard_limit": line1_hard}
-            ),
+        "line1": constraints_json.get(
+            "line1", {"soft_target": line1_soft, "hard_limit": line1_hard}
+        ),
+        "line2": constraints_json.get(
+            "line2", {"soft_target": line1_soft, "hard_limit": line1_hard}
+        ),
+        "block": constraints_json.get(
+            "block",
+            {
+                "min_total_chars": min_total_chars,
+                "min_last_line_chars": min_last_line_chars,
+            },
+        ),
         },
         min_chars_for_single_word_block=int(
             constraints_yaml.get("min_chars_for_single_word_block", 10)
