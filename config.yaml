@@ -6,9 +6,9 @@ beam_width: 14
 enable_bidirectional_pass: false
 # Number of future tokens each boundary can peek when scoring transitions.
 # Set to 0 to disable lookahead heuristics.
-lookahead_width: 0
-enable_reflow: false
-enable_refinement_pass: false
+lookahead_width: 2
+enable_reflow: true
+enable_refinement_pass: true
 
 # --- Fallback Constraints ---
 # These are used by the trainer if the learned constraints.json cannot be found.
@@ -43,6 +43,7 @@ sliders:
   # Leniency controls for dynamic penalties
   line_length_leniency: 1.0 # >1.0 allows longer lines to avoid bad breaks.
   orphan_leniency: 2.0      # >1.0 makes the penalty for orphans stronger.
+  fallback_sb_penalty: 25.0 # Penalty applied if the search is forced to end a block.
   single_word_line_penalty: 12.0   # Strong penalty for orphaned or sub-minimal lines.
   extreme_balance_penalty: 6.0     # Penalty when one line dwarfs the other in character count.
   extreme_balance_threshold: 2.2   # Character ratio threshold before extreme balance penalty applies.

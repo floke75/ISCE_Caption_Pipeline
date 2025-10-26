@@ -160,18 +160,20 @@ ISCE uses two main configuration files stored in the repository root. The UI bac
     *   `beam_width`: The width of the beam search algorithm. A larger number may yield better results but will be slower.
     *   `enable_bidirectional_pass`: Runs a reverse beam-search pass and blends the transition scores so disputed boundaries can
         be reconsidered without double-counting transitions.
-    *   `enable_refinement_pass`: Performs a second, wider-beam sweep over low-scoring blocks to rebalance awkward captions.
+    *   `enable_refinement_pass`: Performs a second, wider-beam sweep over low-scoring blocks to rebalance awkward captions. The
+        default configuration now enables this so tough cues receive an automatic quality check.
     *   `enable_reflow`: Activates a lightweight post-pass that can merge or redistribute blocks when the beam search leaves
-        behind single-token or imbalanced captions.
+        behind single-token or imbalanced captions. Enabled by default to smooth awkward phrasing without manual tweaks.
     *   `lookahead_width`: Enables a forward-looking pass in the segmenter so the transition scorer can see upcoming pauses,
-        punctuation, or speaker changes. Set this to `0` to preserve legacy behavior or increase it (e.g., `2`) to allow the
-        beam search to anticipate rapid clause endings and speaker turns.
+        punctuation, or speaker changes. The default of `2` mirrors the strategy from PR #58, giving the beam search enough
+        context to anticipate rapid clause endings and speaker turns while keeping runtime manageable. Set this to `0` to
+        preserve legacy behavior or increase it if your corpora benefit from deeper lookahead.
     *   `allowed_single_word_proper_nouns`: Optional allowlist of proper nouns that are permitted to stand alone without
         triggering hard single-word penalties.
     *   `sliders`: User-adjustable weights to fine-tune the importance of different features in the scoring model. The defaults
         now include penalties for under-filled captions (`short_block_penalty`, `short_line_penalty`), balance safety rails
         (`extreme_balance_penalty`, `extreme_balance_threshold`), and fallback leniency knobs (`line_length_leniency`,
-        `orphan_leniency`, `single_word_line_penalty`).
+        `orphan_leniency`, `single_word_line_penalty`, `fallback_sb_penalty`).
     *   `paths`: The paths to your trained `model_weights.json` and `constraints.json` files.
 
 ## Usage
