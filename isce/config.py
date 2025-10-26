@@ -45,6 +45,9 @@ class Config:
                           A value of 0 disables the lookahead pass.
         enable_reflow: When true, run an additional post-processing pass to reflow
                        awkward short or imbalanced cues.
+        enable_refinement_pass: Enables a second, wider-beam sweep over low scoring
+                       blocks so awkward cues can be rebalanced without rerunning the
+                       full pipeline.
         allowed_single_word_proper_nouns: Proper nouns that are permitted as
                        single-word lines without triggering orphan penalties.
     """
@@ -59,6 +62,7 @@ class Config:
     lookahead_width: int = 0
     enable_reflow: bool = False
     allowed_single_word_proper_nouns: tuple[str, ...] = ()
+    enable_refinement_pass: bool = False
 
 def load_config(path: str = "config.yaml") -> Config:
     """
@@ -148,4 +152,5 @@ def load_config(path: str = "config.yaml") -> Config:
         lookahead_width=int(y.get("lookahead_width", 0)),
         enable_reflow=bool(y.get("enable_reflow", False)),
         allowed_single_word_proper_nouns=tuple(y.get("allowed_single_word_proper_nouns", [])),
+        enable_refinement_pass=bool(y.get("enable_refinement_pass", False)),
     )

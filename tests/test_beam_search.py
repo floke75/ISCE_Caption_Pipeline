@@ -1,5 +1,6 @@
 import unittest
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -69,6 +70,31 @@ class BlockPreferenceScorer:
             return 6.0
         if words == ["c", "d"]:
             return 6.0
+        return 0.0
+
+
+class RefinementScorer:
+    def __init__(self):
+        self.sl = {
+            "line_length_leniency": 1.0,
+            "orphan_leniency": 1.0,
+            "single_word_line_penalty": 0.0,
+            "extreme_balance_penalty": 0.0,
+            "extreme_balance_threshold": 2.5,
+        }
+
+    def score_transition(self, row, ctx=None):
+        word = row.token.get("w", "")
+        if word == "alpha":
+            return {"O": 0.0, "LB": -999.0, "SB": 8.0}
+        return {"O": -999.0, "LB": -999.0, "SB": 0.0}
+
+    def score_block(self, block_tokens, block_breaks):
+        words = [token.get("w") for token in block_tokens]
+        if words == ["alpha"]:
+            return -5.0
+        if words == ["alpha", "beta"]:
+            return 5.0
         return 0.0
 
 
@@ -309,6 +335,39 @@ class TestBeamSearch(unittest.TestCase):
         )
 
         self.assertEqual(reconciled, ["O", "SB", "O", "SB"])
+
+    def test_refinement_pass_merges_single_word_block(self):
+        def make_tokens():
+            return [
+                make_token("alpha", 0.0, pos="PROPN"),
+                make_token("beta", 0.5),
+            ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=("alpha",),
+        )
+
+        scorer = RefinementScorer()
+
+        baseline_breaks = [token.break_type for token in segment(make_tokens(), scorer, cfg)]
+        self.assertEqual(baseline_breaks, ["SB", "SB"])
+
+        refined_cfg = replace(cfg, enable_refinement_pass=True)
+        refined_breaks = [
+            token.break_type for token in segment(make_tokens(), scorer, refined_cfg)
+        ]
+        self.assertEqual(refined_breaks, ["O", "SB"])
 
 
 class TestLineViolations(unittest.TestCase):

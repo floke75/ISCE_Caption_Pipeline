@@ -8,6 +8,7 @@ beam_width: 14
 lookahead_width: 0
 enable_bidirectional_pass: false
 enable_reflow: false
+enable_refinement_pass: false
 
 # --- Fallback Constraints ---
 # These are used by the trainer if the learned constraints.json cannot be found.

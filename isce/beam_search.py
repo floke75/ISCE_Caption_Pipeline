@@ -18,6 +18,9 @@ from .scorer import Scorer
 from .config import Config
 
 FALLBACK_SB_PENALTY = 25.0
+LOCAL_REFINEMENT_MIN_BEAM = 5
+LOCAL_REFINEMENT_IMPROVEMENT = 0.5
+BALANCE_RATIO_THRESHOLD = 2.5
 
 
 def _token_to_row_dict(token: Optional[Token]) -> Optional[dict[str, Any]]:
@@ -481,6 +484,61 @@ def _score_segmentation(
     return total
 
 
+def _split_block_lines(block_tokens: Sequence[Token], block_breaks: Sequence[BreakType]) -> List[List[Token]]:
+    lines: List[List[Token]] = []
+    current: List[Token] = []
+    for token, decision in zip(block_tokens, block_breaks):
+        current.append(token)
+        if decision in ("LB", "SB"):
+            lines.append(current)
+            current = []
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _block_balance(block_tokens: Sequence[Token], block_breaks: Sequence[BreakType]) -> float:
+    if not block_tokens:
+        return 1.0
+    lines = _split_block_lines(block_tokens, block_breaks)
+    if not lines:
+        return 1.0
+    lengths = [
+        (sum(len(tok.w) for tok in line) + max(0, len(line) - 1))
+        for line in lines
+    ]
+    if not lengths:
+        return 1.0
+    shorter = min(lengths)
+    longer = max(lengths)
+    if shorter == 0:
+        return float("inf")
+    return longer / shorter
+
+
+def _should_refine_block(
+    block_tokens: Sequence[Token],
+    block_breaks: Sequence[BreakType],
+    block_score: float,
+) -> bool:
+    if not block_tokens:
+        return False
+    if len(block_tokens) == 1:
+        return True
+    if block_score < 0.0:
+        return True
+    return _block_balance(block_tokens, block_breaks) > BALANCE_RATIO_THRESHOLD
+
+
+def _score_path(
+    tokens: Sequence[Token],
+    breaks: Sequence[BreakType],
+    scorer: Scorer,
+    cfg: Config,
+) -> float:
+    return _score_segmentation(list(tokens), list(breaks), scorer, cfg)
+
+
 def _reconcile_bidirectional_breaks(
     forward_breaks: List[BreakType],
     backward_breaks: List[BreakType],
@@ -538,6 +596,68 @@ def _run_bidirectional_breaks(tokens: List[Token], scorer: Scorer, cfg: Config) 
     backward_breaks = _map_reversed_breaks(backward_reversed_breaks)
     return _reconcile_bidirectional_breaks(forward_breaks, backward_breaks, scorer, tokens, cfg)
 
+
+def refine_blocks(
+    tokens: Sequence[Token],
+    breaks: Sequence[BreakType],
+    scorer: Scorer,
+    cfg: Config,
+) -> List[BreakType]:
+    if not tokens or not breaks:
+        return list(breaks)
+
+    refined = list(breaks)
+
+    def _block_boundaries() -> List[tuple[int, int]]:
+        spans: List[tuple[int, int]] = []
+        start = 0
+        for idx, decision in enumerate(refined):
+            if decision == "SB":
+                spans.append((start, idx))
+                start = idx + 1
+        return spans
+
+    boundaries = _block_boundaries()
+    idx = 0
+
+    while idx < len(boundaries):
+        block_start, block_end = boundaries[idx]
+        block_tokens = list(tokens[block_start : block_end + 1])
+        block_breaks = list(refined[block_start : block_end + 1])
+        block_dicts = [dict(t.__dict__) for t in block_tokens]
+        block_score = scorer.score_block(block_dicts, block_breaks)
+
+        if not _should_refine_block(block_tokens, block_breaks, block_score):
+            idx += 1
+            continue
+
+        window_start = block_start
+        window_end_idx = idx
+        if len(block_tokens) == 1 and idx + 1 < len(boundaries):
+            window_end_idx += 1
+        window_end = boundaries[window_end_idx][1]
+
+        window_tokens = list(tokens[window_start : window_end + 1])
+        window_breaks = list(refined[window_start : window_end + 1])
+        baseline_score = _score_path(window_tokens, window_breaks, scorer, cfg)
+
+        refine_beam = max(cfg.beam_width, LOCAL_REFINEMENT_MIN_BEAM)
+        refine_cfg = replace(cfg, beam_width=refine_beam, enable_refinement_pass=False)
+        candidate_segmenter = Segmenter(window_tokens, scorer, refine_cfg)
+        candidate_breaks = candidate_segmenter.run()
+        candidate_score = _score_path(window_tokens, candidate_breaks, scorer, cfg)
+
+        if candidate_score >= baseline_score + LOCAL_REFINEMENT_IMPROVEMENT:
+            refined[window_start : window_end + 1] = candidate_breaks
+            boundaries = _block_boundaries()
+            idx = 0
+            continue
+
+        idx += 1
+
+    return refined
+
+
 def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
     """
     High-level wrapper to perform beam search segmentation.
@@ -561,5 +681,8 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
         final_breaks = _run_bidirectional_breaks(tokens, scorer, cfg)
     else:
         final_breaks = _run_forward_breaks(tokens, scorer, cfg)
+
+    if getattr(cfg, "enable_refinement_pass", False):
+        final_breaks = refine_blocks(tokens, final_breaks, scorer, cfg)
 
     return [replace(token, break_type=final_breaks[i]) for i, token in enumerate(tokens)]
