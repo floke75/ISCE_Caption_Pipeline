@@ -143,7 +143,7 @@ The ISCE pipeline is a multi-stage process designed to create high-quality subti
     *   **Prosodic Features:** The duration of pauses between words.
     *   **Heuristic Features:** Speaker changes, sentence boundaries, and other structural patterns.
 
-3.  **Segmentation:** The `main.py` script takes the enriched data and feeds it into the segmentation engine. This engine uses a beam search algorithm guided by a statistical model to find the optimal placement of subtitle breaks (`SB` for a block break, `LB` for a line break). The model scores different possibilities based on the features, and the beam search efficiently explores the most promising options.
+3.  **Segmentation:** The `main.py` script takes the enriched data and feeds it into the segmentation engine. The engine now mirrors the production stack: a forward beam search is seeded with cached transition scores and learned block scoring, an optional reverse pass contributes additional subtitle-boundary candidates, and a localized refinement pass re-runs the search around low-quality cues. Lookahead-aware heuristics and configurable penalties keep the beam focused on well-formed subtitles while a post-processing reflow can polish the output.
 
 4.  **SRT Generation:** The final output is a standard `.srt` subtitle file, formatted with correct timings and line breaks.
 
@@ -158,7 +158,11 @@ ISCE uses two main configuration files stored in the repository root. The UI bac
 
 *   **`config.yaml`:** This file configures the final segmentation engine. Key settings include:
     *   `beam_width`: The width of the beam search algorithm. A larger number may yield better results but will be slower.
-    *   `sliders`: User-adjustable weights to fine-tune the importance of different features in the scoring model.
+    *   `enable_bidirectional_pass`: Runs a reverse beam search and reconciles the results with the forward pass to recover subtitle boundaries that the initial search may have missed.
+    *   `lookahead_width`: Enables forward-looking heuristics that consider a configurable number of tokens beyond the current decision.
+    *   `enable_refinement_pass`: Re-runs the beam search in focused windows around cues that received a poor block score.
+    *   `enable_reflow`: Activates the token reflow post-processing pass to rebalance lines and merge ultra-short blocks.
+    *   `sliders`: User-adjustable weights and penalties (e.g., `single_word_line_penalty`, `extreme_balance_penalty`, `fallback_sb_penalty`) that fine-tune how aggressively the scorer favors or discourages specific structures.
     *   `paths`: The paths to your trained `model_weights.json` and `constraints.json` files.
 
 ## Usage

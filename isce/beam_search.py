@@ -1,11 +1,15 @@
 # C:\dev\Captions_Formatter\Formatter_machine\isce\beam_search.py
-"""Implements the core beam search algorithm for text segmentation.
+"""Implements the caption segmentation search pipeline.
 
-This module contains the `Segmenter` class, which performs the beam search
-to find the optimal sequence of break decisions (`O`, `LB`, `SB`) for a given
-list of tokens. It maintains a beam of the most promising hypotheses (paths)
-at each step, using a `Scorer` to evaluate the quality of each potential
-decision based on a statistical model and heuristic rules.
+The functions and classes in this module combine the statistical scorer with
+production heuristics to determine the optimal break sequence (`O`, `LB`,
+`SB`) for a stream of enriched tokens.  The search now mirrors the behaviour
+used in production: we prime the forward beam search with cached transition
+scores, consult learned block scores every time we close a cue, and—when
+enabled in :class:`isce.config.Config`—run a reverse beam search so decisions
+from both timelines can be reconciled.  Additional passes re-run the search in
+small windows for low quality cues and invoke post-processing helpers from
+``isce.post_process``.
 """
 from __future__ import annotations
 from dataclasses import dataclass, replace
@@ -31,22 +35,26 @@ class PathState:
     breaks: tuple[BreakType, ...]
 
 class Segmenter:
-    """
-    Manages the beam search segmentation process.
+    """Stateful driver for the forward (or reverse) beam search.
 
-    This stateful class encapsulates the logic for the beam search algorithm,
-    iterating through tokens and maintaining a beam of the most likely
-    segmentation hypotheses (`PathState` objects). It uses a `Scorer` to
-    evaluate the quality of different break decisions at each step.
+    The segmenter walks tokens left-to-right, expanding the best scoring paths
+    stored in :class:`PathState` objects.  Transition scores, line-length
+    heuristics, and block-level quality metrics are blended together so that
+    each hypothesis reflects both the immediate break decision and how that
+    decision affects the remainder of the subtitle block.  The search mirrors
+    the configuration passed in via :class:`isce.config.Config`, including
+    single-word leniency sliders and the tunable fallback subtitle-break
+    penalty used when no candidates survive pruning.
 
     Attributes:
-        tokens: The list of `Token` objects to be segmented.
-        scorer: The `Scorer` instance used to score potential breaks.
-        cfg: The main configuration object.
-        beam: The list of current best `PathState` hypotheses.
-        line_len_leniency: A factor to adjust penalties for long lines.
-        orphan_leniency: A factor to adjust penalties for single-word lines.
-        transition_scores_cache: A cache for transition scores.
+        tokens: Ordered :class:`isce.types.Token` entries to segment.
+        scorer: Shared :class:`isce.scorer.Scorer` used to rate decisions.
+        cfg: Runtime configuration controlling beam width and heuristics.
+        beam: Current best :class:`PathState` hypotheses.
+        line_len_leniency: Slider derived factor for soft overage penalties.
+        orphan_leniency: Slider derived factor for orphaned line penalties.
+        transition_scores_cache: Pre-computed per-token transition scores so
+            reverse and refinement passes can reuse identical inputs.
     """
     def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
         self.tokens = tokens
@@ -176,8 +184,13 @@ class Segmenter:
         return final_breaks
 
 def _refine_blocks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
-    """
-    Improves low-scoring blocks by re-running a localized beam search with a wider beam.
+    """Re-run the search around cues that were scored as low quality.
+
+    Each block is evaluated with :meth:`Scorer.score_block`.  When the score
+    drops below the empirical ``-5.0`` threshold we re-segment a window around
+    the problematic cue using a temporary segmenter configured with a wider
+    beam.  The function reuses :func:`isce.post_process._block_ranges` so the
+    refinement pass stays aligned with the post-processing utilities.
     """
     refined_tokens = list(tokens)
     block_ranges = list(_block_ranges(refined_tokens))
@@ -203,7 +216,13 @@ def _refine_blocks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Tok
     return refined_tokens
 
 def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
-    """Translate reversed-order break decisions back to the forward timeline."""
+    """Translate reverse-pass break decisions back into forward order.
+
+    The helper keeps subtitle-boundary markers discovered by the backward pass
+    so reconciliation can consider them alongside the forward results.  The
+    only mutation performed is ensuring the final break is an ``SB`` in forward
+    order, matching the invariants used elsewhere in the segmentation code.
+    """
     n = len(reversed_breaks)
     if n == 0:
         return []
@@ -224,6 +243,12 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
 
 
 def _score_segmentation(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config) -> float:
+    """Calculate holistic scores for an entire segmentation sequence.
+
+    Used primarily by :func:`_reconcile_bidirectional_breaks`, this helper
+    mirrors the scoring performed during beam search by summing transition
+    scores for every decision and block scores whenever an ``SB`` is emitted.
+    """
     total = 0.0
     block_tokens: List[Token] = []
     block_breaks: List[BreakType] = []
@@ -256,8 +281,13 @@ def _reconcile_bidirectional_breaks(
     tokens: List[Token],
     cfg: Config,
 ) -> List[BreakType]:
-    """
-    Reconciles conflicting break decisions from forward and backward passes.
+    """Blend forward and backward break choices into a single sequence.
+
+    We accept the backward decision when it strictly improves the holistic
+    score or, in the event of a tie, when its break type has higher priority
+    (``LB`` → ``SB`` → ``O``).  This preserves gains uncovered during the
+    reverse pass while continuing to respect preferences for line and subtitle
+    boundaries when both segmentations are equivalent.
     """
     reconciled = list(forward_breaks)
     current_score = _score_segmentation(tokens, reconciled, scorer, cfg)
@@ -282,17 +312,14 @@ def _reconcile_bidirectional_breaks(
     return reconciled
 
 def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
-    """
-    High-level wrapper to perform beam search segmentation.
-    This function instantiates the `Segmenter` class, runs the beam search
-    algorithm, and applies the resulting break types to the input tokens.
-    Args:
-        tokens: The list of `Token` objects to segment.
-        scorer: The `Scorer` instance to use for evaluating breaks.
-        cfg: The main configuration object.
-    Returns:
-        A new list of `Token` objects with the `break_type` attribute set
-        according to the segmentation result.
+    """Entry point that runs all configured segmentation passes.
+
+    The wrapper first runs the forward beam search, optionally mirrors the
+    process in reverse so :func:`_reconcile_bidirectional_breaks` can combine
+    the two perspectives, and finally performs the localized refinement pass
+    when ``cfg.enable_refinement_pass`` is enabled.  The resulting break
+    decisions are applied to the original token objects to produce an updated
+    token list suitable for downstream rendering and post-processing.
     """
     if not tokens:
         return []
