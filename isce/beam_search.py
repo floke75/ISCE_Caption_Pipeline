@@ -208,19 +208,20 @@ class Segmenter:
         forced to emit a block despite failing soft constraints. Returning the
         violation counts lets the caller scale those penalties proportionally
         while keeping the core heuristics encapsulated. Only genuine single-word
-        lines are subject to the short-line guardrail; multi-word cues may be
-        shorter than the ``min_chars_for_single_word_block`` threshold without
-        being treated as violations.
+        blocks – cues that contain a single token across all rendered lines –
+        are subject to the short-line guardrail. Multi-line captions that end
+        on a brief second line should remain eligible so the search is free to
+        prefer a balanced layout when the scorer deems it stronger.
         """
         violations: Counter[str] = Counter()
+        total_tokens = sum(len(line_tokens) for line_tokens in lines)
+        if total_tokens != 1:
+            return violations
         min_chars_single = self.cfg.min_chars_for_single_word_block
         for line_tokens in lines:
             if not line_tokens:
                 continue
             if len(line_tokens) != 1:
-                # Multi-word cues may legitimately be short (e.g. "go now").
-                # The short-line guardrail only applies to single-word lines so
-                # we do not over-constrain normal captions.
                 continue
 
             single_word_token = line_tokens[0]
