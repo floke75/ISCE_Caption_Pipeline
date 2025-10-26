@@ -207,7 +207,7 @@ def _refine_blocks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Tok
         if score < -5.0:  # Threshold for a "low-scoring" block
             window_start = max(0, start - 5)
             window_end = min(len(tokens), end + 5)
-            window_tokens = tokens[window_start:window_end]
+            window_tokens = refined_tokens[window_start:window_end]
 
             refined_cfg = replace(cfg, beam_width=cfg.beam_width * 2)
             segmenter = Segmenter(window_tokens, scorer, refined_cfg)
