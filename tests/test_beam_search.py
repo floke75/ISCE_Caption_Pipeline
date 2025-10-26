@@ -1,10 +1,6 @@
 import unittest
-import sys
 from collections import Counter
 from dataclasses import replace
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from isce.beam_search import (
     Segmenter,
