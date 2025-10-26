@@ -84,7 +84,13 @@ class Segmenter:
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
         self.lookahead_width = getattr(self.cfg, "lookahead_width", 0)
-        self.short_line_penalty = float(self.scorer.sl.get("single_word_line_penalty", 0.0))
+        self.short_line_penalty = float(
+            self.scorer.sl.get(
+                "short_line_penalty",
+                self.scorer.sl.get("single_word_line_penalty", 0.0),
+            )
+        )
+        self.single_word_penalty = float(self.scorer.sl.get("single_word_line_penalty", 0.0))
         self.allowed_proper_nouns = {
             noun.strip().lower()
             for noun in getattr(self.cfg, "allowed_single_word_proper_nouns", tuple())
@@ -155,6 +161,7 @@ class Segmenter:
         """
         violations: List[str] = []
         min_chars = self.cfg.min_chars_for_single_word_block
+        multi_word_threshold = getattr(self.cfg, "min_line_length_char", 0)
         enforce_multi_word_short_line = getattr(
             self.cfg, "enforce_short_line_limit_for_multi_word_lines", False
         )
@@ -163,18 +170,31 @@ class Segmenter:
                 continue
             is_single_word = len(line_tokens) == 1
             allowed_single = is_single_word and self._is_allowed_single_word(line_tokens[0])
+            char_count = self._count_chars(line_tokens)
             if is_single_word and not allowed_single:
                 violations.append("single_word")
-                if self._count_chars(line_tokens) < min_chars:
+                if char_count < min_chars:
                     violations.append("short_line")
                 continue
-            if (
-                self._count_chars(line_tokens) < min_chars
-                and (is_single_word or enforce_multi_word_short_line)
-                and not allowed_single
-            ):
-                violations.append("short_line")
+            if not allowed_single:
+                threshold = min_chars if is_single_word else 0
+                if enforce_multi_word_short_line:
+                    threshold = multi_word_threshold or threshold or min_chars
+                if threshold and char_count < threshold:
+                    violations.append("short_line")
         return violations
+
+    def _penalty_for_violation(self, violation: str) -> float:
+        """Translate a violation label into the configured fallback penalty."""
+
+        if violation == "short_line" and self.short_line_penalty > 0:
+            return self.short_line_penalty
+        if violation == "single_word":
+            if self.single_word_penalty > 0:
+                return self.single_word_penalty
+            if self.short_line_penalty > 0:
+                return self.short_line_penalty
+        return self.fallback_sb_penalty
 
     def _estimate_second_line(self, current_idx: int) -> tuple[int, int]:
         """Estimate how many characters and words may land on the next line."""
@@ -299,11 +319,18 @@ class Segmenter:
                     if self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
                         new_line_len = state.line_len + 1 + len(nxt.w)
                         limit_key = f"line{state.line_num}"
-                        soft_target = self.cfg.line_length_constraints.get(limit_key, {}).get("soft_target", 37)
+                        constraints = self.cfg.line_length_constraints.get(limit_key, {})
+                        soft_target = int(constraints.get("soft_target", 37))
+                        soft_min = int(constraints.get("soft_min", 0))
+                        over_scale = float(constraints.get("soft_over_penalty_scale", 0.1))
+                        under_scale = float(constraints.get("soft_under_penalty_scale", 0.05))
                         line_len_penalty = 0.0
                         if new_line_len > soft_target:
                             overage = new_line_len - soft_target
-                            line_len_penalty = ((overage ** 2) * 0.1) / self.line_len_leniency
+                            line_len_penalty += ((overage ** 2) * over_scale) / max(self.line_len_leniency, 1e-6)
+                        if soft_min and new_line_len < soft_min:
+                            shortfall = soft_min - new_line_len
+                            line_len_penalty += ((shortfall ** 2) * under_scale) / max(self.line_len_leniency, 1e-6)
                         score = state.score + transition_scores["O"] - line_len_penalty
                         candidates.append(PathState(score=score, line_num=state.line_num, line_len=new_line_len, block_start_idx=state.block_start_idx, breaks=state.breaks + ("O",)))
 
@@ -319,9 +346,13 @@ class Segmenter:
 
                 # Candidate: 'SB' (Block Break)
                 if self._is_hard_ok_SB(state, i):
-                    block_tokens, block_breaks, _ = self._block_profiles(state, state.block_start_idx, i)
+                    block_tokens, block_breaks, lines = self._block_profiles(state, state.block_start_idx, i)
                     block_token_dicts = [dict(t.__dict__) for t in block_tokens]
                     block_score = self.scorer.score_block(block_token_dicts, block_breaks)
+                    violations = self._line_violations(lines)
+                    if violations:
+                        penalty = sum(self._penalty_for_violation(v) for v in violations)
+                        block_score -= penalty
                     score = state.score + transition_scores["SB"] + block_score
                     next_word_len = len(nxt.w) if nxt else 0
                     candidates.append(PathState(score=score, line_num=1, line_len=next_word_len, block_start_idx=i + 1, breaks=state.breaks + ("SB",)))
@@ -340,8 +371,8 @@ class Segmenter:
                 next_word_len = len(nxt.w) if nxt else 0
                 violations = self._line_violations(lines)
                 if violations:
-                    per_violation_penalty = self.short_line_penalty if self.short_line_penalty > 0 else self.fallback_sb_penalty
-                    block_score -= per_violation_penalty * len(violations)
+                    penalty = sum(self._penalty_for_violation(v) for v in violations)
+                    block_score -= penalty
                 fallback_candidate = PathState(
                     score=fallback_state.score + fallback_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
                     line_num=1,

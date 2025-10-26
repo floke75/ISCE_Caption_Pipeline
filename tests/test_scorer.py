@@ -17,8 +17,9 @@ def _make_config(**overrides) -> Config:
         min_block_duration_s=0.5,
         max_block_duration_s=8.0,
         line_length_constraints={
-            "line1": {"soft_target": 37, "hard_limit": 42},
-            "line2": {"soft_target": 37, "hard_limit": 42},
+            "line1": {"soft_target": 37, "hard_limit": 42, "soft_min": 21},
+            "line2": {"soft_target": 37, "hard_limit": 42, "soft_min": 21},
+            "block": {"min_total_chars": 0, "min_last_line_chars": 0},
         },
         min_chars_for_single_word_block=10,
         sliders={},
@@ -143,6 +144,58 @@ def test_block_penalty_for_short_total_chars() -> None:
 
     total_chars = sum(count_chars(line) for line in lines)
     expected_penalty = 0.5 * (12 - total_chars)
+    assert pytest.approx(baseline - penalised, rel=1e-6) == expected_penalty
+
+
+def test_short_block_penalty_applies_for_underfilled_block() -> None:
+    constraints = _make_constraints()
+    cfg = _make_config(
+        line_length_constraints={
+            "line1": {"soft_target": 37, "hard_limit": 42, "soft_min": 21},
+            "line2": {"soft_target": 37, "hard_limit": 42, "soft_min": 21},
+            "block": {"min_total_chars": 18, "min_last_line_chars": 0},
+        }
+    )
+
+    tokens = [
+        {"w": "I", "start": 0.0, "end": 0.2, "pos": "PRON"},
+        {"w": "agree", "start": 0.2, "end": 0.8, "pos": "VERB", "is_sentence_final": False},
+    ]
+    block_breaks = ["O", "SB"]
+
+    baseline = Scorer({}, constraints, {"short_block_penalty": 0.0}, cfg).score_block(tokens, block_breaks)
+    penalised = Scorer({}, constraints, {"short_block_penalty": 2.0}, cfg).score_block(tokens, block_breaks)
+
+    assert penalised < baseline
+
+    total_chars = len("I") + len("agree") + 1  # include space between words
+    expected_penalty = 2.0 * (18 - total_chars)
+    assert pytest.approx(baseline - penalised, rel=1e-6) == expected_penalty
+
+
+def test_short_line_penalty_targets_last_line() -> None:
+    constraints = _make_constraints()
+    cfg = _make_config(
+        line_length_constraints={
+            "line1": {"soft_target": 37, "hard_limit": 42, "soft_min": 21},
+            "line2": {"soft_target": 37, "hard_limit": 42, "soft_min": 21},
+            "block": {"min_total_chars": 0, "min_last_line_chars": 12},
+        }
+    )
+
+    tokens = [
+        {"w": "Absolutely", "start": 0.0, "end": 0.6, "pos": "ADV"},
+        {"w": "not.", "start": 0.6, "end": 1.0, "pos": "PART", "is_sentence_final": True},
+    ]
+    block_breaks = ["LB", "SB"]
+
+    baseline = Scorer({}, constraints, {"short_line_penalty": 0.0}, cfg).score_block(tokens, block_breaks)
+    penalised = Scorer({}, constraints, {"short_line_penalty": 1.2}, cfg).score_block(tokens, block_breaks)
+
+    assert penalised < baseline
+
+    last_line_len = len("not.")
+    expected_penalty = 1.2 * (12 - last_line_len)
     assert pytest.approx(baseline - penalised, rel=1e-6) == expected_penalty
 
 

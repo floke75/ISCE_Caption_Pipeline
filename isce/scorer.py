@@ -55,6 +55,8 @@ class Scorer:
             "single_word_line_penalty": 0.0,
             "extreme_balance_penalty": 0.0,
             "extreme_balance_threshold": 2.5,
+            "short_block_penalty": 0.0,
+            "short_line_penalty": 0.0,
         }
         self.sl.update(sliders)
         self.structure_boost = self.sl.get("structure_boost", 15.0)
@@ -386,6 +388,24 @@ class Scorer:
                 # Give increasingly large penalties as the ratio drifts farther
                 # from the configured balance threshold.
                 score -= extreme_balance_penalty * (1.0 + max(0.0, severity))
+
+        block_constraints = self.cfg.line_length_constraints.get("block", {})
+        min_total_chars = int(block_constraints.get("min_total_chars", 0))
+        min_last_line_chars = int(block_constraints.get("min_last_line_chars", 0))
+
+        short_block_penalty = float(self.sl.get("short_block_penalty", 0.0))
+        if short_block_penalty and min_total_chars and total_chars < min_total_chars:
+            last_token = block_tokens[-1]
+            if not last_token.get("is_sentence_final", False):
+                deficit = min_total_chars - total_chars
+                score -= short_block_penalty * deficit
+
+        short_line_penalty = float(self.sl.get("short_line_penalty", 0.0))
+        if short_line_penalty and min_last_line_chars and lines:
+            last_line_len = line_char_counts[-1]
+            if last_line_len < min_last_line_chars:
+                deficit = min_last_line_chars - last_line_len
+                score -= short_line_penalty * deficit
 
         min_duration = float(self.c.get("min_block_duration_s", self.cfg.min_block_duration_s))
         max_duration = float(self.c.get("max_block_duration_s", self.cfg.max_block_duration_s))

@@ -17,11 +17,24 @@ constraints:
   max_block_duration_s: 8.0
   line_length_soft_target: 37
   line_length_hard_limit: 42
+  # Minimum desirable length for a line before underflow penalties apply.
+  line_length_soft_min: 21
+  # Scaling factors that control how aggressively we penalise lines that run
+  # long or come in well under the soft minimum. Larger values make the beam
+  # search increasingly reluctant to exceed the soft limits.
+  line_length_overflow_scale: 0.1
+  line_length_underflow_scale: 0.05
   min_chars_for_single_word_block: 10
   # Soft minimum total character count expected for any block.  The scorer will
   # subtract a small penalty when cues fall below this length to encourage
   # reflow or refinement without outright forbidding the option.
   min_block_length_char: 10
+  # Optional block-level thresholds that allow the scorer to apply targeted
+  # penalties when cues close without a sentence break or leave a dangling last
+  # line. These are intentionally soft so the refinement and reflow passes can
+  # still recover awkward segments.
+  min_total_chars_per_block: 16
+  min_last_line_chars: 10
   # Optional guardrail for multi-word lines.  When enabled the scorer can apply
   # gentle penalties to second lines that would otherwise be extremely short.
   min_line_length_char: 0
@@ -42,6 +55,10 @@ sliders:
   flow: 1.0       # Controls importance of general rhythm (pauses, punctuation).
   density: 2.0    # Controls importance of ideal reading speed (CPS).
   balance: 2.0    # Controls importance of line balance.
+
+  # Penalties for under-filled captions and dangling short lines
+  short_block_penalty: 1.5  # Penalty per missing character when the block closes too soon.
+  short_line_penalty: 1.0   # Penalty per missing character when the last line is too short.
 
   # Leniency controls for dynamic penalties
   line_length_leniency: 1.0 # >1.0 allows longer lines to avoid bad breaks.

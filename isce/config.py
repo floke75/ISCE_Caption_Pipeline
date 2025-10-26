@@ -29,7 +29,8 @@ class Config:
     min_block_duration_s / max_block_duration_s:
         Permitted duration range for subtitle cues, in seconds.
     line_length_constraints:
-        Nested mapping describing soft and hard character limits per line.
+        Nested mapping describing soft and hard character limits per line along
+        with tunable penalty scales and block-level thresholds for short cues.
     min_chars_for_single_word_block:
         Minimum visual length required when a block contains only a single word.
     min_block_length_char:
@@ -72,7 +73,7 @@ class Config:
     beam_width: int
     min_block_duration_s: float
     max_block_duration_s: float
-    line_length_constraints: dict[str, dict[str, int]]
+    line_length_constraints: dict[str, dict[str, float]]
     min_chars_for_single_word_block: int
     sliders: dict[str, float]
     paths: dict[str, str]
@@ -125,6 +126,11 @@ def load_config(path: str = "config.yaml") -> Config:
     constraints_yaml = y.get("constraints", {})
     line1_soft = int(constraints_yaml.get("line_length_soft_target", 37))
     line1_hard = int(constraints_yaml.get("line_length_hard_limit", 42))
+    line_soft_min = int(constraints_yaml.get("line_length_soft_min", max(0, line1_soft - 16)))
+    overflow_scale = float(constraints_yaml.get("line_length_overflow_scale", 0.1))
+    underflow_scale = float(constraints_yaml.get("line_length_underflow_scale", 0.05))
+    min_total_chars = int(constraints_yaml.get("min_total_chars_per_block", 0))
+    min_last_line_chars = int(constraints_yaml.get("min_last_line_chars", 0))
     min_line_length_for_break = int(constraints_yaml.get("min_line_length_for_break", 0))
     min_last_word_len_for_break = int(constraints_yaml.get("min_last_word_len_for_break", 0))
     min_block_length_char = int(constraints_yaml.get("min_block_length_char", 0))
@@ -151,6 +157,19 @@ def load_config(path: str = "config.yaml") -> Config:
         str(item) for item in y.get("allowed_single_word_proper_nouns", [])
     )
 
+    line_defaults = {
+        "soft_target": line1_soft,
+        "hard_limit": line1_hard,
+        "soft_min": line_soft_min,
+        "soft_over_penalty_scale": overflow_scale,
+        "soft_under_penalty_scale": underflow_scale,
+    }
+
+    block_defaults = {
+        "min_total_chars": min_total_chars,
+        "min_last_line_chars": min_last_line_chars,
+    }
+
     return Config(
         beam_width=int(y.get("beam_width", 7)),
         min_block_duration_s=float(
@@ -166,12 +185,9 @@ def load_config(path: str = "config.yaml") -> Config:
             )
         ),
         line_length_constraints={
-            "line1": constraints_json.get(
-                "line1", {"soft_target": line1_soft, "hard_limit": line1_hard}
-            ),
-            "line2": constraints_json.get(
-                "line2", {"soft_target": line1_soft, "hard_limit": line1_hard}
-            ),
+            "line1": {**line_defaults, **constraints_json.get("line1", {})},
+            "line2": {**line_defaults, **constraints_json.get("line2", {})},
+            "block": {**block_defaults, **constraints_json.get("block", {})},
         },
         min_chars_for_single_word_block=int(
             constraints_yaml.get("min_chars_for_single_word_block", 10)
