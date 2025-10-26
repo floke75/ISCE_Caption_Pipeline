@@ -9,7 +9,7 @@ decision based on a statistical model and heuristic rules.
 """
 from __future__ import annotations
 from dataclasses import dataclass, replace
-from typing import List
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 from heapq import nlargest
 from tqdm import tqdm
 
@@ -18,8 +18,171 @@ from .scorer import Scorer
 from .config import Config
 
 FALLBACK_SB_PENALTY = 25.0
+DISAGREEMENT_MARGIN = 5.0
 LOCAL_REFINEMENT_MIN_BEAM = 5
+LOCAL_REFINEMENT_IMPROVEMENT = 0.5
 BALANCE_RATIO_THRESHOLD = 2.5
+
+
+def _token_to_row_dict(token: Optional[Token], *, reverse: bool = False) -> Optional[dict[str, Any]]:
+    """Create a dictionary representation of ``token`` for scorer consumption."""
+
+    if token is None:
+        return None
+
+    data: dict[str, Any] = dict(token.__dict__)
+
+    if reverse:
+        pause_after = data.get("pause_after_ms", 0)
+        pause_before = data.get("pause_before_ms", 0)
+        data["pause_after_ms"] = pause_before
+        data["pause_before_ms"] = pause_after
+
+        if "pause_z" in data:
+            data["pause_z"] = -float(data["pause_z"])
+
+        if "is_sentence_initial" in data or "is_sentence_final" in data:
+            data["is_sentence_initial"], data["is_sentence_final"] = (
+                data.get("is_sentence_final", False),
+                data.get("is_sentence_initial", False),
+            )
+
+        if data.get("relative_position") is not None:
+            data["relative_position"] = 1.0 - float(data["relative_position"])
+
+    return data
+
+
+def _compute_transition_scores(
+    tokens: Sequence[Token],
+    scorer: Scorer,
+    cfg: Config,
+    *,
+    reverse: bool = False,
+) -> List[Dict[str, float]]:
+    """Compute scorer transition outputs for ``tokens`` in forward or reverse order."""
+
+    if not tokens:
+        return []
+
+    lookahead_width = getattr(cfg, "lookahead_width", 0)
+
+    def _build_row(idx: int, token_list: Sequence[Token], *, reverse_row: bool = False) -> TokenRow:
+        token = token_list[idx]
+        nxt = token_list[idx + 1] if idx + 1 < len(token_list) else None
+        lookahead = None
+        if lookahead_width > 0:
+            future_slice = token_list[idx + 1 : idx + 1 + lookahead_width]
+            if future_slice:
+                lookahead = tuple(_token_to_row_dict(t, reverse=reverse_row) for t in future_slice)
+        return TokenRow(
+            token=_token_to_row_dict(token, reverse=reverse_row) or {},
+            nxt=_token_to_row_dict(nxt, reverse=reverse_row) if nxt else None,
+            feats=None,
+            lookahead=lookahead,
+        )
+
+    if not reverse:
+        return [scorer.score_transition(_build_row(idx, tokens)) for idx in range(len(tokens))]
+
+    reversed_tokens = list(reversed(tokens))
+    scores: List[Optional[Dict[str, float]]] = [None] * len(tokens)
+
+    for ridx in range(len(reversed_tokens)):
+        row = _build_row(ridx, reversed_tokens, reverse_row=True)
+        forward_idx = len(tokens) - 1 - ridx
+        scores[forward_idx] = scorer.score_transition(row)
+
+    for idx, sc in enumerate(scores):
+        if sc is None:
+            scores[idx] = scorer.score_transition(_build_row(idx, tokens))
+
+    return [dict(sc) for sc in scores if sc is not None]
+
+
+def _best_choice_and_margin(scores: Dict[str, float]) -> Tuple[str, float]:
+    ordered = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    if not ordered:
+        return "O", 0.0
+    best_score = ordered[0][1]
+    runner_up = ordered[1][1] if len(ordered) > 1 else best_score
+    return ordered[0][0], best_score - runner_up
+
+
+def _blend_transition_scores(
+    forward: Sequence[Dict[str, float]],
+    backward: Sequence[Dict[str, float]],
+) -> List[Optional[Dict[str, float]]]:
+    blended: List[Optional[Dict[str, float]]] = []
+    for fwd, bwd in zip(forward, backward):
+        forward_choice, forward_margin = _best_choice_and_margin(fwd)
+        backward_choice, backward_margin = _best_choice_and_margin(bwd)
+
+        if backward_choice == "SB" and backward_margin >= DISAGREEMENT_MARGIN:
+            blended.append(dict(bwd))
+            continue
+        if forward_choice == "SB" and forward_margin >= DISAGREEMENT_MARGIN:
+            blended.append(dict(fwd))
+            continue
+
+        if (
+            forward_choice != backward_choice
+            and forward_margin >= DISAGREEMENT_MARGIN
+            and backward_margin >= DISAGREEMENT_MARGIN
+        ):
+            blended.append(dict(fwd))
+            continue
+
+        merged = {outcome: (fwd[outcome] + bwd[outcome]) / 2.0 for outcome in fwd.keys()}
+        blended.append(merged)
+
+    if len(forward) > len(backward):
+        for idx in range(len(backward), len(forward)):
+            blended.append(dict(forward[idx]))
+    elif len(backward) > len(forward):
+        for idx in range(len(forward), len(backward)):
+            blended.append(dict(backward[idx]))
+
+    return blended
+
+
+def _prepare_transition_overrides(
+    tokens: Sequence[Token], scorer: Scorer, cfg: Config
+) -> Optional[List[Optional[Dict[str, float]]]]:
+    """Pre-compute override tables blending forward and reverse scorer outputs."""
+
+    if len(tokens) <= 1:
+        return None
+
+    forward_scores = _compute_transition_scores(tokens, scorer, cfg)
+    backward_scores = _compute_transition_scores(tokens, scorer, cfg, reverse=True)
+    return _blend_transition_scores(forward_scores, backward_scores)
+
+
+def _merge_transition_overrides(
+    base_scores: Dict[str, float],
+    override_scores: Optional[Dict[str, float]],
+    *,
+    context_free_scores: Optional[Dict[str, float]] = None,
+) -> Dict[str, float]:
+    """Blend contextual transition scores with override tables."""
+
+    if override_scores is None:
+        return base_scores
+
+    merged = dict(base_scores)
+    context_free_scores = context_free_scores or {}
+
+    for outcome, override_value in override_scores.items():
+        baseline = context_free_scores.get(outcome)
+        if baseline is None:
+            merged[outcome] = override_value
+            continue
+
+        context_adjustment = base_scores.get(outcome, 0.0) - baseline
+        merged[outcome] = override_value + context_adjustment
+
+    return merged
 
 @dataclass(frozen=True)
 class PathState:
@@ -267,7 +430,9 @@ class Segmenter:
             return False
         return True
 
-    def run(self) -> List[BreakType]:
+    def run(
+        self, transition_overrides: Optional[Sequence[Optional[Dict[str, float]]]] = None
+    ) -> List[BreakType]:
         """
         Executes the main beam search algorithm.
 
@@ -277,6 +442,16 @@ class Segmenter:
         scored, and the beam is pruned to keep only the top N hypotheses, where
         N is the beam width.
 
+        Parameters
+        ----------
+        transition_overrides:
+            Optional sequence of scorer outputs that should replace the raw
+            transition scores for each token. These are typically produced by
+            blending forward and reverse scorer passes when the bidirectional
+            configuration is enabled. The overrides preserve contextual
+            penalties (such as projected orphan detection) while allowing
+            callers to inject alternate base scores.
+
     Returns:
         A list of `BreakType` enums representing the best-scoring
         segmentation path found.  The method also caches the score of that path
@@ -285,6 +460,9 @@ class Segmenter:
         """
         if not self.tokens:
             return []
+
+        if transition_overrides is not None and len(transition_overrides) != len(self.tokens):
+            raise ValueError("transition_overrides must match the number of tokens")
 
         initial_state = PathState(score=0.0, line_num=1, line_len=len(self.tokens[0].w), block_start_idx=0, breaks=())
         self.beam = [initial_state]
@@ -311,9 +489,22 @@ class Segmenter:
                 feats=None,  # feats object is no longer used by the scorer
                 lookahead=lookahead_tokens,
             )
+            override_scores = transition_overrides[i] if transition_overrides is not None else None
+
             for state in self.beam:
                 context = self._build_transition_context(state, i)
-                transition_scores = self._score_transition(scorer_row, context)
+                base_scores = self._score_transition(scorer_row, context)
+                context_free_scores = None
+                if override_scores is not None:
+                    try:
+                        context_free_scores = self.scorer.score_transition(scorer_row)
+                    except TypeError:
+                        context_free_scores = self.scorer.score_transition(scorer_row, None)
+                transition_scores = _merge_transition_overrides(
+                    base_scores,
+                    override_scores,
+                    context_free_scores=context_free_scores,
+                )
                 # Candidate: 'O' (No Break)
                 if nxt:
                     if self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
@@ -364,7 +555,18 @@ class Segmenter:
                 # in the sequence.
                 fallback_state = self.beam[0]
                 fallback_context = self._build_transition_context(fallback_state, i)
-                fallback_scores = self._score_transition(scorer_row, fallback_context)
+                base_scores = self._score_transition(scorer_row, fallback_context)
+                context_free_scores = None
+                if override_scores is not None:
+                    try:
+                        context_free_scores = self.scorer.score_transition(scorer_row)
+                    except TypeError:
+                        context_free_scores = self.scorer.score_transition(scorer_row, None)
+                fallback_scores = _merge_transition_overrides(
+                    base_scores,
+                    override_scores,
+                    context_free_scores=context_free_scores,
+                )
                 block_tokens, block_breaks, lines = self._block_profiles(fallback_state, fallback_state.block_start_idx, i)
                 block_token_dicts = [dict(t.__dict__) for t in block_tokens]
                 block_score = self.scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
@@ -574,40 +776,26 @@ def _block_balance(block_tokens: List[Token], block_breaks: List[BreakType]) -> 
     return longer / max(1, shorter)
 
 
-def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config) -> float:
-    """Re-score a fixed segmentation path using the canonical scorer.
-
-    The refinement helpers occasionally explore localized windows using a wider
-    beam.  In order to determine whether those alternates actually improve the
-    subtitle quality, we need a deterministic way to score the original
-    segmentation with the same heuristics the beam search relies on.  This
-    function rebuilds that computation without mutating global state while
-    mirroring the fallback penalties applied when the primary search is forced
-    to emit a structural break.
-    """
-
-    fallback_sb_penalty = float(scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
-    short_line_penalty = float(scorer.sl.get("single_word_line_penalty", 0.0))
-    allowed_proper_nouns = {
-        noun.strip().lower()
-        for noun in getattr(cfg, "allowed_single_word_proper_nouns", tuple())
-    }
-
-    def _is_allowed_single_word(token: Token) -> bool:
-        if token.pos != "PROPN":
-            return False
-        stripped = token.w.rstrip(".,!?;:\"")
-        return stripped.lower() in allowed_proper_nouns
+def _score_path(
+    tokens: Sequence[Token],
+    breaks: Sequence[BreakType],
+    scorer: Scorer,
+    cfg: Config,
+    transition_overrides: Optional[Sequence[Optional[Dict[str, float]]]] = None,
+) -> float:
+    """Re-score a fixed segmentation path using the canonical scorer."""
 
     if not tokens:
         return 0.0
 
+    if transition_overrides is not None and len(transition_overrides) != len(tokens):
+        raise ValueError("transition_overrides must match the number of tokens")
+
+    shadow = Segmenter(list(tokens), scorer, cfg)
     total = 0.0
     line_num = 1
     line_len = len(tokens[0].w)
     block_start_idx = 0
-    line_len_leniency = scorer.sl.get("line_length_leniency", 1.0)
-    orphan_leniency = scorer.sl.get("orphan_leniency", 1.0)
 
     for i, token in enumerate(tokens):
         nxt = tokens[i + 1] if i + 1 < len(tokens) else None
@@ -616,25 +804,59 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
             future_slice = tokens[i + 1 : i + 1 + cfg.lookahead_width]
             if future_slice:
                 lookahead_tokens = tuple(dict(t.__dict__) for t in future_slice)
+
         row = TokenRow(
             token=dict(token.__dict__),
             nxt=dict(nxt.__dict__) if nxt else None,
             feats=None,
             lookahead=lookahead_tokens,
         )
-        transition_scores = scorer.score_transition(row)
+
+        state = PathState(
+            score=total,
+            line_num=line_num,
+            line_len=line_len,
+            block_start_idx=block_start_idx,
+            breaks=tuple(breaks[:i]),
+        )
+        context = shadow._build_transition_context(state, i)
+        override_scores = transition_overrides[i] if transition_overrides is not None else None
+
+        try:
+            base_scores = scorer.score_transition(row, context)
+        except TypeError:
+            base_scores = scorer.score_transition(row)
+        context_free_scores = None
+        if override_scores is not None:
+            try:
+                context_free_scores = scorer.score_transition(row)
+            except TypeError:
+                context_free_scores = scorer.score_transition(row, None)
+        transition_scores = _merge_transition_overrides(
+            base_scores,
+            override_scores,
+            context_free_scores=context_free_scores,
+        )
+
         decision = breaks[i]
 
         if decision == "O":
             if nxt:
                 new_line_len = line_len + 1 + len(nxt.w)
                 limit_key = f"line{line_num}"
-                soft_target = cfg.line_length_constraints.get(limit_key, {}).get("soft_target", 37)
-                line_len_penalty = 0.0
+                constraints = cfg.line_length_constraints.get(limit_key, {})
+                soft_target = int(constraints.get("soft_target", 37))
+                soft_min = int(constraints.get("soft_min", 0))
+                over_scale = float(constraints.get("soft_over_penalty_scale", 0.1))
+                under_scale = float(constraints.get("soft_under_penalty_scale", 0.05))
+                line_penalty = 0.0
                 if new_line_len > soft_target:
                     overage = new_line_len - soft_target
-                    line_len_penalty = ((overage ** 2) * 0.1) / line_len_leniency
-                total += transition_scores.get("O", 0.0) - line_len_penalty
+                    line_penalty += (overage**2) * over_scale / max(shadow.line_len_leniency, 1e-6)
+                if soft_min and new_line_len < soft_min:
+                    shortfall = soft_min - new_line_len
+                    line_penalty += (shortfall**2) * under_scale / max(shadow.line_len_leniency, 1e-6)
+                total += transition_scores.get("O", 0.0) - line_penalty
                 line_len = new_line_len
         elif decision == "LB":
             orphan_penalty = 0.0
@@ -642,55 +864,35 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
                 orphan_penalty = 2.5
             elif i + 1 < len(tokens) and tokens[i + 1].is_sentence_final:
                 orphan_penalty = 5.0
-            total += transition_scores.get("LB", 0.0) - (orphan_penalty * orphan_leniency)
+            total += transition_scores.get("LB", 0.0) - (orphan_penalty * shadow.orphan_leniency)
             line_num = 2
             line_len = len(nxt.w) if nxt else 0
         elif decision == "SB":
-            block_token_dicts = [dict(t.__dict__) for t in tokens[block_start_idx : i + 1]]
-            block_breaks = list(breaks[block_start_idx:i]) + ["SB"]
-            block_score = scorer.score_block(block_token_dicts, block_breaks)
-
-            forced_penalty = 0.0
-            violations: List[str] = []
-            lines: List[List[Token]] = []
-            current_line: List[Token] = []
-            for token_in_block, br in zip(tokens[block_start_idx : i + 1], block_breaks):
-                current_line.append(token_in_block)
-                if br in {"LB", "SB"}:
-                    lines.append(current_line)
-                    current_line = []
-            if current_line:
-                lines.append(current_line)
-
-            min_chars = cfg.min_chars_for_single_word_block
-            enforce_multi_word_short_line = getattr(
-                cfg, "enforce_short_line_limit_for_multi_word_lines", False
+            block_tokens, block_breaks, lines = shadow._block_profiles(state, block_start_idx, i)
+            block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+            block_score = (
+                scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
             )
-            for line_tokens in lines:
-                if not line_tokens:
-                    continue
-                is_single_word = len(line_tokens) == 1
-                allowed_single = is_single_word and _is_allowed_single_word(line_tokens[0])
-                if is_single_word and not allowed_single:
-                    violations.append("single_word")
-                    if _count_chars(line_tokens) < min_chars:
-                        violations.append("short_line")
-                    continue
-                if (
-                    _count_chars(line_tokens) < min_chars
-                    and (is_single_word or enforce_multi_word_short_line)
-                    and not allowed_single
-                ):
-                    violations.append("short_line")
 
-            block_duration = max(1e-6, tokens[i].end - tokens[block_start_idx].start)
-            if block_duration < cfg.min_block_duration_s or violations:
-                forced_penalty += fallback_sb_penalty
-                if violations:
-                    per_violation_penalty = short_line_penalty if short_line_penalty > 0 else fallback_sb_penalty
-                    forced_penalty += per_violation_penalty * len(violations)
+            violations = shadow._line_violations(lines)
+            if violations:
+                per_violation_penalty = (
+                    shadow.short_line_penalty
+                    if shadow.short_line_penalty > 0
+                    else shadow.fallback_sb_penalty
+                )
+                block_score -= per_violation_penalty * len(violations)
 
-            total += transition_scores.get("SB", 0.0) + block_score - forced_penalty
+            forced = True
+            if nxt and shadow._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
+                forced = False
+            if nxt and shadow._is_hard_ok_LB(state, i):
+                forced = False
+            if shadow._is_hard_ok_SB(state, i):
+                forced = False
+
+            fallback_penalty = shadow.fallback_sb_penalty if forced else 0.0
+            total += transition_scores.get("SB", 0.0) + block_score - fallback_penalty
             line_num = 1
             line_len = len(nxt.w) if nxt else 0
             block_start_idx = i + 1
@@ -698,7 +900,6 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
             raise ValueError(f"Unknown break type: {decision}")
 
     return total
-
 
 def _should_refine(block_tokens: List[Token], block_breaks: List[BreakType], block_score: float) -> bool:
     """Decide whether a cue is low quality enough to warrant refinement.
@@ -774,17 +975,33 @@ def refine_blocks(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, 
             window_tokens = tokens[window_start : window_end + 1]
             window_breaks = refined_breaks[window_start : window_end + 1]
 
-            original_score = _score_path(window_tokens, window_breaks, scorer, cfg)
+            overrides = None
+            if getattr(cfg, "enable_bidirectional_pass", False):
+                overrides = _prepare_transition_overrides(window_tokens, scorer, cfg)
+
+            original_score = _score_path(
+                window_tokens,
+                window_breaks,
+                scorer,
+                cfg,
+                transition_overrides=overrides,
+            )
             local_cfg = replace(cfg, beam_width=max(cfg.beam_width, LOCAL_REFINEMENT_MIN_BEAM))
             local_segmenter = Segmenter(window_tokens, scorer, local_cfg)
-            local_breaks = local_segmenter.run()
+            local_breaks = local_segmenter.run(overrides)
             local_score = (
                 local_segmenter.last_path_score
                 if local_segmenter.last_path_score is not None
-                else _score_path(window_tokens, local_breaks, scorer, local_cfg)
+                else _score_path(
+                    window_tokens,
+                    local_breaks,
+                    scorer,
+                    cfg,
+                    transition_overrides=overrides,
+                )
             )
 
-            if local_score > original_score + 1e-6:
+            if local_score >= original_score + LOCAL_REFINEMENT_IMPROVEMENT:
                 current_slice = refined_breaks[window_start : window_end + 1]
                 if list(current_slice) != list(local_breaks):
                     refined_breaks[window_start : window_end + 1] = list(local_breaks)

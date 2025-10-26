@@ -8,7 +8,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from isce.beam_search import (
     PathState,
     Segmenter,
+    _prepare_transition_overrides,
     _reverse_tokens_for_bidirectional,
+    _score_path,
     refine_blocks,
     segment,
 )
@@ -307,6 +309,221 @@ class TestBeamSearch(unittest.TestCase):
 
         self.assertEqual(breaks, ["O", "SB", "O", "SB"])
 
+    def test_transition_overrides_replace_base_scores(self):
+        tokens = [
+            make_token("alpha0", 0.0),
+            make_token("beta1", 0.2),
+            make_token("gamma2", 0.4),
+            make_token("delta3", 0.6),
+        ]
+
+        cfg = Config(
+            beam_width=3,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 20,
+                    "hard_limit": 25,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 20,
+                    "hard_limit": 25,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+        )
+
+        scorer = DummyScorer()
+        baseline = Segmenter(list(tokens), scorer, cfg).run()
+        overrides = _prepare_transition_overrides(tokens, scorer, cfg)
+        with_overrides = Segmenter(list(tokens), scorer, cfg).run(overrides)
+
+        self.assertEqual(baseline, with_overrides)
+
+    def test_transition_overrides_preserve_contextual_penalties(self):
+        class ContextSensitiveScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                }
+
+            def score_transition(self, row, ctx=None):
+                base = {"O": 0.0, "LB": 10.0, "SB": 0.0}
+                if ctx is not None and ctx.current_line_len < 6:
+                    base = dict(base)
+                    base["LB"] = -90.0
+                return base
+
+            def score_block(self, block_tokens, block_breaks):
+                return 0.0
+
+        tokens = [
+            make_token("hi", 0.0),
+            make_token("there", 0.5),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            enable_bidirectional_pass=True,
+        )
+
+        scorer = ContextSensitiveScorer()
+        baseline = Segmenter(list(tokens), scorer, cfg).run()
+        overrides = _prepare_transition_overrides(tokens, scorer, cfg)
+        with_overrides = Segmenter(list(tokens), scorer, cfg).run(overrides)
+
+        self.assertEqual(baseline, with_overrides)
+        self.assertEqual(with_overrides[0], "O")
+
+    def test_refinement_baseline_respects_transition_overrides(self):
+        class OverrideAwareScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                }
+
+            def score_transition(self, row, ctx=None):
+                if ctx is None:
+                    return {"O": 0.0, "LB": 10.0, "SB": 0.0}
+                return {"O": 0.0, "LB": -5.0, "SB": 0.0}
+
+            def score_block(self, block_tokens, block_breaks):
+                return -1.0
+
+        tokens = [
+            Token(w="one", start=0.0, end=0.5, speaker="A"),
+            Token(w="two", start=0.5, end=1.0, speaker="A"),
+        ]
+        initial_breaks = ["LB", "SB"]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            enable_bidirectional_pass=True,
+        )
+
+        overrides_table = [
+            {"O": 0.0, "LB": 10.0, "SB": 0.0},
+            {"O": 0.0, "LB": 0.0, "SB": 0.0},
+        ]
+        candidate_breaks = ["O", "SB"]
+
+        def fake_run(self, transition_overrides=None):
+            self.last_path_score = -10.0
+            return list(candidate_breaks)
+
+        scorer = OverrideAwareScorer()
+
+        with patch("isce.beam_search._prepare_transition_overrides", return_value=overrides_table):
+            with patch("isce.beam_search._score_path", return_value=3.0) as score_mock:
+                with patch.object(Segmenter, "run", new=fake_run):
+                    refined = refine_blocks(tokens, initial_breaks, scorer, cfg)
+
+        self.assertEqual(refined, initial_breaks)
+        self.assertEqual(
+            score_mock.call_args.kwargs.get("transition_overrides"),
+            overrides_table,
+        )
+
+    def test_score_path_matches_fallback_penalty(self):
+        tokens = [make_token("alpha", 0.0)]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=1.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 12,
+                    "hard_limit": 20,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 12,
+                    "hard_limit": 20,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+        )
+
+        scorer = DummyScorer()
+        segmenter = Segmenter(list(tokens), scorer, cfg)
+        breaks = segmenter.run()
+
+        self.assertEqual(breaks, ["SB"])
+        self.assertIsNotNone(segmenter.last_path_score)
+
+        rescored = _score_path(tokens, breaks, scorer, cfg)
+        self.assertAlmostEqual(rescored, segmenter.last_path_score)
+        self.assertLess(rescored, -20.0)
+
     def test_refinement_retries_next_block_after_failed_merge(self):
         class RefinementScorer:
             def __init__(self):
@@ -358,8 +575,12 @@ class TestBeamSearch(unittest.TestCase):
 
         scorer = RefinementScorer()
 
-        with patch("isce.beam_search.Segmenter", side_effect=[first_segmenter, second_segmenter]) as mock_segmenter:
-            refined = refine_blocks(tokens, breaks, scorer, cfg)
+        with patch("isce.beam_search._score_path", side_effect=[0.0, 0.0]):
+            with patch(
+                "isce.beam_search.Segmenter",
+                side_effect=[first_segmenter, second_segmenter],
+            ) as mock_segmenter:
+                refined = refine_blocks(tokens, breaks, scorer, cfg)
 
         self.assertEqual(refined, ["SB", "LB", "SB"])
         self.assertEqual(mock_segmenter.call_count, 2)
