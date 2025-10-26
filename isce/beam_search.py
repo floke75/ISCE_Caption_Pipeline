@@ -571,9 +571,18 @@ def _block_balance(block_tokens: Sequence[Token], block_breaks: Sequence[BreakTy
     return longer / max(1, shorter)
 
 
-def _score_path(tokens: Sequence[Token], breaks: Sequence[BreakType], scorer: Scorer, cfg: Config) -> float:
+def _score_path(
+    tokens: Sequence[Token],
+    breaks: Sequence[BreakType],
+    scorer: Scorer,
+    cfg: Config,
+    transition_overrides: Optional[Sequence[Optional[Dict[str, float]]]] = None,
+) -> float:
     if not tokens:
         return 0.0
+
+    if transition_overrides is not None and len(transition_overrides) != len(tokens):
+        raise ValueError("transition_overrides must match the number of tokens")
 
     shadow = Segmenter(list(tokens), scorer, cfg)
     total = 0.0
@@ -606,7 +615,12 @@ def _score_path(tokens: Sequence[Token], breaks: Sequence[BreakType], scorer: Sc
             breaks=tuple(breaks[:i]),
         )
         context = shadow._build_transition_context(state, i)
-        transition_scores = scorer.score_transition(row, context)
+        override_scores = transition_overrides[i] if transition_overrides is not None else None
+
+        if override_scores is not None:
+            transition_scores = dict(override_scores)
+        else:
+            transition_scores = scorer.score_transition(row, context)
         decision = breaks[i]
 
         if decision == "O":
@@ -716,20 +730,32 @@ def refine_blocks(tokens: List[Token], breaks: Sequence[BreakType], scorer: Scor
 
         window_tokens = tokens[window_start : window_end + 1]
         window_breaks = refined_breaks[window_start : window_end + 1]
-        baseline_score = _score_path(window_tokens, window_breaks, scorer, cfg)
-
         refine_beam = max(cfg.beam_width, LOCAL_REFINEMENT_MIN_BEAM)
         refine_cfg = replace(cfg, beam_width=refine_beam, enable_refinement_pass=False)
         overrides = None
         if getattr(cfg, "enable_bidirectional_pass", False):
             overrides = _prepare_transition_overrides(window_tokens, scorer, cfg)
 
+        baseline_score = _score_path(
+            window_tokens,
+            window_breaks,
+            scorer,
+            cfg,
+            transition_overrides=overrides,
+        )
+
         window_segmenter = Segmenter(list(window_tokens), scorer, refine_cfg)
         candidate_breaks = window_segmenter.run(overrides)
         candidate_score = (
             window_segmenter.last_path_score
             if window_segmenter.last_path_score is not None
-            else _score_path(window_tokens, candidate_breaks, scorer, cfg)
+            else _score_path(
+                window_tokens,
+                candidate_breaks,
+                scorer,
+                cfg,
+                transition_overrides=overrides,
+            )
         )
 
         if candidate_score >= baseline_score + LOCAL_REFINEMENT_IMPROVEMENT:
