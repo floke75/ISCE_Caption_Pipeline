@@ -12,10 +12,12 @@ Usage (from the repository root):
 
 Use ``--help`` to discover optional flags such as GPU-enabled SpaCy installs or
 frontend skipping.
+
+Attributes:
+    MIN_PYTHON (tuple[int, int]): The minimum required Python version.
+    SPACY_MODEL (str): The name of the SpaCy language model to be installed.
 """
-
 from __future__ import annotations
-
 import argparse
 import os
 import platform

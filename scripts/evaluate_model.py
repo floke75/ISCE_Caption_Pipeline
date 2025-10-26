@@ -1,4 +1,3 @@
-# C:\dev\Captions_Formatter\Formatter_machine\scripts\evaluate_model.py
 """Command-line script for evaluating the performance of a trained model.
 
 This script serves as a key tool for model validation and diagnostics. It

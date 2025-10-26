@@ -20,7 +20,6 @@ These functions are responsible for:
     and any result data back to the `JobManager`.
 """
 from __future__ import annotations
-
 import shutil
 import sys
 from pathlib import Path

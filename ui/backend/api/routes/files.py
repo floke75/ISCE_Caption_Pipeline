@@ -1,6 +1,26 @@
-"""Filesystem browsing and validation endpoints for the UI."""
-from __future__ import annotations
+"""Filesystem browsing and validation endpoints for the UI.
 
+This module provides a secure and sandboxed way for the frontend to interact
+with the server's file system. It defines a `FileBrowser` service that operates
+only within a set of administrator-defined "root" directories, preventing
+unauthorized file access.
+
+The main components are:
+-   **FileBrowser**: A service class that encapsulates all safe file system
+    operations, such as listing directories and validating paths. It ensures
+    that all paths are resolved and checked against the allowlisted roots.
+-   **API Router**: The `create_file_router` function constructs and returns a
+    FastAPI router with endpoints for:
+    -   Listing the available root directories (`/roots`).
+    -   Listing the contents of a directory (`/list`).
+    -   Validating a given path (`/validate`), checking for existence, type
+        (file/directory), and whether it is within an allowed root.
+
+These endpoints are crucial for the UI's file picker components, allowing users
+to select input and output paths for pipeline jobs without exposing the entire
+file system.
+"""
+from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple

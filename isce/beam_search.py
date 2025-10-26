@@ -1,18 +1,25 @@
 """Beam search segmentation with lookahead, refinement, and guardrails.
 
-This module hosts the core implementation of ISCE's beam search. The logic has
-accumulated a number of heuristics over the years, so we keep the code heavily
-documented to make the data flow and motivations explicit. In particular:
+This module hosts the core implementation of ISCE's beam search algorithm,
+which is responsible for finding the optimal placement of subtitle breaks.
+The logic incorporates several advanced features to improve segmentation
+quality and robustness:
 
-* the scorer receives a :class:`~isce.types.TransitionContext` so transition
-  scores can consider partially written lines and projected second-line space;
-* optional lookahead exposes a shallow copy of the next ``N`` tokens so the
-  scorer can anticipate speaker changes or punctuation while keeping the hot
-  path side-effect free;
-* fallback penalties and single-word guardrails ensure forced ``SB`` decisions
-  still surface problematic cues for operators; and
-* bidirectional reconciliation plus a targeted refinement pass revisit weak
-  blocks without forcing a full rerun of the global search.
+-   **Lookahead**: The scorer can consider a window of upcoming tokens to make
+    more informed decisions, anticipating speaker changes or significant
+    punctuation.
+-   **Guardrails**: A system of hard constraints and soft penalties prevents
+    the generation of subtitles that violate length, duration, or balance
+    rules. This includes fallback penalties for forced decisions.
+-   **Bidirectional Pass**: An optional mode to run the beam search both
+    forwards and backwards over the tokens, reconciling the results to find a
+    globally more consistent segmentation.
+-   **Refinement Pass**: An optional final pass that revisits and re-segments
+    only the low-quality or imbalanced blocks with a wider beam, providing
+    targeted correction without the cost of a full re-run.
+
+The main entry point is the `segment` function, which orchestrates these
+components based on the provided configuration.
 """
 from __future__ import annotations
 from collections import Counter

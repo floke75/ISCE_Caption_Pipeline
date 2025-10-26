@@ -1,4 +1,3 @@
-# C:\dev\Captions_Formatter\Formatter_machine\isce\io_utils.py
 """Provides utility functions for loading and saving token data.
 
 This module contains helper functions dedicated to the serialization and
@@ -12,9 +11,9 @@ import json
 from typing import List
 from .types import Token
 
+
 def load_tokens(path: str) -> List[Token]:
-    """
-    Loads a list of Token objects from a JSON file.
+    """Loads a list of Token objects from a JSON file.
 
     This function is responsible for parsing a JSON file that contains a list
     of token dictionaries under the "tokens" key. It is designed to be robust

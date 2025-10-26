@@ -2,27 +2,33 @@
 # -*- coding: utf-8 -*-
 """Self-contained audio processing and speech recognition engine.
 
-This script is responsible for the first major stage of the ISCE pipeline.
-It takes a single audio or video file as input and performs the following
-steps:
-1.  Extracts the audio stream and converts it to a standardized format
-    (16kHz mono WAV) required by the speech recognition models.
+This script is responsible for the first major stage of the ISCE pipeline. It
+takes a single audio or video file as input and performs the following steps:
+1.  Extracts the audio stream and converts it to a standardized format (16kHz
+    mono WAV) required by the speech recognition models.
 2.  Uses a WhisperX model to transcribe the audio into text.
 3.  Performs forced alignment to obtain precise word-level timestamps.
 4.  Applies speaker diarization to identify and label different speakers.
 
-The final output is a single JSON file containing a flat list of words,
-each with its start time, end time, and assigned speaker label. This file
-serves as the foundational timing reference for all subsequent steps in the
-main ISCE pipeline.
-"""
+The final output is a single JSON file containing a flat list of words, each
+with its start time, end time, and assigned speaker label. This file serves as
+the foundational timing reference for all subsequent steps in the main ISCE
+pipeline.
 
+This script is designed to be executable as a standalone command-line tool and
+is called by the main orchestrator (`run_pipeline.py`).
+
+Attributes:
+    DEFAULT_SETTINGS (Dict[str, Any]): A dictionary holding the default
+        configuration for the script, which can be overridden by an external
+        YAML file. This includes model identifiers, language settings, and paths.
+"""
 import os
 import json
 import traceback
 import gc
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 import argparse
 import ffmpeg
 import warnings

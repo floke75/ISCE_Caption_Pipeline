@@ -1,4 +1,3 @@
-# C:\dev\Captions_Formatter\Formatter_machine\scripts\train_model.py
 """Command-line script for training the statistical segmentation model.
 
 This script orchestrates the entire model training workflow. It takes a corpus
