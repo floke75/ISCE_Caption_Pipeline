@@ -8,9 +8,10 @@ in order to penalize prospective line breaks that would leave unreasonably short
 orphan lines.
 """
 from __future__ import annotations
+from collections import Counter
 from dataclasses import dataclass, replace
-from typing import Any, List, Optional, Sequence
 from heapq import nlargest
+from typing import Any, List, Optional, Sequence
 from tqdm import tqdm
 
 from .types import Token, BreakType, TokenRow, TransitionContext
@@ -184,18 +185,18 @@ class Segmenter:
             lines.append(list(current_line))
         return block_tokens, block_breaks, lines
 
-    def _line_violations(self, lines: List[List[Token]]) -> List[str]:
+    def _line_violations(self, lines: List[List[Token]]) -> Counter[str]:
         """Report soft violations found within the prospective block lines.
 
         The current fallback strategy applies manual penalties when we are
         forced to emit a block despite failing soft constraints. Returning the
-        violation labels lets the caller scale those penalties proportionally
+        violation counts lets the caller scale those penalties proportionally
         while keeping the core heuristics encapsulated. Only genuine single-word
         lines are subject to the short-line guardrail; multi-word cues may be
         shorter than the ``min_chars_for_single_word_block`` threshold without
         being treated as violations.
         """
-        violations: List[str] = []
+        violations: Counter[str] = Counter()
         min_chars_single = self.cfg.min_chars_for_single_word_block
         for line_tokens in lines:
             if not line_tokens:
@@ -209,9 +210,9 @@ class Segmenter:
             single_word_token = line_tokens[0]
             allowed_single = self._is_allowed_single_word(single_word_token)
             if not allowed_single:
-                violations.append("single_word")
+                violations["single_word"] += 1
                 if self._count_chars(line_tokens) < min_chars_single:
-                    violations.append("short_line")
+                    violations["short_line"] += 1
         return violations
 
     def _is_hard_ok_SB(self, state: PathState, current_idx: int) -> bool:
@@ -360,7 +361,9 @@ class Segmenter:
                     per_violation_penalty = (
                         self.short_line_penalty if self.short_line_penalty > 0 else self.fallback_sb_penalty
                     )
-                    block_score -= per_violation_penalty * len(violations)
+                    violating_lines = violations.get("single_word", 0)
+                    if violating_lines:
+                        block_score -= per_violation_penalty * violating_lines
                 fallback_candidate = PathState(
                     score=fallback_state.score + fallback_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
                     line_num=1,

@@ -1,5 +1,6 @@
 import unittest
 import sys
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
@@ -438,7 +439,7 @@ class TestLineViolations(unittest.TestCase):
         segmenter = Segmenter(tokens, DummyScorer(), cfg)
         violations = segmenter._line_violations([tokens])
 
-        assert sorted(violations) == ["short_line", "single_word"]
+        assert violations == Counter({"single_word": 1, "short_line": 1})
 
     def test_ignores_multi_word_short_lines(self):
         tokens = [make_token("Go", 0.0), make_token("now", 0.2)]
@@ -460,7 +461,7 @@ class TestLineViolations(unittest.TestCase):
         segmenter = Segmenter(tokens, DummyScorer(), cfg)
         violations = segmenter._line_violations([tokens])
 
-        assert violations == []
+        assert violations == Counter()
 
     def test_respects_whitelisted_single_words(self):
         tokens = [make_token("NASA", 0.0, pos="PROPN")]
@@ -482,7 +483,7 @@ class TestLineViolations(unittest.TestCase):
         segmenter = Segmenter(tokens, DummyScorer(), cfg)
         violations = segmenter._line_violations([tokens])
 
-        assert violations == []
+        assert violations == Counter()
 
 
 if __name__ == "__main__":
