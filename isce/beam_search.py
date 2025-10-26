@@ -692,11 +692,31 @@ def _score_path(
             line_num = 2
             line_len = len(nxt.w) if nxt else 0
         elif decision == "SB":
-            block_tokens = tokens[block_start_idx : i + 1]
-            block_breaks = list(breaks[block_start_idx:i]) + ["SB"]
+            block_tokens, block_breaks, lines = shadow._block_profiles(state, block_start_idx, i)
             block_token_dicts = [dict(t.__dict__) for t in block_tokens]
-            block_score = scorer.score_block(block_token_dicts, block_breaks)
-            total += transition_scores.get("SB", 0.0) + block_score
+            block_score = (
+                scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
+            )
+
+            violations = shadow._line_violations(lines)
+            if violations:
+                per_violation_penalty = (
+                    shadow.short_line_penalty
+                    if shadow.short_line_penalty > 0
+                    else shadow.fallback_sb_penalty
+                )
+                block_score -= per_violation_penalty * len(violations)
+
+            forced = True
+            if nxt and shadow._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
+                forced = False
+            if nxt and shadow._is_hard_ok_LB(state, i):
+                forced = False
+            if shadow._is_hard_ok_SB(state, i):
+                forced = False
+
+            fallback_penalty = shadow.fallback_sb_penalty if forced else 0.0
+            total += transition_scores.get("SB", 0.0) + block_score - fallback_penalty
             line_num = 1
             line_len = len(nxt.w) if nxt else 0
             block_start_idx = i + 1

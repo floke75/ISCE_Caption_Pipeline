@@ -9,6 +9,7 @@ from isce.beam_search import (
     Segmenter,
     PathState,
     _prepare_transition_overrides,
+    _score_path,
     refine_blocks,
     segment,
 )
@@ -546,6 +547,48 @@ class TestBeamSearch(unittest.TestCase):
                 refined = refine_blocks(tokens, initial_breaks, scorer, cfg)
 
         self.assertEqual(refined, initial_breaks)
+
+    def test_score_path_matches_fallback_penalty(self):
+        tokens = [make_token("alpha", 0.0, end=0.2)]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=1.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 12,
+                    "hard_limit": 20,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 12,
+                    "hard_limit": 20,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+        )
+
+        scorer = DummyScorer()
+        segmenter = Segmenter(list(tokens), scorer, cfg)
+        breaks = segmenter.run()
+
+        self.assertEqual(breaks, ["SB"])
+        self.assertIsNotNone(segmenter.last_path_score)
+
+        rescored = _score_path(tokens, breaks, scorer, cfg)
+
+        self.assertAlmostEqual(rescored, segmenter.last_path_score)
+        self.assertLess(rescored, -20.0)
 
 
 if __name__ == "__main__":
