@@ -121,6 +121,41 @@ def _compute_transition_scores(
     return [dict(sc) for sc in scores if sc is not None]
 
 
+def _merge_transition_overrides(
+    base_scores: Dict[str, float],
+    override_scores: Optional[Dict[str, float]],
+    *,
+    context_free_scores: Optional[Dict[str, float]] = None,
+) -> Dict[str, float]:
+    """Blend contextual scores with override tables.
+
+    ``base_scores`` already includes contextual heuristics derived from the
+    :class:`TransitionContext`. ``override_scores`` only captures the
+    context-free scorer output because the preparation pass cannot reproduce the
+    live beam state. When overrides are present we preserve the contextual
+    adjustments and replace only the underlying non-contextual component so that
+    bidirectional runs continue to benefit from safeguards such as projected
+    orphan penalties.
+    """
+
+    if override_scores is None:
+        return base_scores
+
+    merged = dict(base_scores)
+    context_free_scores = context_free_scores or {}
+
+    for outcome, override_value in override_scores.items():
+        baseline = context_free_scores.get(outcome)
+        if baseline is None:
+            merged[outcome] = override_value
+            continue
+
+        context_adjustment = base_scores.get(outcome, 0.0) - baseline
+        merged[outcome] = override_value + context_adjustment
+
+    return merged
+
+
 def _best_choice_and_margin(scores: Dict[str, float]) -> Tuple[str, float]:
     ordered = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     if not ordered:
@@ -443,10 +478,14 @@ class Segmenter:
             for state in self.beam:
                 context = self._build_transition_context(state, i)
                 base_scores = self.scorer.score_transition(scorer_row, context)
+                context_free_scores = None
                 if override_scores is not None:
-                    transition_scores = dict(override_scores)
-                else:
-                    transition_scores = base_scores
+                    context_free_scores = self.scorer.score_transition(scorer_row)
+                transition_scores = _merge_transition_overrides(
+                    base_scores,
+                    override_scores,
+                    context_free_scores=context_free_scores,
+                )
 
                 # Candidate: 'O' (No Break)
                 if nxt:
@@ -617,10 +656,15 @@ def _score_path(
         context = shadow._build_transition_context(state, i)
         override_scores = transition_overrides[i] if transition_overrides is not None else None
 
+        base_scores = scorer.score_transition(row, context)
+        context_free_scores = None
         if override_scores is not None:
-            transition_scores = dict(override_scores)
-        else:
-            transition_scores = scorer.score_transition(row, context)
+            context_free_scores = scorer.score_transition(row)
+        transition_scores = _merge_transition_overrides(
+            base_scores,
+            override_scores,
+            context_free_scores=context_free_scores,
+        )
         decision = breaks[i]
 
         if decision == "O":

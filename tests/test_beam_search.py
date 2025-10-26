@@ -420,6 +420,65 @@ class TestBeamSearch(unittest.TestCase):
 
         self.assertEqual(baseline, with_overrides)
 
+    def test_transition_overrides_preserve_contextual_penalties(self):
+        class ContextSensitiveScorer:
+            def __init__(self):
+                self.sl = {
+                    "line_length_leniency": 1.0,
+                    "orphan_leniency": 1.0,
+                    "single_word_line_penalty": 0.0,
+                }
+
+            def score_transition(self, row, ctx=None):
+                base = {"O": 0.0, "LB": 10.0, "SB": 0.0}
+                if ctx is not None and ctx.current_line_len < 6:
+                    base = dict(base)
+                    base["LB"] = -90.0
+                return base
+
+            def score_block(self, block_tokens, block_breaks):
+                return 0.0
+
+        tokens = [
+            make_token("hi", 0.0),
+            make_token("there", 0.5),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "line2": {
+                    "soft_target": 50,
+                    "hard_limit": 60,
+                    "soft_min": 0,
+                    "soft_over_penalty_scale": 0.1,
+                    "soft_under_penalty_scale": 0.05,
+                },
+                "block": {"min_total_chars": 0, "min_last_line_chars": 0},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            enable_bidirectional_pass=True,
+        )
+
+        scorer = ContextSensitiveScorer()
+        baseline = Segmenter(list(tokens), scorer, cfg).run()
+        overrides = _prepare_transition_overrides(tokens, scorer, cfg)
+        with_overrides = Segmenter(list(tokens), scorer, cfg).run(overrides)
+
+        self.assertEqual(baseline, with_overrides)
+        self.assertEqual(with_overrides[0], "O")
+
     def test_refinement_baseline_respects_transition_overrides(self):
         class OverrideAwareScorer:
             def __init__(self):
