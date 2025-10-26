@@ -10,6 +10,7 @@ from isce.beam_search import (
     Segmenter,
     PathState,
     _map_reversed_breaks,
+    _reverse_tokens_for_bidirectional,
     _reconcile_bidirectional_breaks,
     _score_path,
     segment,
@@ -107,6 +108,20 @@ def make_token(word: str, start: float, **overrides) -> Token:
 
 
 class TestBeamSearch(unittest.TestCase):
+    def test_reverse_tokens_flip_speaker_change(self) -> None:
+        tokens = [
+            make_token("hello", 0.0, speaker="A", speaker_change=True),
+            make_token("there", 0.5, speaker="B", speaker_change=False),
+            make_token("friend", 1.0, speaker="B", speaker_change=False),
+        ]
+
+        reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
+
+        self.assertEqual(len(reversed_tokens), 3)
+        self.assertFalse(reversed_tokens[0].speaker_change)
+        self.assertTrue(reversed_tokens[1].speaker_change)
+        self.assertFalse(reversed_tokens[2].speaker_change)
+
     def test_segmenter_records_last_path_score(self):
         class ConstantScorer:
             def __init__(self):

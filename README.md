@@ -98,6 +98,7 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
     *   Enable `enable_refinement_pass` to let the segmenter revisit low-scoring or single-word cues with a wider beam before post-processing so awkward captions can be rebalanced automatically.
     *   Adjust `min_chars_for_single_word_block` to control when genuinely single-word cues require manual review. Multi-word lines ignore this threshold so normal short phrases remain eligible.
     *   Configure block-level guardrails with `min_total_chars_per_block` / `min_last_line_chars` and the matching `short_block_penalty` / `short_line_penalty` sliders to discourage under-filled captions or vanishingly short final lines.
+    *   Adjust the `fragment_penalty` / `fragment_char_threshold` sliders to suppress cues whose projected second line would collapse to an empty or ultra-short fragment.
 
 ## Web Control Center
 

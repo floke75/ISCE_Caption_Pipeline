@@ -39,6 +39,8 @@ sliders:
   single_word_line_penalty: 12.0   # Strong penalty for orphaned or sub-minimal lines.
   short_block_penalty: 0.0         # Penalty per missing character when a block is under-filled.
   short_line_penalty: 0.0          # Penalty per missing character when the last line is too short.
+  fragment_penalty: 6.0            # Penalty for fragments when a projected second line would be empty.
+  fragment_char_threshold: 8.0     # Characters required to avoid the fragment penalty when only one word fits.
   extreme_balance_penalty: 6.0     # Penalty when one line dwarfs the other in character count.
   extreme_balance_threshold: 2.2   # Character ratio threshold before extreme balance penalty applies.
 

@@ -636,6 +636,22 @@ def build_segmentation_field_catalog() -> List[ConfigField]:
             advanced=True,
         ),
         ConfigField(
+            path=["sliders", "fragment_penalty"],
+            section="Stylistic sliders",
+            label="Fragment penalty",
+            field_type="number",
+            description="Penalty when the projected second line would be empty or a short fragment.",
+            advanced=True,
+        ),
+        ConfigField(
+            path=["sliders", "fragment_char_threshold"],
+            section="Stylistic sliders",
+            label="Fragment character threshold",
+            field_type="number",
+            description="Characters required on the projected second line before fragment penalties stop applying.",
+            advanced=True,
+        ),
+        ConfigField(
             path=["sliders", "extreme_balance_penalty"],
             section="Stylistic sliders",
             label="Extreme balance penalty",

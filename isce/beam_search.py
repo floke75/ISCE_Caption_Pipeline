@@ -393,7 +393,13 @@ class Segmenter:
 def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
     """Create a reversed copy of the tokens suited for the backward beam."""
     reversed_tokens: List[Token] = []
-    for token in reversed(tokens):
+    for idx in range(len(tokens) - 1, -1, -1):
+        token = tokens[idx]
+        speaker_change = False
+        if idx > 0:
+            next_token = tokens[idx - 1]
+            if token.speaker is not None and next_token.speaker is not None:
+                speaker_change = token.speaker != next_token.speaker
         relative_position = 1.0 - token.relative_position if token.relative_position is not None else None
         if relative_position is None:
             relative_position = 0.0
@@ -408,6 +414,7 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
                 pause_before_ms=token.pause_after_ms,
                 is_sentence_initial=token.is_sentence_final,
                 is_sentence_final=token.is_sentence_initial,
+                speaker_change=speaker_change,
                 relative_position=relative_position,
                 break_type=None,
             )
