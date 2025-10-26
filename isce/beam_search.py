@@ -65,6 +65,7 @@ class Segmenter:
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
         self.fallback_sb_penalty = float(self.scorer.sl.get("fallback_sb_penalty", FALLBACK_SB_PENALTY))
         self.transition_scores_cache = {}
+        self.last_path_score: float | None = None
 
     def _is_hard_ok_O(self, line_num: int, line_len: int, next_word_len: int) -> bool:
         """Checks if continuing a line (`O`) violates hard length constraints."""
@@ -176,6 +177,7 @@ class Segmenter:
             self.beam = nlargest(self.cfg.beam_width, candidates, key=lambda s: s.score)
 
         best_path = self.beam[0] if self.beam else initial_state
+        self.last_path_score = best_path.score
         final_breaks = list(best_path.breaks)
         
         while len(final_breaks) < len(self.tokens):
@@ -234,6 +236,33 @@ def _refine_blocks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Tok
                 refined_tokens[absolute_idx] = replace(refined_tokens[absolute_idx], break_type=new_break)
 
     return refined_tokens
+
+def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
+    """Prepare a reversed copy of the tokens for the backward beam search."""
+
+    reversed_tokens: List[Token] = []
+    for token in reversed(tokens):
+        original_relative = getattr(token, "relative_position", None)
+        mirrored_position = None
+        if original_relative is not None:
+            mirrored_position = max(0.0, min(1.0, 1.0 - original_relative))
+
+        reversed_tokens.append(
+            replace(
+                token,
+                start=-token.end,
+                end=-token.start,
+                pause_after_ms=token.pause_before_ms,
+                pause_before_ms=token.pause_after_ms,
+                is_sentence_initial=token.is_sentence_final,
+                is_sentence_final=token.is_sentence_initial,
+                relative_position=mirrored_position if mirrored_position is not None else original_relative,
+                break_type=None,
+            )
+        )
+
+    return reversed_tokens
+
 
 def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     """Translate reverse-pass break decisions back into forward order.
@@ -367,7 +396,7 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
 
     # Optional bidirectional pass
     if cfg.enable_bidirectional_pass:
-        reversed_tokens = tokens[::-1]
+        reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
         backward_segmenter = Segmenter(reversed_tokens, scorer, cfg)
         backward_raw_breaks = backward_segmenter.run()
         backward_breaks = _map_reversed_breaks(backward_raw_breaks)
