@@ -57,4 +57,10 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 - UI-exposed `project_root` / `pipeline_root` sliders are currently overridden by the backend; adjust messaging or respect overrides if modifying the UI.
 - Some CLI scripts assume WhisperX resources have already been downloaded—follow the installation guidance in `README.md` before running alignment locally.
 
+## Recent Enhancements & Where to Learn More
+- **Lookahead-aware beam search** – See `isce/beam_search.py` (helpers near `Segmenter.score_path`) and the configuration guidance in the README step 3 bullets for how `lookahead_width`, bidirectional reconciliation, and refinement toggles interact.
+- **Guardrail penalties for short/imbalanced cues** – Review `isce/scorer.py`, slider defaults in `config.yaml`, and the README bullet list under "Update `config.yaml`" to understand single-word, underfill, and fallback penalty tuning.
+- **Reflow safeguards and block profiling** – `isce/post_process.py` documents the merge heuristics; the same README section covers when to enable reflow and how it cooperates with speaker boundaries.
+- **Backend config surface updates** – UI metadata lives under `ui/backend/config_service.py`. Cross-check with `config.yaml` and the README defaults to keep slider descriptions consistent when changing operator-facing labels.
+
 This document should orient any agent before deeper changes—consult the referenced README and docs for operational details and historical context.
