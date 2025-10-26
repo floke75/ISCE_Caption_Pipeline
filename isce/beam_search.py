@@ -305,12 +305,26 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
     total_tokens = len(tokens)
     for offset, token in enumerate(reversed(tokens)):
 
+        prior_idx = total_tokens - offset - 2
         if offset < total_tokens - 1:
-            speaker_change = tokens[total_tokens - offset - 2].speaker_change
+            prior_token = tokens[prior_idx]
+            speaker_change = prior_token.speaker_change
+            starts_with_dialogue_dash = prior_token.starts_with_dialogue_dash
+            num_unit_glue = prior_token.num_unit_glue
+            is_llm_structural_break = prior_token.is_llm_structural_break
+            is_dangling_eos = prior_token.is_dangling_eos
         else:
             speaker_change = False
+            starts_with_dialogue_dash = False
+            num_unit_glue = False
+            is_llm_structural_break = False
+            is_dangling_eos = False
 
                 speaker_change=speaker_change,
+                starts_with_dialogue_dash=starts_with_dialogue_dash,
+                num_unit_glue=num_unit_glue,
+                is_llm_structural_break=is_llm_structural_break,
+                is_dangling_eos=is_dangling_eos,
     for offset, token in enumerate(reversed(tokens)):
         relative_position = 1.0 - token.relative_position if token.relative_position is not None else None
         if relative_position is None:

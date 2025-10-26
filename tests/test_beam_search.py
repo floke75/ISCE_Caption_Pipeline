@@ -5,7 +5,13 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from isce.beam_search import PathState, Segmenter, refine_blocks, segment
+from isce.beam_search import (
+    PathState,
+    Segmenter,
+    _reverse_tokens_for_bidirectional,
+    refine_blocks,
+    segment,
+)
 from isce.config import Config
 from isce.scorer import Scorer
 from isce.types import Token
@@ -199,6 +205,63 @@ class TestBeamSearch(unittest.TestCase):
             breaks=(),
         )
         self.assertTrue(segmenter._is_hard_ok_SB(state, 0))
+
+    def test_reverse_tokens_shift_boundary_features(self):
+        tokens = [
+            make_token(
+                "one",
+                0.0,
+                speaker="A",
+                speaker_change=True,
+                starts_with_dialogue_dash=True,
+                num_unit_glue=True,
+                is_llm_structural_break=True,
+                is_dangling_eos=True,
+            ),
+            make_token(
+                "two",
+                0.2,
+                speaker="B",
+                speaker_change=False,
+                starts_with_dialogue_dash=True,
+                num_unit_glue=False,
+                is_llm_structural_break=False,
+                is_dangling_eos=False,
+            ),
+            make_token(
+                "three",
+                0.4,
+                speaker="B",
+                speaker_change=True,
+                starts_with_dialogue_dash=False,
+                num_unit_glue=True,
+                is_llm_structural_break=False,
+                is_dangling_eos=True,
+            ),
+        ]
+
+        reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
+
+        self.assertEqual(
+            [t.speaker_change for t in reversed_tokens],
+            [tokens[1].speaker_change, tokens[0].speaker_change, False],
+        )
+        self.assertEqual(
+            [t.starts_with_dialogue_dash for t in reversed_tokens],
+            [tokens[1].starts_with_dialogue_dash, tokens[0].starts_with_dialogue_dash, False],
+        )
+        self.assertEqual(
+            [t.num_unit_glue for t in reversed_tokens],
+            [tokens[1].num_unit_glue, tokens[0].num_unit_glue, False],
+        )
+        self.assertEqual(
+            [t.is_llm_structural_break for t in reversed_tokens],
+            [tokens[1].is_llm_structural_break, tokens[0].is_llm_structural_break, False],
+        )
+        self.assertEqual(
+            [t.is_dangling_eos for t in reversed_tokens],
+            [tokens[1].is_dangling_eos, tokens[0].is_dangling_eos, False],
+        )
 
     def test_refinement_pass_merges_single_word_cue(self):
         class RefinementScorer:
