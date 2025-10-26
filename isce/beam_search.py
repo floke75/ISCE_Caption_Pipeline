@@ -329,32 +329,18 @@ class Segmenter:
         initial_state = PathState(score=0.0, line_num=1, line_len=len(self.tokens[0].w), block_start_idx=0, breaks=())
         self.beam = [initial_state]
 
-        for i, token in tqdm(enumerate(self.tokens), total=len(self.tokens), desc="Segmenting", unit="token"):
+        for i, token in tqdm(
+            enumerate(self.tokens), total=len(self.tokens), desc="Segmenting", unit="token"
+        ):
             candidates: List[PathState] = []
             is_last_token = (i == len(self.tokens) - 1)
             nxt = self.tokens[i + 1] if not is_last_token else None
 
-            token_dict = dict(token.__dict__)
-            token_dict["token_index"] = i
-            nxt_dict = None
-            if nxt:
-                nxt_dict = dict(nxt.__dict__)
-                nxt_dict["token_index"] = i + 1
+            token_dict = _token_to_row_dict(token, i) or {}
+            nxt_dict = _token_to_row_dict(nxt, i + 1)
 
             # Create the dictionary-based TokenRow required by the refactored scorer
-            lookahead_tokens = None
-            if self.lookahead_width > 0:
-                # Expose a shallow copy of the upcoming tokens so the scorer can
-                # apply lookahead heuristics without mutating the canonical list.
-                future_end = i + 1 + self.lookahead_width
-                if i + 1 < len(self.tokens):
-                    lookahead_tokens = tuple(
-                        {
-                            **dict(self.tokens[idx].__dict__),
-                            "token_index": idx,
-                        }
-                        for idx in range(i + 1, min(future_end, len(self.tokens)))
-                    )
+            lookahead_tokens = _get_lookahead_slice(self.tokens, i + 1, self.lookahead_width)
 
             scorer_row = TokenRow(
                 token=token_dict,
