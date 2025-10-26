@@ -21,9 +21,11 @@ from .types import Token, BreakType, TokenRow
 from .scorer import Scorer
 from .config import Config
 from .utils import _token_to_row_dict, _compute_transition_scores, _get_lookahead_slice
-from .post_process import _block_ranges
+from .post_process import _block_ranges, reflow_tokens
 
 FALLBACK_SB_PENALTY = 25.0
+LOCAL_REFINEMENT_MIN_BEAM = 5
+LOCAL_REFINEMENT_IMPROVEMENT = 0.5
 
 @dataclass(frozen=True)
 class PathState:
@@ -215,43 +217,72 @@ def _refine_blocks(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Tok
     refinement pass stays aligned with the post-processing utilities.  When a
     window extends beyond the block being refined we keep the trailing token's
     original break decision so the localized search does not introduce spurious
-    subtitle breaks into the surrounding context.
+    subtitle breaks into the surrounding context.  Candidate refinements are
+    accepted only when they improve the holistic segmentation score by a
+    meaningful margin to avoid thrashing stable cues.
     """
-    refined_tokens = list(tokens)
-    original_breaks = [token.break_type for token in tokens]
-    block_ranges = list(_block_ranges(refined_tokens))
 
-    for i, (start, end) in enumerate(block_ranges):
+    refined_tokens = list(tokens)
+    if not refined_tokens:
+        return refined_tokens
+
+    block_ranges = list(_block_ranges(refined_tokens))
+    idx = 0
+
+    while idx < len(block_ranges):
+        start, end = block_ranges[idx]
         block = refined_tokens[start : end + 1]
         breaks = [t.break_type for t in block]
         score = scorer.score_block([t.__dict__ for t in block], breaks)
 
-        if score < -5.0:  # Threshold for a "low-scoring" block
-            window_start = max(0, start - 5)
-            window_end = min(len(tokens), end + 5)
-            window_tokens = refined_tokens[window_start:window_end]
+        if score >= -5.0:
+            idx += 1
+            continue
 
-            refined_cfg = replace(cfg, beam_width=cfg.beam_width * 2)
-            segmenter = Segmenter(window_tokens, scorer, refined_cfg)
-            refined_breaks = segmenter.run()
+        window_start = max(0, start - 5)
+        window_end = min(len(refined_tokens), end + 6)
+        window_tokens = refined_tokens[window_start:window_end]
 
-            for j, br in enumerate(refined_breaks):
-                absolute_idx = window_start + j
-                if absolute_idx >= len(refined_tokens):
-                    break
+        if not window_tokens:
+            idx += 1
+            continue
 
-                new_break: BreakType = br
-                is_last_in_window = j == len(refined_breaks) - 1
-                window_has_trailing_context = window_end < len(tokens)
+        baseline_breaks: List[BreakType] = []
+        for offset, token in enumerate(window_tokens):
+            br = token.break_type
+            if br is None:
+                br = "SB" if offset == len(window_tokens) - 1 else "O"
+            baseline_breaks.append(br)
 
-                if is_last_in_window and window_has_trailing_context:
-                    preserved = original_breaks[absolute_idx] if absolute_idx < len(original_breaks) else None
-                    if preserved is not None:
-                        new_break = preserved
-                    else:
-                        new_break = "SB" if absolute_idx == len(refined_tokens) - 1 else "O"
+        baseline_score = _score_segmentation(window_tokens, baseline_breaks, scorer, cfg)
 
-                refined_tokens[absolute_idx] = replace(refined_tokens[absolute_idx], break_type=new_break)
+        refined_beam = max(cfg.beam_width * 2, LOCAL_REFINEMENT_MIN_BEAM)
+        refined_cfg = replace(cfg, beam_width=refined_beam)
+        window_segmenter = Segmenter(list(window_tokens), scorer, refined_cfg)
+        candidate_breaks = window_segmenter.run()
+
+        adjusted_breaks = list(candidate_breaks)
+        if window_end < len(refined_tokens) and adjusted_breaks:
+            preserved = refined_tokens[window_end - 1].break_type
+            if preserved is not None:
+                adjusted_breaks[-1] = preserved
+            else:
+                adjusted_breaks[-1] = "SB" if (window_end - 1) == len(refined_tokens) - 1 else "O"
+
+        candidate_score = _score_segmentation(window_tokens, adjusted_breaks, scorer, cfg)
+
+        if candidate_score < (baseline_score + LOCAL_REFINEMENT_IMPROVEMENT):
+            idx += 1
+            continue
+
+        for offset, new_break in enumerate(adjusted_breaks):
+            absolute_idx = window_start + offset
+            if absolute_idx >= len(refined_tokens):
+                break
+            refined_tokens[absolute_idx] = replace(refined_tokens[absolute_idx], break_type=new_break)
+
+        block_ranges = list(_block_ranges(refined_tokens))
+        idx = 0
 
     return refined_tokens
 
@@ -400,10 +431,10 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
 
     The wrapper first runs the forward beam search, optionally mirrors the
     process in reverse so :func:`_reconcile_bidirectional_breaks` can combine
-    the two perspectives, and finally performs the localized refinement pass
-    when ``cfg.enable_refinement_pass`` is enabled.  The resulting break
-    decisions are applied to the original token objects to produce an updated
-    token list suitable for downstream rendering and post-processing.
+    the two perspectives, and performs a localized refinement pass when
+    ``cfg.enable_refinement_pass`` is enabled.  A final optional reflow stage
+    invokes :func:`isce.post_process.reflow_tokens` to tidy short or imbalanced
+    cues before returning the updated token list.
     """
     if not tokens:
         return []
@@ -425,5 +456,8 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
     # Optional refinement pass
     if cfg.enable_refinement_pass:
         segmented_tokens = _refine_blocks(segmented_tokens, scorer, cfg)
+
+    if cfg.enable_reflow:
+        segmented_tokens = reflow_tokens(segmented_tokens, scorer)
 
     return segmented_tokens
