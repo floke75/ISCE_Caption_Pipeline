@@ -208,11 +208,18 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
     if n == 0:
         return []
 
-    # Reverse the breaks and handle the sentinel "SB"
-    mapped = reversed(reversed_breaks)
-    final_breaks = [b if b != "SB" else "O" for b in mapped]
-    if final_breaks:
-        final_breaks[-1] = "SB"
+    mapped = list(reversed(reversed_breaks))
+    final_breaks: List[BreakType] = [b if b != "SB" else "O" for b in mapped]
+    final_breaks[-1] = "SB"
+
+    # Preserve internal subtitle-block boundaries proposed by the backward
+    # search. A reversed boundary after token ``j`` corresponds to the forward
+    # boundary after token ``i = n - 2 - j``.
+    for backward_idx, br in enumerate(reversed_breaks[:-1]):
+        if br == "SB":
+            forward_idx = (n - 2) - backward_idx
+            final_breaks[forward_idx] = "SB"
+
     return final_breaks
 
 
