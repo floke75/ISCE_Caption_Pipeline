@@ -312,7 +312,17 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
 
         if offset < total_tokens - 1:
             prior_token = tokens[total_tokens - offset - 2]
-            speaker_change = prior_token.speaker_change
+            if (
+                token.speaker is not None
+                and prior_token.speaker is not None
+                and token.speaker != prior_token.speaker
+            ):
+                speaker_change = True
+            elif prior_token.speaker is None or token.speaker is None:
+                speaker_change = prior_token.speaker_change
+            else:
+                speaker_change = False
+
             starts_with_dialogue_dash = prior_token.starts_with_dialogue_dash
             num_unit_glue = prior_token.num_unit_glue
             is_llm_structural_break = prior_token.is_llm_structural_break
