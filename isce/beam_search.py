@@ -13,7 +13,7 @@ from typing import List
 from heapq import nlargest
 from tqdm import tqdm
 
-from .types import Token, BreakType, TokenRow
+from .types import Token, BreakType, TokenRow, TransitionContext
 from .scorer import Scorer
 from .config import Config
 
@@ -176,6 +176,64 @@ class Segmenter:
                 violations.append("short_line")
         return violations
 
+    def _estimate_second_line(self, current_idx: int) -> tuple[int, int]:
+        """Estimate how many characters and words may land on the next line."""
+
+        if current_idx + 1 >= len(self.tokens):
+            return 0, 0
+
+        length = 0
+        words = 0
+        soft_target = self.cfg.line_length_constraints.get("line2", {}).get("soft_target", 37)
+
+        for j in range(current_idx + 1, len(self.tokens)):
+            token = self.tokens[j]
+            if words > 0:
+                length += 1
+            length += len(token.w)
+            words += 1
+
+            if words >= 2:
+                break
+            if token.is_sentence_final or token.speaker_change or token.starts_with_dialogue_dash:
+                break
+            if length >= soft_target:
+                break
+
+        return length, words
+
+    def _build_transition_context(self, state: PathState, current_idx: int) -> TransitionContext:
+        """Construct the scorer context for the current transition candidate."""
+
+        pending_tokens = tuple(
+            dict(t.__dict__) for t in self.tokens[state.block_start_idx : current_idx + 1]
+        )
+        projected_chars: int | None = None
+        projected_words: int | None = None
+        if state.line_num == 1 and current_idx + 1 < len(self.tokens):
+            projected_chars, projected_words = self._estimate_second_line(current_idx)
+
+        return TransitionContext(
+            pending_tokens=pending_tokens,
+            current_line_num=state.line_num,
+            current_line_len=state.line_len,
+            projected_second_line_chars=projected_chars,
+            projected_second_line_words=projected_words,
+        )
+
+    def _score_transition(self, scorer_row: TokenRow, context: TransitionContext | None) -> dict[str, float]:
+        """Invoke ``Scorer.score_transition`` while tolerating legacy signatures."""
+
+        try:
+            if context is not None:
+                return self.scorer.score_transition(scorer_row, context)  # type: ignore[arg-type]
+        except TypeError:
+            # Older scorer implementations do not accept a context argument.  Fall
+            # back to the legacy call signature while keeping the richer context
+            # available for modern scorers.
+            pass
+        return self.scorer.score_transition(scorer_row)
+
     def _is_hard_ok_SB(self, state: PathState, current_idx: int) -> bool:
         """Checks if a block break (`SB`) violates hard constraints."""
         block_start_idx = state.block_start_idx
@@ -233,9 +291,9 @@ class Segmenter:
                 feats=None,  # feats object is no longer used by the scorer
                 lookahead=lookahead_tokens,
             )
-            transition_scores = self.scorer.score_transition(scorer_row)
-
             for state in self.beam:
+                context = self._build_transition_context(state, i)
+                transition_scores = self._score_transition(scorer_row, context)
                 # Candidate: 'O' (No Break)
                 if nxt:
                     if self._is_hard_ok_O(state.line_num, state.line_len, len(nxt.w)):
@@ -274,6 +332,8 @@ class Segmenter:
                 # score penalty so that the search prefers cleaner options later
                 # in the sequence.
                 fallback_state = self.beam[0]
+                fallback_context = self._build_transition_context(fallback_state, i)
+                fallback_scores = self._score_transition(scorer_row, fallback_context)
                 block_tokens, block_breaks, lines = self._block_profiles(fallback_state, fallback_state.block_start_idx, i)
                 block_token_dicts = [dict(t.__dict__) for t in block_tokens]
                 block_score = self.scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
@@ -283,7 +343,7 @@ class Segmenter:
                     per_violation_penalty = self.short_line_penalty if self.short_line_penalty > 0 else self.fallback_sb_penalty
                     block_score -= per_violation_penalty * len(violations)
                 fallback_candidate = PathState(
-                    score=fallback_state.score + transition_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
+                    score=fallback_state.score + fallback_scores.get("SB", 0.0) + block_score - self.fallback_sb_penalty,
                     line_num=1,
                     line_len=next_word_len,
                     block_start_idx=i + 1,

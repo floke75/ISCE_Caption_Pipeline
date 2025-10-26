@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 
 from .model_builder import bin_pause_z, punct_class, bin_rel_pos
 from .config import Config
-from .types import BreakType, TokenRow
+from .types import BreakType, TokenRow, TransitionContext
 
 class Scorer:
     """
@@ -83,7 +83,7 @@ class Scorer:
         except (KeyError, AttributeError):
             return 0.0
 
-    def score_transition(self, row: TokenRow) -> Dict[str, float]:
+    def score_transition(self, row: TokenRow, ctx: Optional[TransitionContext] = None) -> Dict[str, float]:
         """
         Calculates the scores for each possible break type after the current token.
 
@@ -94,7 +94,11 @@ class Scorer:
 
         Args:
             row: A `TokenRow` object containing the current token and the next
-                 token, structured as dictionaries.
+                token, structured as dictionaries.
+            ctx: Optional :class:`~isce.types.TransitionContext` describing the
+                running block state. When provided the scorer can discourage
+                prospective breaks that would strand extremely short second
+                lines.
 
         Returns:
             A dictionary mapping each break type ('O', 'LB', 'SB') to its
@@ -156,13 +160,23 @@ class Scorer:
         if token.get("speaker_change") or token.get("starts_with_dialogue_dash"):
             scores["SB"] += self.structure_boost
             scores["O"] -= self.structure_boost
-        
+
         if token.get("is_llm_structural_break"):
             scores["SB"] += self.structure_boost
             scores["O"] -= self.structure_boost
 
         # --- Step 3: Optional lookahead heuristics ---
         self._apply_lookahead_heuristics(scores, lookahead)
+
+        if ctx and ctx.current_line_num == 1:
+            projected_words = ctx.projected_second_line_words
+            projected_chars = ctx.projected_second_line_chars or 0
+            if projected_words is not None and projected_words <= 1:
+                threshold = float(self.sl.get("fragment_char_threshold", 8.0))
+                penalty_strength = float(self.sl.get("fragment_penalty", 6.0))
+                deficit = max(0.0, threshold - projected_chars)
+                severity = 1.0 if projected_words == 0 else deficit / max(threshold, 1e-6)
+                scores["LB"] -= penalty_strength * severity
 
         return scores
 
@@ -196,7 +210,7 @@ class Scorer:
         speaker_idx = next((idx for idx, future in enumerate(lookahead) if future.get("speaker_change")), None)
         if speaker_idx is not None:
             distance = speaker_idx + 1
-            structural_bonus = self.structure_boost / max(1, distance)
+            structural_bonus = self.structure_boost / max(1, distance + 1)
             scores["SB"] += structural_bonus
             scores["LB"] += structural_bonus * 0.5
             scores["O"] -= structural_bonus

@@ -8,9 +8,15 @@ pipeline, from data enrichment to scoring and final SRT generation.
 """
 from __future__ import annotations
 from dataclasses import dataclass, fields
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Tuple
 
-__all__ = ["BreakType", "Token", "TokenRow", "Engineered"]
+__all__ = [
+    "BreakType",
+    "Token",
+    "TokenRow",
+    "TransitionContext",
+    "Engineered",
+]
 
 BreakType = Literal["O", "LB", "SB"]
 
@@ -129,6 +135,17 @@ class TokenRow:
         """Return ``True`` when future-token context is attached to the row."""
 
         return bool(self.lookahead)
+
+
+@dataclass(frozen=True)
+class TransitionContext:
+    """Describe the running block state when evaluating a transition."""
+
+    pending_tokens: Tuple[dict[str, Any], ...]
+    current_line_num: int
+    current_line_len: int
+    projected_second_line_chars: Optional[int] = None
+    projected_second_line_words: Optional[int] = None
 
 
 @dataclass(frozen=True)
