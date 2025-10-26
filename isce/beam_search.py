@@ -155,6 +155,9 @@ class Segmenter:
         """
         violations: List[str] = []
         min_chars = self.cfg.min_chars_for_single_word_block
+        enforce_multi_word_short_line = getattr(
+            self.cfg, "enforce_short_line_limit_for_multi_word_lines", False
+        )
         for line_tokens in lines:
             if not line_tokens:
                 continue
@@ -162,8 +165,14 @@ class Segmenter:
             allowed_single = is_single_word and self._is_allowed_single_word(line_tokens[0])
             if is_single_word and not allowed_single:
                 violations.append("single_word")
+                if self._count_chars(line_tokens) < min_chars:
+                    violations.append("short_line")
                 continue
-            if self._count_chars(line_tokens) < min_chars and not allowed_single:
+            if (
+                self._count_chars(line_tokens) < min_chars
+                and (is_single_word or enforce_multi_word_short_line)
+                and not allowed_single
+            ):
                 violations.append("short_line")
         return violations
 
@@ -563,6 +572,9 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
                 lines.append(current_line)
 
             min_chars = cfg.min_chars_for_single_word_block
+            enforce_multi_word_short_line = getattr(
+                cfg, "enforce_short_line_limit_for_multi_word_lines", False
+            )
             for line_tokens in lines:
                 if not line_tokens:
                     continue
@@ -570,8 +582,14 @@ def _score_path(tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cf
                 allowed_single = is_single_word and _is_allowed_single_word(line_tokens[0])
                 if is_single_word and not allowed_single:
                     violations.append("single_word")
+                    if _count_chars(line_tokens) < min_chars:
+                        violations.append("short_line")
                     continue
-                if _count_chars(line_tokens) < min_chars and not allowed_single:
+                if (
+                    _count_chars(line_tokens) < min_chars
+                    and (is_single_word or enforce_multi_word_short_line)
+                    and not allowed_single
+                ):
                     violations.append("short_line")
 
             block_duration = max(1e-6, tokens[i].end - tokens[block_start_idx].start)
