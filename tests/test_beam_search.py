@@ -240,5 +240,74 @@ class TestBeamSearch(unittest.TestCase):
         self.assertEqual(breaks[0], "O")
         self.assertNotIn("LB", breaks[:2])
 
+
+class TestLineViolations(unittest.TestCase):
+    def test_flags_short_single_word_lines(self):
+        tokens = [make_token("Hi", 0.0, pos="INTJ")]
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=6,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        segmenter = Segmenter(tokens, DummyScorer(), cfg)
+        violations = segmenter._line_violations([tokens])
+
+        assert sorted(violations) == ["short_line", "single_word"]
+
+    def test_ignores_multi_word_short_lines(self):
+        tokens = [make_token("Go", 0.0), make_token("now", 0.2)]
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=10,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        segmenter = Segmenter(tokens, DummyScorer(), cfg)
+        violations = segmenter._line_violations([tokens])
+
+        assert violations == []
+
+    def test_respects_whitelisted_single_words(self):
+        tokens = [make_token("NASA", 0.0, pos="PROPN")]
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.1,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 12, "hard_limit": 20},
+                "line2": {"soft_target": 12, "hard_limit": 20},
+            },
+            min_chars_for_single_word_block=12,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=("NASA",),
+        )
+
+        segmenter = Segmenter(tokens, DummyScorer(), cfg)
+        violations = segmenter._line_violations([tokens])
+
+        assert violations == []
+
+
 if __name__ == "__main__":
     unittest.main()
