@@ -477,7 +477,9 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
         reversed_tokens.append(
             replace(
                 token,
-                token_index=idx,
+                token_index=(
+                    token.token_index if token.token_index is not None else idx
+                ),
                 start=-token.end,
                 end=-token.start,
                 pause_after_ms=token.pause_before_ms,
@@ -564,7 +566,10 @@ def _score_segmentation(
 
         if br == "SB":
             block_dicts = [
-                _token_to_row_dict(t, block_start + offset) or {}
+                _token_to_row_dict(
+                    t, start_offset + block_start + offset
+                )
+                or {}
                 for offset, t in enumerate(block_tokens)
             ]
             total += scorer.score_block(block_dicts, block_breaks)
