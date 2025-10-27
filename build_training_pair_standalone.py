@@ -835,7 +835,12 @@ def process_file(
             generate_labels_from_cues(token_list, cue_list, settings)
         engineer_features(token_list, settings)
 
-        return [serialize_token(t, i, settings) for i, t in enumerate(token_list)]
+        serialized_tokens = [
+            serialize_token(token, token_index, settings)
+            for token_index, token in enumerate(token_list)
+        ]
+
+        return serialized_tokens
 
     # --- Output Generation ---
     if is_training_mode:
