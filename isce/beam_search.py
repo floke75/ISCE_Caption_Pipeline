@@ -40,6 +40,15 @@ LOCAL_REFINEMENT_IMPROVEMENT = 0.5
 BALANCE_RATIO_THRESHOLD = 2.5
 
 
+def _clone_token_payload(token: Token | Mapping[str, Any]) -> dict[str, Any]:
+    """Return a shallow dictionary copy of ``token`` without mutating input."""
+
+    if isinstance(token, Mapping):
+        return {k: v for k, v in token.items()}
+
+    return dict(token.__dict__)
+
+
 def _coerce_token_index(raw_index: Any) -> Optional[int]:
     """Best-effort coercion of ``raw_index`` into an integer token offset."""
 
@@ -98,10 +107,7 @@ def _token_to_row_dict(
     if token is None:
         return None
 
-    if isinstance(token, Mapping):
-        payload: dict[str, Any] = {k: v for k, v in token.items()}
-    else:
-        payload = dict(token.__dict__)
+    payload = _clone_token_payload(token)
 
     # Normalise ``token_index`` to an integer when possible. Payloads pulled
     # from JSON can expose the field as a string, float, or even ``NaN``. We
