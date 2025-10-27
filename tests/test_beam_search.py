@@ -5,6 +5,7 @@ from dataclasses import replace
 from isce.beam_search import (
     Segmenter,
     PathState,
+    _token_to_row_dict,
     _map_reversed_breaks,
     _reverse_tokens_for_bidirectional,
     _reconcile_bidirectional_breaks,
@@ -163,6 +164,30 @@ def make_token(word: str, start: float, **overrides) -> Token:
     defaults.update(overrides)
     return Token(**defaults)
 
+
+def test_token_to_row_dict_copies_payload_and_assigns_index() -> None:
+    token = make_token("hello", 0.0)
+    payload = _token_to_row_dict(token, idx=5)
+
+    assert payload["token_index"] == 5
+    assert payload["w"] == "hello"
+
+    # Mutating the returned payload should not affect the original dataclass.
+    payload["w"] = "changed"
+    assert token.w == "hello"
+
+
+def test_token_to_row_dict_normalises_index_and_word() -> None:
+    source = {"w": 123, "token_index": "7"}
+    payload = _token_to_row_dict(source, idx=3)
+
+    assert payload["token_index"] == 7
+    assert payload["w"] == "123"
+
+    # Invalid indexes should fall back to the provided idx.
+    broken = {"w": "ok", "token_index": "not-a-number"}
+    payload = _token_to_row_dict(broken, idx=9)
+    assert payload["token_index"] == 9
 
 class TestBeamSearch(unittest.TestCase):
     def test_reverse_tokens_flip_speaker_change(self) -> None:

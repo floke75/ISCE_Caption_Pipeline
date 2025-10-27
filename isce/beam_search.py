@@ -70,14 +70,35 @@ def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[in
         return None
 
     if isinstance(token, dict):
-        payload: dict[str, Any] = dict(token)
+        payload: dict[str, Any] = {k: v for k, v in token.items()}
     else:
         payload = dict(token.__dict__)
 
-    # The token's own index takes precedence. The passed `idx` is a fallback
-    # for contexts where we are creating the index for the first time.
+    # Normalise the token index so downstream feature helpers receive a stable
+    # integer. Token payloads pulled straight from JSON occasionally expose the
+    # index as a string (or omit it entirely). In that case we coerce the value
+    # to ``int`` or fall back to the supplied ``idx`` when available. The
+    # fallback mirrors :func:`_tokens_to_dicts` in :mod:`isce.postprocess` so the
+    # scorer sees consistent numbering whether we are evaluating the primary
+    # beam, a refinement slice, or a reversed sequence.
+    token_index = payload.get("token_index")
+    if token_index is not None:
+        try:
+            payload["token_index"] = int(token_index)
+        except (TypeError, ValueError):
+            payload["token_index"] = None
+
+    # The token's own index takes precedence. The passed ``idx`` is a fallback
+    # for contexts where we are creating the index for the first time or when
+    # the original payload could not be coerced to an integer.
     if payload.get("token_index") is None and idx is not None:
-        payload["token_index"] = idx
+        payload["token_index"] = int(idx)
+
+    # Some legacy corpora contain non-string ``w`` values (for example numbers
+    # emitted by pandas when loading CSV exports). Converting them eagerly
+    # prevents downstream feature helpers from tripping over unexpected types.
+    if "w" in payload and payload["w"] is not None and not isinstance(payload["w"], str):
+        payload["w"] = str(payload["w"])
 
     return payload
 
