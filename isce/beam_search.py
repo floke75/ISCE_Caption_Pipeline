@@ -393,7 +393,7 @@ class Segmenter:
                 if self._is_hard_ok_SB(state, i):
                     block_tokens, block_breaks, _ = self._block_profiles(state, state.block_start_idx, i)
                     block_token_dicts = [
-                        _token_to_row_dict(t, state.block_start_idx + offset) or {}
+                        _token_to_row_dict(t, self.start_offset + state.block_start_idx + offset) or {}
                         for offset, t in enumerate(block_tokens)
                     ]
                     block_score = self.scorer.score_block(block_token_dicts, block_breaks)
@@ -415,7 +415,10 @@ class Segmenter:
                     fallback_state, fallback_state.block_start_idx, i
                 )
                 block_token_dicts = [
-                    _token_to_row_dict(t, fallback_state.block_start_idx + offset) or {}
+                    _token_to_row_dict(
+                        t, self.start_offset + fallback_state.block_start_idx + offset
+                    )
+                    or {}
                     for offset, t in enumerate(block_tokens)
                 ]
                 block_score = self.scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
