@@ -57,14 +57,23 @@ def _block_breaks(tokens: Sequence[Token]) -> List[BreakType]:
     return [(token.break_type or "O") for token in tokens]
 
 
-def _tokens_to_dicts(tokens: Iterable[Token]) -> List[dict]:
+def _tokens_to_dicts(tokens: Iterable[Token], start_index: int = 0) -> List[dict]:
     """Convert dataclass tokens into dictionaries understood by ``Scorer``.
 
     The scorer expects the JSON-compatible payloads produced by the training
     pipeline. Each token dataclass exposes the same fields, so a shallow
-    ``dict()`` conversion is sufficient.
+    ``dict()`` conversion is sufficient. When legacy payloads omit
+    ``token_index`` we backfill it with the absolute position supplied via
+    ``start_index`` so dependency-aware features remain stable across the
+    post-processing passes.
     """
-    return [dict(token.__dict__) for token in tokens]
+    dicts: List[dict] = []
+    for offset, token in enumerate(tokens):
+        payload = dict(token.__dict__)
+        if payload.get("token_index") is None:
+            payload["token_index"] = start_index + offset
+        dicts.append(payload)
+    return dicts
 
 
 def _make_breaks_with_lb(length: int, lb_index: int | None) -> List[BreakType]:
@@ -112,7 +121,7 @@ def postprocess(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[To
             break
 
         block_breaks = _block_breaks(block_tokens)
-        block_dicts = _tokens_to_dicts(block_tokens)
+        block_dicts = _tokens_to_dicts(block_tokens, start)
         # Baseline score for the unmodified block; all candidates must beat this
         # by at least ``epsilon`` before we accept a change.
         block_score = scorer.score_block(block_dicts, block_breaks)
@@ -157,7 +166,7 @@ def postprocess(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[To
                 )
                 if can_merge:
                     next_breaks = _block_breaks(next_tokens)
-                    next_dicts = _tokens_to_dicts(next_tokens)
+                    next_dicts = _tokens_to_dicts(next_tokens, next_start)
                     base_score = block_score + scorer.score_block(next_dicts, next_breaks)
 
                     best_bridge: BreakType | None = None
@@ -169,7 +178,7 @@ def postprocess(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[To
                             continue
                         combined_breaks = block_breaks[:-1] + [bridge] + next_breaks
                         combined_tokens = block_tokens + next_tokens
-                        combined_dicts = _tokens_to_dicts(combined_tokens)
+                        combined_dicts = _tokens_to_dicts(combined_tokens, start)
                         combined_score = scorer.score_block(combined_dicts, combined_breaks)
                         if combined_score > best_score + epsilon:
                             best_score = combined_score
@@ -179,7 +188,7 @@ def postprocess(tokens: Sequence[Token], scorer: Scorer, cfg: Config) -> List[To
                         refined[end] = replace(refined[end], break_type=best_bridge)
                         block_tokens = refined[start : _find_block_end(refined, start) + 1]
                         block_breaks = _block_breaks(block_tokens)
-                        block_dicts = _tokens_to_dicts(block_tokens)
+                        block_dicts = _tokens_to_dicts(block_tokens, start)
                         block_score = scorer.score_block(block_dicts, block_breaks)
                         merged = True
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
-from typing import Sequence
+from typing import List, Sequence
 
 # Add the repository root to ``sys.path`` so the tests can import local modules
 # when executed directly via ``python tests/test_post_process.py``.
@@ -52,6 +52,17 @@ class BalanceScorer:
             return -5.0
         if block_breaks[1] == "LB":
             return 8.0
+        return 0.0
+
+
+class RecordingIndexScorer:
+    """Capture the token indices observed by ``postprocess`` for assertions."""
+
+    def __init__(self) -> None:
+        self.calls: List[List[int | None]] = []
+
+    def score_block(self, block_tokens: Sequence[dict], block_breaks: Sequence[str]) -> float:
+        self.calls.append([token.get("token_index") for token in block_tokens])
         return 0.0
 
 
@@ -143,6 +154,29 @@ class TestReflowTokens(unittest.TestCase):
         reflowed = postprocess(tokens, MergeFriendlyScorer(), cfg)
 
         self.assertEqual([token.break_type for token in reflowed], ["SB", "O", "SB"])
+
+    def test_records_absolute_indices_for_missing_token_index(self) -> None:
+        """postprocess should backfill indices before scoring legacy payloads."""
+
+        tokens = [
+            Token(w="one", start=0.0, end=0.2, speaker="A", break_type="O"),
+            Token(w="two", start=0.2, end=0.4, speaker="A", break_type="SB"),
+            Token(w="three", start=0.4, end=0.6, speaker="A", break_type="O"),
+            Token(w="four", start=0.6, end=0.8, speaker="A", break_type="SB"),
+        ]
+
+        cfg = _make_config()
+        scorer = RecordingIndexScorer()
+
+        postprocess(tokens, scorer, cfg)
+
+        # All recorded scorer payloads should expose absolute token indices.
+        for call in scorer.calls:
+            self.assertTrue(all(idx is not None for idx in call))
+
+        expected_slices = [[0, 1], [2, 3], [0, 1, 2, 3]]
+        for slice_indices in expected_slices:
+            self.assertIn(slice_indices, scorer.calls)
 
 
 if __name__ == "__main__":

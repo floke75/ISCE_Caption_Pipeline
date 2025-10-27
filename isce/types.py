@@ -63,6 +63,13 @@ class Token:
     start: float
     end: float
     speaker: Optional[str]
+
+    # The absolute index of the token within the full, un-sliced sequence of
+    # tokens passed into the first segmenter.  We have to store this on the
+    # token itself so that dependency-based features can compute stable keys
+    # when the beam search is operating on slices (refinement) or reversed
+    # sequences (bidirectional reconciliation).
+    token_index: Optional[int] = None
     
     # Features from the enrichment script
     cue_id: Optional[int] = None

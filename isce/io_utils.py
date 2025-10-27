@@ -2,13 +2,15 @@
 
 This module contains helper functions dedicated to the serialization and
 deserialization of `Token` objects. It defines a standardized JSON structure
-where the token list is stored under a "tokens" key. The `load_tokens` function
-is designed to be robust against extra, unknown fields in the input JSON,
-while the `save_tokens` function ensures a consistent and human-readable
-output format.
+where the token list is stored under a "tokens" key. The `load_tokens`
+function is designed to be robust against extra, unknown fields in the input
+JSON, while the `save_tokens` function ensures a consistent and
+human-readable output format.
 """
 import json
+from dataclasses import replace
 from typing import List
+
 from .types import Token
 
 
@@ -46,21 +48,28 @@ def load_tokens(path: str) -> List[Token]:
     if not isinstance(items, list):
         raise TypeError(f"Expected a 'tokens' key with a list of objects in {path}")
 
-    out = []
+    out: List[Token] = []
     token_fields = Token.get_field_names()
     for i, t_dict in enumerate(items):
         if not isinstance(t_dict, dict):
             raise TypeError(f"Token item at index {i} in {path} is not a dictionary.")
-        
+
         # Filter the dictionary to only include keys that are fields in the Token dataclass
         filtered_dict = {k: v for k, v in t_dict.items() if k in token_fields}
-        
+
         try:
             out.append(Token(**filtered_dict))
         except TypeError as e:
             raise TypeError(f"Mismatch between JSON object and Token dataclass at index {i} in {path}: {e}")
-            
-    return out
+
+    normalised: List[Token] = []
+    for idx, token in enumerate(out):
+        if token.token_index is None:
+            normalised.append(replace(token, token_index=idx))
+        else:
+            normalised.append(token)
+
+    return normalised
 
 def save_tokens(path: str, tokens: List[Token]) -> None:
     """
