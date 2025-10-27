@@ -71,10 +71,15 @@ def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[in
         return None
 
     if isinstance(token, dict):
-        payload: dict[str, Any] = dict(token)
+        payload: dict[str, Any] = {k: v for k, v in token.items()}
     else:
         payload = dict(token.__dict__)
 
+    # Normalise ``token_index`` to an integer when possible. Payloads pulled
+    # from JSON can expose the field as a string, float, or even ``NaN``. We
+    # coerce the known-safe cases, drop nonsensical values, and fall back to the
+    # caller-supplied ``idx`` so dependency-derived feature keys observe stable
+    # numbering across reconciliation and refinement paths.
     raw_index = payload.get("token_index")
     coerced_index: Optional[int] = None
     if raw_index is not None:
@@ -92,10 +97,16 @@ def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[in
     if coerced_index is not None:
         payload["token_index"] = coerced_index
     elif idx is not None:
-        payload["token_index"] = idx
+        payload["token_index"] = int(idx)
     elif "token_index" in payload:
         # Drop invalid token indexes so callers never observe unexpected types.
         payload.pop("token_index")
+
+    # Some legacy corpora contain non-string ``w`` values (for example numbers
+    # emitted by pandas when loading CSV exports). Converting them eagerly
+    # prevents downstream feature helpers from tripping over unexpected types.
+    if "w" in payload and payload["w"] is not None and not isinstance(payload["w"], str):
+        payload["w"] = str(payload["w"])
 
     return payload
 
