@@ -22,6 +22,7 @@ The main entry point is the `segment` function, which orchestrates these
 components based on the provided configuration.
 """
 from __future__ import annotations
+import math
 from collections import Counter
 from dataclasses import dataclass, replace
 from heapq import nlargest
@@ -74,10 +75,27 @@ def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[in
     else:
         payload = dict(token.__dict__)
 
-    # The token's own index takes precedence. The passed `idx` is a fallback
-    # for contexts where we are creating the index for the first time.
-    if payload.get("token_index") is None and idx is not None:
+    raw_index = payload.get("token_index")
+    coerced_index: Optional[int] = None
+    if raw_index is not None:
+        if isinstance(raw_index, float):
+            if math.isnan(raw_index):
+                coerced_index = None
+            elif raw_index.is_integer():
+                coerced_index = int(raw_index)
+        else:
+            try:
+                coerced_index = int(raw_index)
+            except (TypeError, ValueError):
+                coerced_index = None
+
+    if coerced_index is not None:
+        payload["token_index"] = coerced_index
+    elif idx is not None:
         payload["token_index"] = idx
+    elif "token_index" in payload:
+        # Drop invalid token indexes so callers never observe unexpected types.
+        payload.pop("token_index")
 
     return payload
 
