@@ -52,6 +52,15 @@ def test_token_to_row_dict_falls_back_for_invalid_indexes():
     assert payload["token_index"] == "oops"
 
 
+def test_token_to_row_dict_drops_invalid_index_without_fallback():
+    payload = {"w": "hi", "token_index": "oops"}
+
+    result = _token_to_row_dict(payload)
+
+    assert result is not None
+    assert "token_index" not in result
+
+
 def test_token_to_row_dict_handles_nan_indexes():
     payload = {"w": "hi", "token_index": math.nan}
 

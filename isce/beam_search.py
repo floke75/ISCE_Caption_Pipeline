@@ -24,6 +24,7 @@ components based on the provided configuration.
 from __future__ import annotations
 import math
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from heapq import nlargest
 from typing import Any, List, Optional, Sequence
@@ -39,7 +40,34 @@ LOCAL_REFINEMENT_IMPROVEMENT = 0.5
 BALANCE_RATIO_THRESHOLD = 2.5
 
 
-def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[int] = None) -> Optional[dict[str, Any]]:
+def _coerce_token_index(raw_index: Any) -> Optional[int]:
+    """Best-effort coercion of ``raw_index`` into an integer token offset."""
+
+    if raw_index is None:
+        return None
+
+    if isinstance(raw_index, float):
+        if math.isnan(raw_index):
+            return None
+        if raw_index.is_integer():
+            return int(raw_index)
+        return None
+
+    if isinstance(raw_index, bool):
+        # ``bool`` is technically a subclass of ``int`` but storing ``True`` or
+        # ``False`` in ``token_index`` is almost certainly unintended. Treat
+        # those cases as malformed so callers can fall back to their offsets.
+        return None
+
+    try:
+        return int(raw_index)
+    except (TypeError, ValueError):
+        return None
+
+
+def _token_to_row_dict(
+    token: Optional[Token | Mapping[str, Any]], idx: Optional[int] = None
+) -> Optional[dict[str, Any]]:
     """Normalise token-like objects into scorer-ready dictionaries.
 
     Parameters
@@ -70,7 +98,7 @@ def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[in
     if token is None:
         return None
 
-    if isinstance(token, dict):
+    if isinstance(token, Mapping):
         payload: dict[str, Any] = {k: v for k, v in token.items()}
     else:
         payload = dict(token.__dict__)
@@ -81,18 +109,7 @@ def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[in
     # caller-supplied ``idx`` so dependency-derived feature keys observe stable
     # numbering across reconciliation and refinement paths.
     raw_index = payload.get("token_index")
-    coerced_index: Optional[int] = None
-    if raw_index is not None:
-        if isinstance(raw_index, float):
-            if math.isnan(raw_index):
-                coerced_index = None
-            elif raw_index.is_integer():
-                coerced_index = int(raw_index)
-        else:
-            try:
-                coerced_index = int(raw_index)
-            except (TypeError, ValueError):
-                coerced_index = None
+    coerced_index = _coerce_token_index(raw_index)
 
     if coerced_index is not None:
         payload["token_index"] = coerced_index
