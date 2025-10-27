@@ -37,6 +37,6 @@ def test_engineer_features_sets_relative_position_and_dangling_flags():
     assert tokens[1]["is_dangling_eos"] is False
     assert tokens[5]["is_dangling_eos"] is True
 
-    serialized = [serialize_token(t, settings) for t in tokens]
+    serialized = [serialize_token(t, idx, settings) for idx, t in enumerate(tokens)]
     assert serialized[3]["relative_position"] == pytest.approx(0.5)
     assert serialized[5]["is_dangling_eos"] is True
