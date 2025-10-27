@@ -379,7 +379,10 @@ class Segmenter:
                 # Candidate: 'SB' (Block Break)
                 if self._is_hard_ok_SB(state, i):
                     block_tokens, block_breaks, _ = self._block_profiles(state, state.block_start_idx, i)
-                    block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+                    block_token_dicts = [
+                        _token_to_row_dict(t, state.block_start_idx + offset) or {}
+                        for offset, t in enumerate(block_tokens)
+                    ]
                     block_score = self.scorer.score_block(block_token_dicts, block_breaks)
                     score = state.score + transition_scores["SB"] + block_score
                     next_word_len = len(nxt.w) if nxt else 0
@@ -398,7 +401,10 @@ class Segmenter:
                 block_tokens, block_breaks, lines = self._block_profiles(
                     fallback_state, fallback_state.block_start_idx, i
                 )
-                block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+                block_token_dicts = [
+                    _token_to_row_dict(t, fallback_state.block_start_idx + offset) or {}
+                    for offset, t in enumerate(block_tokens)
+                ]
                 block_score = self.scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
                 next_word_len = len(nxt.w) if nxt else 0
                 violations = self._line_violations(lines)
@@ -534,7 +540,10 @@ def _score_segmentation(
         total += transition_scores.get(br, 0.0)
 
         if br == "SB":
-            block_dicts = [dict(t.__dict__) for t in block_tokens]
+            block_dicts = [
+                _token_to_row_dict(t, block_start + offset) or {}
+                for offset, t in enumerate(block_tokens)
+            ]
             total += scorer.score_block(block_dicts, block_breaks)
             block_tokens = []
             block_breaks = []
@@ -722,7 +731,10 @@ def refine_blocks(
         block_start, block_end = boundaries[idx]
         block_tokens = list(tokens[block_start : block_end + 1])
         block_breaks = list(refined[block_start : block_end + 1])
-        block_dicts = [dict(t.__dict__) for t in block_tokens]
+        block_dicts = [
+            _token_to_row_dict(t, block_start + offset) or {}
+            for offset, t in enumerate(block_tokens)
+        ]
         block_score = scorer.score_block(block_dicts, block_breaks)
 
         if not _should_refine_block(block_tokens, block_breaks, block_score):
