@@ -108,12 +108,14 @@ class RecordingScorer:
             "extreme_balance_threshold": 2.5,
         }
         self.lookahead_payloads: list[tuple[dict, ...] | None] = []
+        self.block_token_indices: list[list[int | None]] = []
 
     def score_transition(self, row, ctx=None):
         self.lookahead_payloads.append(row.lookahead)
         return {"O": 0.0, "LB": 0.0, "SB": 0.0}
 
     def score_block(self, block_tokens, block_breaks):
+        self.block_token_indices.append([token.get("token_index") for token in block_tokens])
         return 0.0
 
 
@@ -137,6 +139,18 @@ class TestBeamSearch(unittest.TestCase):
         self.assertFalse(reversed_tokens[0].speaker_change)
         self.assertTrue(reversed_tokens[1].speaker_change)
         self.assertFalse(reversed_tokens[2].speaker_change)
+
+    def test_reverse_tokens_backfill_missing_indices(self) -> None:
+        tokens = [
+            make_token("one", 0.0),
+            replace(make_token("two", 0.4), token_index=42),
+            make_token("three", 0.8),
+        ]
+
+        reversed_tokens = _reverse_tokens_for_bidirectional(tokens)
+        indices = [token.token_index for token in reversed_tokens]
+
+        self.assertEqual(indices, [2, 42, 0])
 
     def test_segmenter_records_last_path_score(self):
         class ConstantScorer:
@@ -231,6 +245,40 @@ class TestBeamSearch(unittest.TestCase):
         self.assertIsNone(second_context.projected_second_line_chars)
         self.assertIsNone(second_context.projected_second_line_words)
 
+    def test_transition_context_pending_tokens_respect_start_offset(self) -> None:
+        tokens = [
+            make_token("alpha", 0.0),
+            make_token("beta", 0.2),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 20, "hard_limit": 30},
+                "line2": {"soft_target": 20, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        segmenter = Segmenter(list(tokens), DummyScorer(), cfg, start_offset=7)
+        state = PathState(
+            score=0.0,
+            line_num=1,
+            line_len=len(tokens[0].w) + 1 + len(tokens[1].w),
+            block_start_idx=0,
+            breaks=("O",),
+        )
+
+        context = segmenter._build_transition_context(state, 1)
+        indices = [token.get("token_index") for token in context.pending_tokens]
+        self.assertEqual(indices, [7, 8])
+
     def test_score_path_exposes_lookahead(self):
         tokens = [
             make_token("alpha", 0.0),
@@ -261,6 +309,34 @@ class TestBeamSearch(unittest.TestCase):
         self.assertIsNone(scorer.lookahead_payloads[-1])
         self.assertIsNotNone(scorer.lookahead_payloads[0])
         self.assertEqual(len(scorer.lookahead_payloads[0]), 2)
+
+    def test_score_path_assigns_block_indices_with_offset(self) -> None:
+        tokens = [
+            make_token("alpha", 0.0),
+            make_token("beta", 0.2),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 20, "hard_limit": 30},
+                "line2": {"soft_target": 20, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        scorer = RecordingScorer()
+        breaks = ["O", "SB"]
+
+        _score_path(tokens, breaks, scorer, cfg, start_offset=11)
+
+        self.assertEqual(scorer.block_token_indices, [[11, 12]])
 
     def test_fallback_uses_single_word_slider_penalty(self):
         tokens = [make_token("Hi", 0.0)]
@@ -295,6 +371,43 @@ class TestBeamSearch(unittest.TestCase):
         self.assertIsNotNone(custom_score)
         self.assertGreater(custom_score, zero_score)
         self.assertAlmostEqual(custom_score - zero_score, 18.0, places=3)
+
+    def test_segmenter_fallback_block_scoring_respects_start_offset(self) -> None:
+        tokens = [
+            make_token("alpha", 0.0),
+            make_token("beta", 0.2),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 20, "hard_limit": 30},
+                "line2": {"soft_target": 20, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=0,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        class ForcedSegmenter(Segmenter):
+            def _is_hard_ok_O(self, *args, **kwargs):
+                return False
+
+            def _is_hard_ok_LB(self, *args, **kwargs):
+                return False
+
+            def _is_hard_ok_SB(self, *args, **kwargs):
+                return False
+
+        scorer = RecordingScorer()
+        segmenter = ForcedSegmenter(list(tokens), scorer, cfg, start_offset=9)
+        segmenter.run()
+
+        self.assertEqual(scorer.block_token_indices, [[9], [10]])
 
     def test_fallback_candidate_keeps_beam_alive(self):
         tokens = [
