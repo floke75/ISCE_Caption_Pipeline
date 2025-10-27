@@ -28,6 +28,7 @@ from tqdm import tqdm
 
 from .config import Config
 from .types import TokenRow
+from .token_utils import normalize_token_payload
 
 # --- Helper Functions (Updated for Dictionary Input) ---
 def bin_pause_z(z: float | None) -> str:
@@ -276,8 +277,8 @@ def create_feature_row(row: TokenRow, cfg: Config) -> dict:
         A dictionary where keys are feature names and values are the
         discretized feature values for the given decision point.
     """
-    token = row.token
-    nxt = row.nxt if row.nxt else {}
+    token = normalize_token_payload(row.token) or {}
+    nxt = normalize_token_payload(row.nxt) or {}
 
     pos_bigram = f"{token.get('pos', 'none')}|{nxt.get('pos', 'none')}"
     is_cap_mid = token.get('w', '') and token['w'][0].isupper() and not token.get('is_sentence_initial', False)

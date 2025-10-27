@@ -38,6 +38,7 @@ from isce.model_builder import build_weights, derive_constraints, create_feature
 from isce.config import Config, load_config
 from isce.scorer import Scorer
 from isce.types import TokenRow, Engineered
+from isce.token_utils import normalize_token_payload
 
 # =========================================
 # REFACTORED DATA LOADING
@@ -122,8 +123,8 @@ def get_full_feature_table_and_rows(corpus_paths: list[str], cfg: Config) -> tup
             token.setdefault("token_index", idx)
 
         for i in range(len(tokens) - 1):
-            token = tokens[i]
-            nxt = tokens[i+1]
+            token = normalize_token_payload(tokens[i], idx=i) or {}
+            nxt = normalize_token_payload(tokens[i + 1], idx=i + 1)
 
             if token.get("break_type") is None:
                 continue

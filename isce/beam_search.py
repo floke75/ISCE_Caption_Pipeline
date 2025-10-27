@@ -31,6 +31,7 @@ from tqdm import tqdm
 from .types import Token, BreakType, TokenRow, TransitionContext
 from .scorer import Scorer
 from .config import Config
+from .token_utils import normalize_token_payload
 
 FALLBACK_SB_PENALTY = 25.0
 LOCAL_REFINEMENT_MIN_BEAM = 5
@@ -41,45 +42,14 @@ BALANCE_RATIO_THRESHOLD = 2.5
 def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[int] = None) -> Optional[dict[str, Any]]:
     """Normalise token-like objects into scorer-ready dictionaries.
 
-    Parameters
-    ----------
-    token:
-        Either a :class:`~isce.types.Token` instance or a dictionary already in
-        scorer format.
-    idx:
-        Optional numeric index to store under ``token_index`` when the payload
-        does not yet advertise one.  The caller should pass the absolute token
-        position relative to the original transcript so dependency-aware feature
-        helpers can derive repeatable keys.
-
-    Returns
-    -------
-    dict[str, Any] | None
-        A shallow copy of ``token`` as a dictionary, or ``None`` when ``token``
-        itself is ``None``.
-
-    Notes
-    -----
-    ``token_index`` is a critical field for dependency-derived feature keys such
-    as ``head_position_key`` and ``dependency_link_key``.  Carrying the index
-    through every scoring path ensures reconciled and refined segmentations see
-    the same feature activations as the primary beam.
+    The heavy lifting is delegated to :func:`~isce.token_utils.normalize_token_payload`
+    so both the beam search and the training pipeline apply identical
+    sanitisation rules.  We keep the helper local to preserve the existing
+    import surface and to document why the beam search depends on the utility
+    module.
     """
 
-    if token is None:
-        return None
-
-    if isinstance(token, dict):
-        payload: dict[str, Any] = dict(token)
-    else:
-        payload = dict(token.__dict__)
-
-    # The token's own index takes precedence. The passed `idx` is a fallback
-    # for contexts where we are creating the index for the first time.
-    if payload.get("token_index") is None and idx is not None:
-        payload["token_index"] = idx
-
-    return payload
+    return normalize_token_payload(token, idx)
 
 
 def _get_lookahead_slice(
