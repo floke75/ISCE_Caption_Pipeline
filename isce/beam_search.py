@@ -500,7 +500,19 @@ class Segmenter:
 
 
 def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
-    """Create a reversed copy of the tokens suited for the backward beam."""
+    """Create reversed tokens with mirrored timing and metadata for backpasses.
+
+    The backward beam reuses :class:`Segmenter` without understanding that its
+    input originated from the end of the sequence.  We therefore construct a
+    deep copy of every token that inverts the temporal markers (``start`` /
+    ``end``), swaps pause metadata so the scorer still interprets hesitations
+    correctly, and recomputes ``relative_position`` to stay inside ``[0.0, 1.0]``.
+    Speaker changes are also recalculated so reconciliation logic can recognise
+    cross-speaker boundaries even while iterating in reverse order.  ``token_index``
+    is preserved when available so dependency-driven features continue to align
+    with the forward pass, letting :func:`_map_reversed_breaks` stitch the decisions
+    back together without feature drift.
+    """
     reversed_tokens: List[Token] = []
     for idx in range(len(tokens) - 1, -1, -1):
         token = tokens[idx]
@@ -535,7 +547,14 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
 
 
 def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
-    """Translate reverse-order break decisions back into forward order."""
+    """Translate reverse-order break decisions back into forward order.
+
+    ``Segmenter.run`` always marks the final decision as ``SB``.  When we reuse
+    it in reverse the closing ``SB`` refers to the *first* token in forward
+    time.  This helper flips the sequence, restores the trailing ``SB`` to the
+    real end of the caption, and replays every backward ``SB`` onto the matching
+    forward index so the reconciler compares equivalent breakpoints.
+    """
 
     n = len(reversed_breaks)
     if n == 0:
@@ -791,7 +810,10 @@ def refine_blocks(
     model a second chance by expanding a local window with a wider beam and
     replaying the search.  Only blocks that look suspicious—single-token cues,
     negative scorer feedback, or severe balance ratios—are reconsidered so the
-    routine stays fast enough for interactive use.
+    routine stays fast enough for interactive use.  Candidate windows are scored
+    with :func:`_score_path`, which rebuilds ``token_index``-aware payloads so any
+    dependency features contribute consistently between the primary pass and the
+    local what-if evaluation.
     """
 
     if not tokens or not breaks:
