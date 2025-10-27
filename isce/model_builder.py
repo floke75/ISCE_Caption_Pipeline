@@ -291,7 +291,7 @@ def create_feature_row(row: TokenRow, cfg: Config) -> dict:
         "rel_pos_bin": bin_rel_pos(token.get("relative_position")),
         "break_before_glue": str(token.get("num_unit_glue", False)),
         "is_dangling_eos": str(token.get("is_dangling_eos", False)),
-        "outcome": token.get("break_type"),
+        "outcome": str(token.get("break_type") or "O"),
         "speaker_change": str(token.get("speaker_change", False)),
         "starts_with_dash": str(token.get("starts_with_dialogue_dash", False)),
     }
