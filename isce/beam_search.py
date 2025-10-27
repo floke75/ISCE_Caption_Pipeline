@@ -39,13 +39,31 @@ BALANCE_RATIO_THRESHOLD = 2.5
 
 
 def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[int] = None) -> Optional[dict[str, Any]]:
-    """Project a token payload into the dictionary structure expected by ``Scorer``.
+    """Normalise token-like objects into scorer-ready dictionaries.
 
-    When the caller supplies an index (or the source payload already carries a
-    ``token_index`` field) we preserve it so dependency-based feature helpers can
-    compute stable keys.  This keeps bidirectional reconciliation and
-    post-hoc scoring aligned with the forward beam, which always assigns
-    ``token_index`` values before invoking the scorer.
+    Parameters
+    ----------
+    token:
+        Either a :class:`~isce.types.Token` instance or a dictionary already in
+        scorer format.
+    idx:
+        Optional numeric index to store under ``token_index`` when the payload
+        does not yet advertise one.  The caller should pass the absolute token
+        position relative to the original transcript so dependency-aware feature
+        helpers can derive repeatable keys.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        A shallow copy of ``token`` as a dictionary, or ``None`` when ``token``
+        itself is ``None``.
+
+    Notes
+    -----
+    ``token_index`` is a critical field for dependency-derived feature keys such
+    as ``head_position_key`` and ``dependency_link_key``.  Carrying the index
+    through every scoring path ensures reconciled and refined segmentations see
+    the same feature activations as the primary beam.
     """
 
     if token is None:
@@ -67,7 +85,29 @@ def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[in
 def _get_lookahead_slice(
     tokens: Sequence[Token], start: int, width: int, offset: int = 0
 ) -> Optional[tuple[dict[str, Any], ...]]:
-    """Return a tuple of upcoming token dictionaries for lookahead heuristics."""
+    """Return lookahead token payloads with stable indexes for scoring.
+
+    Parameters
+    ----------
+    tokens:
+        Full ordered sequence of :class:`~isce.types.Token` objects.
+    start:
+        Index of the first future token to include.
+    width:
+        Maximum number of lookahead entries to materialise.
+    offset:
+        Optional starting index used when the caller is operating on a slice of
+        the original transcript.  The resulting ``token_index`` values become
+        ``offset + start + i`` so dependency-aware feature helpers receive the
+        same numbering as the forward beam.
+
+    Returns
+    -------
+    tuple[dict[str, Any]] | None
+        Normalised token dictionaries suitable for :class:`~isce.scorer.Scorer`
+        consumption. ``None`` is returned when the lookahead width is zero or no
+        future tokens are available.
+    """
 
     if width <= 0:
         return None
@@ -521,7 +561,16 @@ def _score_segmentation(
     cfg: Config,
     start_offset: int = 0,
 ) -> float:
-    """Calculate holistic scores for an entire segmentation sequence."""
+    """Calculate holistic scores for an entire segmentation sequence.
+
+    The reconciler and refinement stages use this helper to compare candidate
+    break sequences against the beam's best path.  We rebuild the dictionary
+    payloads the scorer expects—including ``token_index``—so the
+    dependency-derived features activated in :mod:`isce.scorer` receive the same
+    inputs regardless of which stage is performing the evaluation.  Keeping this
+    parity prevents bidirectional reconciliation from favouring transitions that
+    would later degrade once dependency weights apply.
+    """
 
     total = 0.0
     block_tokens: List[Token] = []
@@ -654,7 +703,15 @@ def _score_path(
     cfg: Config,
     start_offset: int = 0,
 ) -> float:
-    """Convenience wrapper mirroring :func:`_score_segmentation` for slices."""
+    """Score a token/break slice with full dependency-aware context.
+
+    Refinement windows call this wrapper so they can operate on lightweight
+    slices without duplicating the projection logic in
+    :func:`_score_segmentation`.  Passing ``start_offset`` ensures that the
+    generated ``token_index`` values line up with the original transcript,
+    allowing dependency keys such as ``head_position_key`` to remain stable
+    during local what-if evaluations.
+    """
 
     return _score_segmentation(list(tokens), list(breaks), scorer, cfg, start_offset)
 
