@@ -7,6 +7,9 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 
 ## Where to Read Next
 - **`README.md`** – Complete walkthrough of features, prerequisites, installation, CLI entry points, and the full-stack web control center.
+- **Beam-search orientation** – The `README.md` section under **How It Works → Segmentation** now links straight to the
+  `isce/beam_search.py` docstrings and `docs/spacy_feature_impact.md` so new contributors can follow how token indexes and
+  dependency-aware features survive reconciliation and refinement.
 - **`docs/build_training_pair_comparison.md`** – Deep dive into the production alignment script vs. the alternate prototype.
 - **`docs/alt_build_training_pair_standalone.py`** – Self-contained alternative implementation referenced in the comparison doc.
 

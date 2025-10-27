@@ -7,6 +7,9 @@ Recent changes reincorporated the lemma, part-of-speech (POS) tag, morphology, a
 1. **Training** – `create_feature_row` generates categorical keys for the current/next lemma, tag, morphology, and dependency relationship, alongside existing prosody and punctuation features.【F:isce/model_builder.py†L92-L139】 Those columns are grouped under dedicated feature families in `build_weights`, ensuring each linguistic dimension receives its own set of learned log-odds weights.【F:isce/model_builder.py†L298-L336】
 2. **Inference** – The `Scorer` recomputes the same normalized keys for every transition and sums their learned weights during scoring, so the runtime decisions mirror the training feature space.【F:isce/scorer.py†L40-L123】 Because `scripts/train_model.py` now stamps each token with a stable `token_index`, the scorer can also recognise when two neighbouring tokens participate in the same dependency arc.【F:scripts/train_model.py†L85-L129】
 
+### Token index propagation across beam-search stages
+The beam search, bidirectional reconciler, and refinement passes all rescore segments while exploring alternative break sequences. To keep dependency-aware features in sync, helpers such as `_token_to_row_dict`, `_get_lookahead_slice`, and `_score_segmentation` reattach the originating `token_index` before delegating to the scorer.【F:isce/beam_search.py†L40-L112】【F:isce/beam_search.py†L499-L555】 This guarantees that feature keys like `head_position_key` stay identical whether a decision comes from the primary beam or from a what-if evaluation in refinement.
+
 ## Real-world quality gains
 ### 1. Handling speech repairs and resumptions
 *Scenario*: A speaker corrects themselves mid-sentence ("We need to ship — I mean **deploy** — the update tomorrow").

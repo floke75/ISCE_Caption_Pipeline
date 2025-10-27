@@ -150,6 +150,15 @@ The ISCE pipeline is a multi-stage process designed to create high-quality subti
 
 3.  **Segmentation:** The `main.py` script takes the enriched data and feeds it into the segmentation engine. This engine uses a beam search algorithm guided by a statistical model to find the optimal placement of subtitle breaks (`SB` for a block break, `LB` for a line break). The model scores different possibilities based on the features, and the beam search efficiently explores the most promising options.
 
+    New contributors who want to explore the internals can start with
+    `isce/beam_search.py`. The module-level overview outlines how lookahead,
+    bidirectional reconciliation, and refinement cooperate. Helper docstrings for
+    `_token_to_row_dict`, `_get_lookahead_slice`, and `_score_segmentation` walk
+    through how `token_index` values persist across passes so dependency-aware
+    features in `isce/scorer.py` stay aligned. The companion document
+    `docs/spacy_feature_impact.md` expands on why those dependency keys matter and
+    shows concrete scenarios where they improve segmentation quality.
+
 4.  **SRT Generation:** The final output is a standard `.srt` subtitle file, formatted with correct timings and line breaks.
 
 ## Configuration
