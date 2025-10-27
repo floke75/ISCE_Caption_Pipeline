@@ -77,9 +77,9 @@ def test_score_transition_applies_weights_and_structure_boost():
 
     scores = scorer.score_transition(TokenRow(token=token, nxt=nxt))
 
-    assert scores["O"] == pytest.approx(-7.1)
+    assert scores["O"] == pytest.approx(-6.95)
     assert scores["LB"] == pytest.approx(1.7)
-    assert scores["SB"] == pytest.approx(12.05)
+    assert scores["SB"] == pytest.approx(11.85)
 
 
 def test_score_transition_handles_missing_spacy_payload():

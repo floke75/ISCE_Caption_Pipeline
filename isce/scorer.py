@@ -172,19 +172,18 @@ class Scorer:
         # --- Step 1: Calculate the score from all learned weights ---
         for outcome in scores.keys():
             learned_score = (
-                self._get_weight("prosody", pz_bin, outcome) +
-                self._get_weight("punctuation", pc_class, outcome) +
-                self._get_weight("position", rp_bin, outcome) +
-                self._get_weight("syntax", pb_key, outcome) +
-                self._get_weight("lemma", lemma_key, outcome) +
-                self._get_weight("tag", tag_key, outcome) +
-                self._get_weight("morphology", morph_key, outcome) +
-                self._get_weight("dependency", dep_key, outcome) +
-                self._get_weight("dependency", head_pos_key, outcome) +
-                self._get_weight("dependency", head_link_key, outcome) +
-                self._get_weight("capitalization", cap_key, outcome) +
-                self._get_weight("cohesion", glue_key, outcome) +
-                self._get_weight("structural_heuristics", dangling_key, outcome)
+                self._get_weight("prosody", pz_bin, outcome)
+                + self._get_weight("punctuation", pc_class, outcome)
+                + self._get_weight("position", rp_bin, outcome)
+                + self._get_weight("syntax", pb_key, outcome)
+                + self._get_weight("lemma", lemma_key, outcome)
+                + self._get_weight("tag", tag_key, outcome)
+                + self._get_weight("morphology", morph_key, outcome)
+                + self._get_weight("dependency", dep_key, outcome)
+                + self._get_weight("dependency", head_pos_key, outcome)
+                + self._get_weight("dependency", head_link_key, outcome)
+                + self._get_weight("capitalization", cap_key, outcome)
+                + self._get_weight("cohesion", glue_key, outcome)
             )
             interaction_score = (
                 self._get_weight("interaction_punct_pause", interact_pp_key, outcome) +
@@ -198,10 +197,12 @@ class Scorer:
         dash_key = f"starts_with_dash:{dash_flag}"
 
         for outcome in scores.keys():
-            scores[outcome] += self.sl.get("structure", 1.0) * (
-                self._get_weight("speaker_change_feature", sc_key, outcome) +
-                self._get_weight("structural_heuristics", dash_key, outcome)
+            structural_score = (
+                self._get_weight("speaker_change_feature", sc_key, outcome)
+                + self._get_weight("structural_heuristics", dash_key, outcome)
+                + self._get_weight("structural_heuristics", dangling_key, outcome)
             )
+            scores[outcome] += self.sl.get("structure", 1.0) * structural_score
 
         # Apply the powerful, non-statistical "nudges"
         if token.get("speaker_change") or token.get("starts_with_dialogue_dash"):
