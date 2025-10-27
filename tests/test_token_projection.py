@@ -1,4 +1,5 @@
 import math
+from types import MappingProxyType
 
 from isce.beam_search import _token_to_row_dict
 from isce.types import Token
@@ -41,6 +42,15 @@ def test_token_to_row_dict_coerces_string_indexes():
     assert result["token_index"] == 12
 
 
+def test_token_to_row_dict_accepts_integer_like_float_indexes():
+    payload = {"w": "hi", "token_index": 7.0}
+
+    result = _token_to_row_dict(payload)
+
+    assert result is not None
+    assert result["token_index"] == 7
+
+
 def test_token_to_row_dict_falls_back_for_invalid_indexes():
     payload = {"w": "hi", "token_index": "oops"}
 
@@ -69,6 +79,36 @@ def test_token_to_row_dict_handles_nan_indexes():
     assert result is not None
     assert result["token_index"] == 2
     assert math.isnan(payload["token_index"])
+
+
+def test_token_to_row_dict_treats_boolean_indexes_as_invalid():
+    payload = {"w": "hi", "token_index": True}
+
+    result = _token_to_row_dict(payload, 6)
+
+    assert result is not None
+    assert result["token_index"] == 6
+    assert payload["token_index"] is True
+
+
+def test_token_to_row_dict_normalises_non_integer_floats():
+    payload = {"w": "hi", "token_index": 8.5}
+
+    result = _token_to_row_dict(payload, 10)
+
+    assert result is not None
+    assert result["token_index"] == 10
+    assert payload["token_index"] == 8.5
+
+
+def test_token_to_row_dict_accepts_mapping_inputs():
+    payload = MappingProxyType({"w": "hi", "token_index": "3"})
+
+    result = _token_to_row_dict(payload, 11)
+
+    assert result is not None
+    assert result["token_index"] == 3
+    assert dict(payload)["token_index"] == "3"
 
 
 def test_token_to_row_dict_returns_copy_that_can_be_mutated_safely():
