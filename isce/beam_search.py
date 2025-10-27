@@ -56,13 +56,17 @@ def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[in
     else:
         payload = dict(token.__dict__)
 
-    if idx is not None and "token_index" not in payload:
+    # The token's own index takes precedence. The passed `idx` is a fallback
+    # for contexts where we are creating the index for the first time.
+    if payload.get("token_index") is None and idx is not None:
         payload["token_index"] = idx
 
     return payload
 
 
-def _get_lookahead_slice(tokens: Sequence[Token], start: int, width: int) -> Optional[tuple[dict[str, Any], ...]]:
+def _get_lookahead_slice(
+    tokens: Sequence[Token], start: int, width: int, offset: int = 0
+) -> Optional[tuple[dict[str, Any], ...]]:
     """Return a tuple of upcoming token dictionaries for lookahead heuristics."""
 
     if width <= 0:
@@ -71,8 +75,8 @@ def _get_lookahead_slice(tokens: Sequence[Token], start: int, width: int) -> Opt
     if not future:
         return None
     return tuple(
-        _token_to_row_dict(tokens[idx], idx) or {}
-        for idx in range(start, start + len(future))
+        _token_to_row_dict(tokens[start + i], offset + start + i) or {}
+        for i in range(len(future))
     )
 
 
@@ -155,10 +159,12 @@ class Segmenter:
         This is cached so that refinement helpers can compare alternate
         segmentations without re-scoring from scratch.
     """
-    def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
+
+    def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config, start_offset: int = 0):
         self.tokens = tokens
         self.scorer = scorer
         self.cfg = cfg
+        self.start_offset = start_offset
         self.beam: List[PathState] = []
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
@@ -287,8 +293,13 @@ class Segmenter:
         provided only when the current path is still mid-first-line; otherwise
         the scorer can infer that the transition stays within the same line.
         """
+        block_start_idx = state.block_start_idx
+        pending_tokens_slice = self.tokens[block_start_idx : current_idx + 1]
+        pending_tokens = tuple(
+            _token_to_row_dict(t, self.start_offset + block_start_idx + i) or {}
+            for i, t in enumerate(pending_tokens_slice)
+        )
 
-        pending_tokens = tuple(dict(t.__dict__) for t in self.tokens[state.block_start_idx : current_idx + 1])
         projected_chars: int | None = None
         projected_words: int | None = None
         if state.line_num == 1 and current_idx + 1 < len(self.tokens):
@@ -336,11 +347,13 @@ class Segmenter:
             is_last_token = (i == len(self.tokens) - 1)
             nxt = self.tokens[i + 1] if not is_last_token else None
 
-            token_dict = _token_to_row_dict(token, i) or {}
-            nxt_dict = _token_to_row_dict(nxt, i + 1)
+            token_dict = _token_to_row_dict(token, self.start_offset + i) or {}
+            nxt_dict = _token_to_row_dict(nxt, self.start_offset + i + 1)
 
             # Create the dictionary-based TokenRow required by the refactored scorer
-            lookahead_tokens = _get_lookahead_slice(self.tokens, i + 1, self.lookahead_width)
+            lookahead_tokens = _get_lookahead_slice(
+                self.tokens, i + 1, self.lookahead_width, offset=self.start_offset
+            )
 
             scorer_row = TokenRow(
                 token=token_dict,
@@ -461,6 +474,7 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
         reversed_tokens.append(
             replace(
                 token,
+                token_index=idx,
                 start=-token.end,
                 end=-token.start,
                 pause_after_ms=token.pause_before_ms,
@@ -496,7 +510,11 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
 
 
 def _score_segmentation(
-    tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config
+    tokens: List[Token],
+    breaks: List[BreakType],
+    scorer: Scorer,
+    cfg: Config,
+    start_offset: int = 0,
 ) -> float:
     """Calculate holistic scores for an entire segmentation sequence."""
 
@@ -513,14 +531,16 @@ def _score_segmentation(
 
         nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
         row = TokenRow(
-            token=_token_to_row_dict(token, idx) or {},
-            nxt=_token_to_row_dict(nxt, idx + 1),
+            token=_token_to_row_dict(token, start_offset + idx) or {},
+            nxt=_token_to_row_dict(nxt, start_offset + idx + 1),
             feats=None,
-            lookahead=_get_lookahead_slice(tokens, idx + 1, cfg.lookahead_width),
+            lookahead=_get_lookahead_slice(
+                tokens, idx + 1, cfg.lookahead_width, offset=start_offset
+            ),
         )
 
         pending_tokens = tuple(
-            _token_to_row_dict(t, block_start + offset) or {}
+            _token_to_row_dict(t, start_offset + block_start + offset) or {}
             for offset, t in enumerate(tokens[block_start : idx + 1])
         )
         projected_chars: Optional[int]
@@ -624,10 +644,11 @@ def _score_path(
     breaks: Sequence[BreakType],
     scorer: Scorer,
     cfg: Config,
+    start_offset: int = 0,
 ) -> float:
     """Convenience wrapper mirroring :func:`_score_segmentation` for slices."""
 
-    return _score_segmentation(list(tokens), list(breaks), scorer, cfg)
+    return _score_segmentation(list(tokens), list(breaks), scorer, cfg, start_offset)
 
 
 def _reconcile_bidirectional_breaks(
@@ -750,15 +771,21 @@ def refine_blocks(
 
         window_tokens = list(tokens[window_start : window_end + 1])
         window_breaks = list(refined[window_start : window_end + 1])
-        baseline_score = _score_path(window_tokens, window_breaks, scorer, cfg)
+        baseline_score = _score_path(
+            window_tokens, window_breaks, scorer, cfg, start_offset=window_start
+        )
 
         refine_beam = max(cfg.beam_width, LOCAL_REFINEMENT_MIN_BEAM)
         refine_cfg = replace(cfg, beam_width=refine_beam, enable_refinement_pass=False)
-        candidate_segmenter = Segmenter(window_tokens, scorer, refine_cfg)
+        candidate_segmenter = Segmenter(
+            window_tokens, scorer, refine_cfg, start_offset=window_start
+        )
         candidate_breaks = candidate_segmenter.run()
         candidate_score = candidate_segmenter.last_path_score
         if candidate_score is None:
-            candidate_score = _score_path(window_tokens, candidate_breaks, scorer, cfg)
+            candidate_score = _score_path(
+                window_tokens, candidate_breaks, scorer, cfg, start_offset=window_start
+            )
 
         if candidate_score >= baseline_score + LOCAL_REFINEMENT_IMPROVEMENT:
             refined[window_start : window_end + 1] = candidate_breaks

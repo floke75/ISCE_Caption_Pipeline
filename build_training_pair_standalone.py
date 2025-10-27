@@ -680,7 +680,7 @@ def engineer_features(tokens: List[Dict[str, Any]], settings: Dict[str, Any]):
         token.setdefault("relative_position", 0.0)
 
 
-def serialize_token(token: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
+def serialize_token(token: Dict[str, Any], token_index: int, settings: Dict[str, Any]) -> Dict[str, Any]:
     """Create the public JSON representation for a token."""
 
     round_digits = settings.get("round_seconds", 3)
@@ -690,6 +690,7 @@ def serialize_token(token: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str
         "end": round(token.get("end", 0.0), round_digits),
         "speaker": token.get("speaker"),
         "cue_id": token.get("cue_id"),
+        "token_index": token_index,
         "is_sentence_initial": token.get("is_sentence_initial", False),
         "is_sentence_final": token.get("is_sentence_final", False),
         "pause_after_ms": token.get("pause_after_ms", 0),
@@ -834,7 +835,7 @@ def process_file(
             generate_labels_from_cues(token_list, cue_list, settings)
         engineer_features(token_list, settings)
 
-        return [serialize_token(t, settings) for t in token_list]
+    return [serialize_token(t, i, settings) for i, t in enumerate(token_list)]
 
     # --- Output Generation ---
     if is_training_mode:
