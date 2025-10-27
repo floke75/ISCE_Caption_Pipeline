@@ -9,6 +9,7 @@ from isce.beam_search import (
     _reverse_tokens_for_bidirectional,
     _reconcile_bidirectional_breaks,
     _score_path,
+    _run_forward_breaks,
     refine_blocks,
     segment,
 )
@@ -116,6 +117,44 @@ class RecordingScorer:
 
     def score_block(self, block_tokens, block_breaks):
         self.block_token_indices.append([token.get("token_index") for token in block_tokens])
+        return 0.0
+
+
+class TokenIndexRecordingScorer:
+    def __init__(self):
+        self.sl = {
+            "line_length_leniency": 1.0,
+            "orphan_leniency": 1.0,
+            "single_word_line_penalty": 0.0,
+            "extreme_balance_penalty": 0.0,
+            "extreme_balance_threshold": 2.5,
+        }
+        self.reset()
+
+    def reset(self) -> None:
+        self.transition_indices: list[int | None] = []
+        self.pending_indices: list[tuple[int | None, ...]] = []
+        self.lookahead_indices: list[tuple[int | None, ...] | None] = []
+        self.block_indices: list[tuple[int | None, ...]] = []
+
+    def score_transition(self, row, ctx=None):
+        self.transition_indices.append(row.token.get("token_index"))
+        if ctx is not None:
+            self.pending_indices.append(
+                tuple(token.get("token_index") for token in ctx.pending_tokens)
+            )
+        if row.lookahead is None:
+            self.lookahead_indices.append(None)
+        else:
+            self.lookahead_indices.append(
+                tuple(token.get("token_index") for token in row.lookahead)
+            )
+        return {"O": 0.0, "LB": 0.0, "SB": 0.0}
+
+    def score_block(self, block_tokens, block_breaks):
+        self.block_indices.append(
+            tuple(token.get("token_index") for token in block_tokens)
+        )
         return 0.0
 
 
@@ -337,6 +376,103 @@ class TestBeamSearch(unittest.TestCase):
         _score_path(tokens, breaks, scorer, cfg, start_offset=11)
 
         self.assertEqual(scorer.block_token_indices, [[11, 12]])
+
+    def test_token_index_propagates_through_all_scoring_paths(self) -> None:
+        def chunk_sequence(seq, size):
+            return [tuple(seq[i : i + size]) for i in range(0, len(seq), size)]
+
+        base_tokens = [
+            make_token("alpha", 0.0),
+            make_token("beta", 0.2),
+            make_token("gamma", 0.4),
+        ]
+
+        cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 20, "hard_limit": 30},
+                "line2": {"soft_target": 20, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=2,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        recorder = TokenIndexRecordingScorer()
+        _run_forward_breaks(base_tokens, recorder, cfg)
+
+        self.assertEqual(recorder.transition_indices[:3], [0, 1, 2])
+        self.assertEqual(
+            recorder.pending_indices[:3], [(0,), (0, 1), (0, 1, 2)]
+        )
+        self.assertEqual(
+            recorder.lookahead_indices[:3], [(1, 2), (2,), None]
+        )
+        for block_payload in recorder.block_indices:
+            self.assertTrue(all(idx in {0, 1, 2} for idx in block_payload))
+            self.assertTrue(all(idx is not None for idx in block_payload))
+
+        recorder.reset()
+        forward_breaks = ["O", "LB", "SB"]
+        backward_breaks = ["LB", "O", "SB"]
+        _reconcile_bidirectional_breaks(
+            forward_breaks, backward_breaks, recorder, base_tokens, cfg
+        )
+
+        transition_chunks = chunk_sequence(recorder.transition_indices, len(base_tokens))
+        for chunk in transition_chunks:
+            self.assertEqual(chunk, (0, 1, 2))
+
+        pending_chunks = chunk_sequence(recorder.pending_indices, len(base_tokens))
+        for chunk in pending_chunks:
+            self.assertEqual(chunk, ((0,), (0, 1), (0, 1, 2)))
+
+        lookahead_chunks = chunk_sequence(recorder.lookahead_indices, len(base_tokens))
+        for chunk in lookahead_chunks:
+            self.assertEqual(chunk, ((1, 2), (2,), None))
+
+        self.assertTrue(
+            all(block == (0, 1, 2) for block in recorder.block_indices)
+        )
+
+        recorder.reset()
+        refinement_tokens = [
+            make_token("alpha", 0.0),
+            make_token("beta", 0.2),
+            make_token("gamma", 0.4),
+            make_token("delta", 0.6),
+        ]
+        refinement_breaks = ["O", "SB", "SB", "SB"]
+        refinement_cfg = Config(
+            beam_width=1,
+            min_block_duration_s=0.0,
+            max_block_duration_s=10.0,
+            line_length_constraints={
+                "line1": {"soft_target": 20, "hard_limit": 30},
+                "line2": {"soft_target": 20, "hard_limit": 30},
+            },
+            min_chars_for_single_word_block=1,
+            sliders={},
+            paths={},
+            lookahead_width=1,
+            allowed_single_word_proper_nouns=(),
+        )
+
+        refine_blocks(refinement_tokens, refinement_breaks, recorder, refinement_cfg)
+
+        self.assertGreaterEqual(len(recorder.transition_indices), 2)
+        self.assertEqual(recorder.transition_indices[0:2], [2, 3])
+        self.assertEqual(recorder.pending_indices[0:2], [(2,), (3,)])
+        self.assertEqual(recorder.lookahead_indices[0], (3,))
+        self.assertIsNone(recorder.lookahead_indices[1])
+        flattened_block_indices = [idx for block in recorder.block_indices for idx in block]
+        self.assertIn(2, flattened_block_indices)
+        self.assertIn(3, flattened_block_indices)
+        self.assertTrue(all(idx is not None for idx in flattened_block_indices))
 
     def test_fallback_uses_single_word_slider_penalty(self):
         tokens = [make_token("Hi", 0.0)]
