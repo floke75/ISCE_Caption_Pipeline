@@ -823,6 +823,7 @@ def refine_blocks(
     breaks: Sequence[BreakType],
     scorer: Scorer,
     cfg: Config,
+    start_offset: int = 0,
 ) -> List[BreakType]:
     """Re-run targeted refinement over low-scoring or lopsided blocks.
 
@@ -834,7 +835,9 @@ def refine_blocks(
     routine stays fast enough for interactive use.  Candidate windows are scored
     with :func:`_score_path`, which rebuilds ``token_index``-aware payloads so any
     dependency features contribute consistently between the primary pass and the
-    local what-if evaluation.
+    local what-if evaluation.  ``start_offset`` lets callers operate on slices of
+    the original transcript while keeping ``token_index`` values aligned with the
+    global token order, preserving the dependency-derived scorer features.
     """
 
     if not tokens or not breaks:
@@ -861,7 +864,10 @@ def refine_blocks(
         block_tokens = list(tokens[block_start : block_end + 1])
         block_breaks = list(refined[block_start : block_end + 1])
         block_dicts = [
-            _token_to_row_dict(t, block_start + offset) or {}
+            _token_to_row_dict(
+                t, start_offset + block_start + offset
+            )
+            or {}
             for offset, t in enumerate(block_tokens)
         ]
         block_score = scorer.score_block(block_dicts, block_breaks)
@@ -880,19 +886,30 @@ def refine_blocks(
         window_tokens = list(tokens[window_start : window_end + 1])
         window_breaks = list(refined[window_start : window_end + 1])
         baseline_score = _score_path(
-            window_tokens, window_breaks, scorer, cfg, start_offset=window_start
+            window_tokens,
+            window_breaks,
+            scorer,
+            cfg,
+            start_offset=start_offset + window_start,
         )
 
         refine_beam = max(cfg.beam_width, LOCAL_REFINEMENT_MIN_BEAM)
         refine_cfg = replace(cfg, beam_width=refine_beam, enable_refinement_pass=False)
         candidate_segmenter = Segmenter(
-            window_tokens, scorer, refine_cfg, start_offset=window_start
+            window_tokens,
+            scorer,
+            refine_cfg,
+            start_offset=start_offset + window_start,
         )
         candidate_breaks = candidate_segmenter.run()
         candidate_score = candidate_segmenter.last_path_score
         if candidate_score is None:
             candidate_score = _score_path(
-                window_tokens, candidate_breaks, scorer, cfg, start_offset=window_start
+                window_tokens,
+                candidate_breaks,
+                scorer,
+                cfg,
+                start_offset=start_offset + window_start,
             )
 
         if candidate_score >= baseline_score + LOCAL_REFINEMENT_IMPROVEMENT:

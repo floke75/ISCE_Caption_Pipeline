@@ -499,6 +499,25 @@ class TestBeamSearch(unittest.TestCase):
         self.assertIn(3, flattened_block_indices)
         self.assertTrue(all(idx is not None for idx in flattened_block_indices))
 
+        recorder.reset()
+        refine_blocks(
+            refinement_tokens,
+            refinement_breaks,
+            recorder,
+            refinement_cfg,
+            start_offset=5,
+        )
+
+        self.assertGreaterEqual(len(recorder.transition_indices), 2)
+        self.assertEqual(recorder.transition_indices[0:2], [7, 8])
+        self.assertEqual(recorder.pending_indices[0:2], [(7,), (8,)])
+        self.assertEqual(recorder.lookahead_indices[0], (8,))
+        self.assertIsNone(recorder.lookahead_indices[1])
+        offset_block_indices = [idx for block in recorder.block_indices for idx in block]
+        self.assertIn(7, offset_block_indices)
+        self.assertIn(8, offset_block_indices)
+        self.assertTrue(all(idx is not None for idx in offset_block_indices))
+
     def test_fallback_uses_single_word_slider_penalty(self):
         tokens = [make_token("Hi", 0.0)]
         base_cfg = Config(
