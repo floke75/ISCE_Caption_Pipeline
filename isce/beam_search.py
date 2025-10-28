@@ -867,11 +867,9 @@ def refine_blocks(
         block_start, block_end = boundaries[idx]
         block_tokens = list(tokens[block_start : block_end + 1])
         block_breaks = list(refined[block_start : block_end + 1])
+        block_offset = start_offset + block_start
         block_dicts = [
-            _token_to_row_dict(
-                t, start_offset + block_start + offset
-            )
-            or {}
+            _token_to_row_dict(t, block_offset + offset) or {}
             for offset, t in enumerate(block_tokens)
         ]
         block_score = scorer.score_block(block_dicts, block_breaks)
@@ -889,12 +887,13 @@ def refine_blocks(
 
         window_tokens = list(tokens[window_start : window_end + 1])
         window_breaks = list(refined[window_start : window_end + 1])
+        window_offset = start_offset + window_start
         baseline_score = _score_path(
             window_tokens,
             window_breaks,
             scorer,
             cfg,
-            start_offset=start_offset + window_start,
+            start_offset=window_offset,
         )
 
         refine_beam = max(cfg.beam_width, LOCAL_REFINEMENT_MIN_BEAM)
@@ -903,7 +902,7 @@ def refine_blocks(
             window_tokens,
             scorer,
             refine_cfg,
-            start_offset=start_offset + window_start,
+            start_offset=window_offset,
         )
         candidate_breaks = candidate_segmenter.run()
         candidate_score = candidate_segmenter.last_path_score
@@ -913,7 +912,7 @@ def refine_blocks(
                 candidate_breaks,
                 scorer,
                 cfg,
-                start_offset=start_offset + window_start,
+                start_offset=window_offset,
             )
 
         if candidate_score >= baseline_score + LOCAL_REFINEMENT_IMPROVEMENT:
