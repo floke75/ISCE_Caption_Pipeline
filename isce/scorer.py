@@ -24,7 +24,17 @@ The scoring is divided into two main components:
 from __future__ import annotations
 from typing import Dict, Optional
 
-from .model_builder import bin_pause_z, punct_class, bin_rel_pos
+from .model_builder import (
+    bin_pause_z,
+    punct_class,
+    bin_rel_pos,
+    lemma_bigram_key,
+    tag_bigram_key,
+    morph_bigram_key,
+    dep_bigram_key,
+    head_position_key,
+    dependency_link_key,
+)
 from .config import Config
 from .types import BreakType, TokenRow, TransitionContext
 
@@ -141,6 +151,12 @@ class Scorer:
         
         pos_bigram = f"{token.get('pos', 'none')}|{nxt.get('pos', 'none')}"
         pb_key = f"pb:{pos_bigram}"
+        lemma_key = lemma_bigram_key(token, nxt)
+        tag_key = tag_bigram_key(token, nxt)
+        morph_key = morph_bigram_key(token, nxt)
+        dep_key = dep_bigram_key(token, nxt)
+        head_pos_key = head_position_key(token)
+        head_link_key = dependency_link_key(token, nxt)
         
         is_cap_mid = token.get('w', '') and token['w'][0].isupper() and not token.get('is_sentence_initial', False)
         splits_cap_pair = bool(is_cap_mid and nxt.get('w', '') and nxt['w'][0].isupper() and not nxt.get('is_sentence_initial', False))
@@ -156,13 +172,18 @@ class Scorer:
         # --- Step 1: Calculate the score from all learned weights ---
         for outcome in scores.keys():
             learned_score = (
-                self._get_weight("prosody", pz_bin, outcome) +
-                self._get_weight("punctuation", pc_class, outcome) +
-                self._get_weight("position", rp_bin, outcome) +
-                self._get_weight("syntax", pb_key, outcome) +
-                self._get_weight("capitalization", cap_key, outcome) +
-                self._get_weight("cohesion", glue_key, outcome) +
-                self._get_weight("structural_heuristics", dangling_key, outcome)
+                self._get_weight("prosody", pz_bin, outcome)
+                + self._get_weight("punctuation", pc_class, outcome)
+                + self._get_weight("position", rp_bin, outcome)
+                + self._get_weight("syntax", pb_key, outcome)
+                + self._get_weight("lemma", lemma_key, outcome)
+                + self._get_weight("tag", tag_key, outcome)
+                + self._get_weight("morphology", morph_key, outcome)
+                + self._get_weight("dependency", dep_key, outcome)
+                + self._get_weight("dependency", head_pos_key, outcome)
+                + self._get_weight("dependency", head_link_key, outcome)
+                + self._get_weight("capitalization", cap_key, outcome)
+                + self._get_weight("cohesion", glue_key, outcome)
             )
             interaction_score = (
                 self._get_weight("interaction_punct_pause", interact_pp_key, outcome) +
@@ -176,10 +197,12 @@ class Scorer:
         dash_key = f"starts_with_dash:{dash_flag}"
 
         for outcome in scores.keys():
-            scores[outcome] += self.sl.get("structure", 1.0) * (
-                self._get_weight("speaker_change_feature", sc_key, outcome) +
-                self._get_weight("structural_heuristics", dash_key, outcome)
+            structural_score = (
+                self._get_weight("speaker_change_feature", sc_key, outcome)
+                + self._get_weight("structural_heuristics", dash_key, outcome)
+                + self._get_weight("structural_heuristics", dangling_key, outcome)
             )
+            scores[outcome] += self.sl.get("structure", 1.0) * structural_score
 
         # Apply the powerful, non-statistical "nudges"
         if token.get("speaker_change") or token.get("starts_with_dialogue_dash"):

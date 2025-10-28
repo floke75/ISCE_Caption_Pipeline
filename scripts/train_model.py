@@ -117,7 +117,10 @@ def get_full_feature_table_and_rows(corpus_paths: list[str], cfg: Config) -> tup
         except (json.JSONDecodeError, FileNotFoundError) as e:
             print(f"\nWarning: Skipping file {path} due to error: {e}")
             continue
-        
+
+        for idx, token in enumerate(tokens):
+            token.setdefault("token_index", idx)
+
         for i in range(len(tokens) - 1):
             token = tokens[i]
             nxt = tokens[i+1]

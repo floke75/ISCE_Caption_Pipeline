@@ -38,23 +38,107 @@ LOCAL_REFINEMENT_IMPROVEMENT = 0.5
 BALANCE_RATIO_THRESHOLD = 2.5
 
 
-def _token_to_row_dict(token: Optional[Token]) -> Optional[dict[str, Any]]:
-    """Project a token dataclass into the dictionary payload expected by ``Scorer``."""
+def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[int] = None) -> Optional[dict[str, Any]]:
+    """Normalise token-like objects into scorer-ready dictionaries.
+
+    Parameters
+    ----------
+    token:
+        Either a :class:`~isce.types.Token` instance or a dictionary already in
+        scorer format.
+    idx:
+        Optional numeric index to store under ``token_index`` when the payload
+        does not yet advertise one.  The caller should pass the absolute token
+        position relative to the original transcript so dependency-aware feature
+        helpers can derive repeatable keys.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        A shallow copy of ``token`` as a dictionary, or ``None`` when ``token``
+        itself is ``None``.
+
+    Notes
+    -----
+    ``token_index`` is a critical field for dependency-derived feature keys such
+    as ``head_position_key`` and ``dependency_link_key``.  Carrying the index
+    through every scoring path ensures reconciled and refined segmentations see
+    the same feature activations as the primary beam.
+    """
 
     if token is None:
         return None
-    return dict(token.__dict__)
+
+    if isinstance(token, dict):
+        payload: dict[str, Any] = {k: v for k, v in token.items()}
+    else:
+        payload = dict(token.__dict__)
+
+    # Normalise the token index so downstream feature helpers receive a stable
+    # integer. Token payloads pulled straight from JSON occasionally expose the
+    # index as a string (or omit it entirely). In that case we coerce the value
+    # to ``int`` or fall back to the supplied ``idx`` when available. The
+    # fallback mirrors :func:`_tokens_to_dicts` in :mod:`isce.postprocess` so the
+    # scorer sees consistent numbering whether we are evaluating the primary
+    # beam, a refinement slice, or a reversed sequence.
+    token_index = payload.get("token_index")
+    if token_index is not None:
+        try:
+            payload["token_index"] = int(token_index)
+        except (TypeError, ValueError):
+            payload["token_index"] = None
+
+    # The token's own index takes precedence. The passed ``idx`` is a fallback
+    # for contexts where we are creating the index for the first time or when
+    # the original payload could not be coerced to an integer.
+    if payload.get("token_index") is None and idx is not None:
+        payload["token_index"] = int(idx)
+
+    # Some legacy corpora contain non-string ``w`` values (for example numbers
+    # emitted by pandas when loading CSV exports). Converting them eagerly
+    # prevents downstream feature helpers from tripping over unexpected types.
+    if "w" in payload and payload["w"] is not None and not isinstance(payload["w"], str):
+        payload["w"] = str(payload["w"])
+
+    return payload
 
 
-def _get_lookahead_slice(tokens: Sequence[Token], start: int, width: int) -> Optional[tuple[dict[str, Any], ...]]:
-    """Return a tuple of upcoming token dictionaries for lookahead heuristics."""
+def _get_lookahead_slice(
+    tokens: Sequence[Token], start: int, width: int, offset: int = 0
+) -> Optional[tuple[dict[str, Any], ...]]:
+    """Return lookahead token payloads with stable indexes for scoring.
+
+    Parameters
+    ----------
+    tokens:
+        Full ordered sequence of :class:`~isce.types.Token` objects.
+    start:
+        Index of the first future token to include.
+    width:
+        Maximum number of lookahead entries to materialise.
+    offset:
+        Optional starting index used when the caller is operating on a slice of
+        the original transcript.  The resulting ``token_index`` values become
+        ``offset + start + i`` so dependency-aware feature helpers receive the
+        same numbering as the forward beam.
+
+    Returns
+    -------
+    tuple[dict[str, Any]] | None
+        Normalised token dictionaries suitable for :class:`~isce.scorer.Scorer`
+        consumption. ``None`` is returned when the lookahead width is zero or no
+        future tokens are available.
+    """
 
     if width <= 0:
         return None
     future = tokens[start : start + width]
     if not future:
         return None
-    return tuple(dict(token.__dict__) for token in future)
+    return tuple(
+        _token_to_row_dict(tokens[start + i], offset + start + i) or {}
+        for i in range(len(future))
+    )
 
 
 def _estimate_second_line_window(tokens: Sequence[Token], current_idx: int, cfg: Config) -> tuple[int, int]:
@@ -110,6 +194,10 @@ class Segmenter:
         Instance responsible for scoring transition and block level decisions.
     cfg:
         The loaded :class:`~isce.config.Config` describing constraints.
+    start_offset:
+        Absolute index of ``tokens[0]`` within the original transcript. This is
+        propagated to every scorer payload so dependency-aware feature keys stay
+        aligned when the segmenter operates on slices during refinement.
     beam:
         Mutable collection of the best :class:`PathState` hypotheses explored
         so far.
@@ -136,10 +224,12 @@ class Segmenter:
         This is cached so that refinement helpers can compare alternate
         segmentations without re-scoring from scratch.
     """
-    def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config):
+
+    def __init__(self, tokens: List[Token], scorer: Scorer, cfg: Config, start_offset: int = 0):
         self.tokens = tokens
         self.scorer = scorer
         self.cfg = cfg
+        self.start_offset = start_offset
         self.beam: List[PathState] = []
         self.line_len_leniency = self.scorer.sl.get("line_length_leniency", 1.0)
         self.orphan_leniency = self.scorer.sl.get("orphan_leniency", 1.0)
@@ -268,8 +358,13 @@ class Segmenter:
         provided only when the current path is still mid-first-line; otherwise
         the scorer can infer that the transition stays within the same line.
         """
+        block_start_idx = state.block_start_idx
+        pending_tokens_slice = self.tokens[block_start_idx : current_idx + 1]
+        pending_tokens = tuple(
+            _token_to_row_dict(t, self.start_offset + block_start_idx + i) or {}
+            for i, t in enumerate(pending_tokens_slice)
+        )
 
-        pending_tokens = tuple(dict(t.__dict__) for t in self.tokens[state.block_start_idx : current_idx + 1])
         projected_chars: int | None = None
         projected_words: int | None = None
         if state.line_num == 1 and current_idx + 1 < len(self.tokens):
@@ -310,22 +405,20 @@ class Segmenter:
         initial_state = PathState(score=0.0, line_num=1, line_len=len(self.tokens[0].w), block_start_idx=0, breaks=())
         self.beam = [initial_state]
 
-        for i, token in tqdm(enumerate(self.tokens), total=len(self.tokens), desc="Segmenting", unit="token"):
+        for i, token in tqdm(
+            enumerate(self.tokens), total=len(self.tokens), desc="Segmenting", unit="token"
+        ):
             candidates: List[PathState] = []
             is_last_token = (i == len(self.tokens) - 1)
             nxt = self.tokens[i + 1] if not is_last_token else None
 
-            token_dict = dict(token.__dict__)
-            nxt_dict = dict(nxt.__dict__) if nxt else None
+            token_dict = _token_to_row_dict(token, self.start_offset + i) or {}
+            nxt_dict = _token_to_row_dict(nxt, self.start_offset + i + 1)
 
             # Create the dictionary-based TokenRow required by the refactored scorer
-            lookahead_tokens = None
-            if self.lookahead_width > 0:
-                # Expose a shallow copy of the upcoming tokens so the scorer can
-                # apply lookahead heuristics without mutating the canonical list.
-                future_slice = self.tokens[i + 1 : i + 1 + self.lookahead_width]
-                if future_slice:
-                    lookahead_tokens = tuple(dict(t.__dict__) for t in future_slice)
+            lookahead_tokens = _get_lookahead_slice(
+                self.tokens, i + 1, self.lookahead_width, offset=self.start_offset
+            )
 
             scorer_row = TokenRow(
                 token=token_dict,
@@ -364,7 +457,10 @@ class Segmenter:
                 # Candidate: 'SB' (Block Break)
                 if self._is_hard_ok_SB(state, i):
                     block_tokens, block_breaks, _ = self._block_profiles(state, state.block_start_idx, i)
-                    block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+                    block_token_dicts = [
+                        _token_to_row_dict(t, self.start_offset + state.block_start_idx + offset) or {}
+                        for offset, t in enumerate(block_tokens)
+                    ]
                     block_score = self.scorer.score_block(block_token_dicts, block_breaks)
                     score = state.score + transition_scores["SB"] + block_score
                     next_word_len = len(nxt.w) if nxt else 0
@@ -383,7 +479,13 @@ class Segmenter:
                 block_tokens, block_breaks, lines = self._block_profiles(
                     fallback_state, fallback_state.block_start_idx, i
                 )
-                block_token_dicts = [dict(t.__dict__) for t in block_tokens]
+                block_token_dicts = [
+                    _token_to_row_dict(
+                        t, self.start_offset + fallback_state.block_start_idx + offset
+                    )
+                    or {}
+                    for offset, t in enumerate(block_tokens)
+                ]
                 block_score = self.scorer.score_block(block_token_dicts, block_breaks) if block_token_dicts else 0.0
                 next_word_len = len(nxt.w) if nxt else 0
                 violations = self._line_violations(lines)
@@ -423,7 +525,19 @@ class Segmenter:
 
 
 def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
-    """Create a reversed copy of the tokens suited for the backward beam."""
+    """Create reversed tokens with mirrored timing and metadata for backpasses.
+
+    The backward beam reuses :class:`Segmenter` without understanding that its
+    input originated from the end of the sequence.  We therefore construct a
+    deep copy of every token that inverts the temporal markers (``start`` /
+    ``end``), swaps pause metadata so the scorer still interprets hesitations
+    correctly, and recomputes ``relative_position`` to stay inside ``[0.0, 1.0]``.
+    Speaker changes are also recalculated so reconciliation logic can recognise
+    cross-speaker boundaries even while iterating in reverse order.  ``token_index``
+    is preserved when available so dependency-driven features continue to align
+    with the forward pass, letting :func:`_map_reversed_breaks` stitch the decisions
+    back together without feature drift.
+    """
     reversed_tokens: List[Token] = []
     for idx in range(len(tokens) - 1, -1, -1):
         token = tokens[idx]
@@ -440,6 +554,9 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
         reversed_tokens.append(
             replace(
                 token,
+                token_index=(
+                    token.token_index if token.token_index is not None else idx
+                ),
                 start=-token.end,
                 end=-token.start,
                 pause_after_ms=token.pause_before_ms,
@@ -455,7 +572,14 @@ def _reverse_tokens_for_bidirectional(tokens: List[Token]) -> List[Token]:
 
 
 def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
-    """Translate reverse-order break decisions back into forward order."""
+    """Translate reverse-order break decisions back into forward order.
+
+    ``Segmenter.run`` always marks the final decision as ``SB``.  When we reuse
+    it in reverse the closing ``SB`` refers to the *first* token in forward
+    time.  This helper flips the sequence, restores the trailing ``SB`` to the
+    real end of the caption, and replays every backward ``SB`` onto the matching
+    forward index so the reconciler compares equivalent breakpoints.
+    """
 
     n = len(reversed_breaks)
     if n == 0:
@@ -475,9 +599,22 @@ def _map_reversed_breaks(reversed_breaks: List[BreakType]) -> List[BreakType]:
 
 
 def _score_segmentation(
-    tokens: List[Token], breaks: List[BreakType], scorer: Scorer, cfg: Config
+    tokens: List[Token],
+    breaks: List[BreakType],
+    scorer: Scorer,
+    cfg: Config,
+    start_offset: int = 0,
 ) -> float:
-    """Calculate holistic scores for an entire segmentation sequence."""
+    """Calculate holistic scores for an entire segmentation sequence.
+
+    The reconciler and refinement stages use this helper to compare candidate
+    break sequences against the beam's best path.  We rebuild the dictionary
+    payloads the scorer expects—including ``token_index``—so the
+    dependency-derived features activated in :mod:`isce.scorer` receive the same
+    inputs regardless of which stage is performing the evaluation.  Keeping this
+    parity prevents bidirectional reconciliation from favouring transitions that
+    would later degrade once dependency weights apply.
+    """
 
     total = 0.0
     block_tokens: List[Token] = []
@@ -492,14 +629,17 @@ def _score_segmentation(
 
         nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
         row = TokenRow(
-            token=_token_to_row_dict(token) or {},
-            nxt=_token_to_row_dict(nxt),
+            token=_token_to_row_dict(token, start_offset + idx) or {},
+            nxt=_token_to_row_dict(nxt, start_offset + idx + 1),
             feats=None,
-            lookahead=_get_lookahead_slice(tokens, idx + 1, cfg.lookahead_width),
+            lookahead=_get_lookahead_slice(
+                tokens, idx + 1, cfg.lookahead_width, offset=start_offset
+            ),
         )
 
         pending_tokens = tuple(
-            dict(t.__dict__) for t in tokens[block_start : idx + 1]
+            _token_to_row_dict(t, start_offset + block_start + offset) or {}
+            for offset, t in enumerate(tokens[block_start : idx + 1])
         )
         projected_chars: Optional[int]
         projected_words: Optional[int]
@@ -518,7 +658,13 @@ def _score_segmentation(
         total += transition_scores.get(br, 0.0)
 
         if br == "SB":
-            block_dicts = [dict(t.__dict__) for t in block_tokens]
+            block_dicts = [
+                _token_to_row_dict(
+                    t, start_offset + block_start + offset
+                )
+                or {}
+                for offset, t in enumerate(block_tokens)
+            ]
             total += scorer.score_block(block_dicts, block_breaks)
             block_tokens = []
             block_breaks = []
@@ -599,10 +745,19 @@ def _score_path(
     breaks: Sequence[BreakType],
     scorer: Scorer,
     cfg: Config,
+    start_offset: int = 0,
 ) -> float:
-    """Convenience wrapper mirroring :func:`_score_segmentation` for slices."""
+    """Score a token/break slice with full dependency-aware context.
 
-    return _score_segmentation(list(tokens), list(breaks), scorer, cfg)
+    Refinement windows call this wrapper so they can operate on lightweight
+    slices without duplicating the projection logic in
+    :func:`_score_segmentation`.  Passing ``start_offset`` ensures that the
+    generated ``token_index`` values line up with the original transcript,
+    allowing dependency keys such as ``head_position_key`` to remain stable
+    during local what-if evaluations.
+    """
+
+    return _score_segmentation(list(tokens), list(breaks), scorer, cfg, start_offset)
 
 
 def _reconcile_bidirectional_breaks(
@@ -672,6 +827,7 @@ def refine_blocks(
     breaks: Sequence[BreakType],
     scorer: Scorer,
     cfg: Config,
+    start_offset: int = 0,
 ) -> List[BreakType]:
     """Re-run targeted refinement over low-scoring or lopsided blocks.
 
@@ -680,7 +836,12 @@ def refine_blocks(
     model a second chance by expanding a local window with a wider beam and
     replaying the search.  Only blocks that look suspicious—single-token cues,
     negative scorer feedback, or severe balance ratios—are reconsidered so the
-    routine stays fast enough for interactive use.
+    routine stays fast enough for interactive use.  Candidate windows are scored
+    with :func:`_score_path`, which rebuilds ``token_index``-aware payloads so any
+    dependency features contribute consistently between the primary pass and the
+    local what-if evaluation.  ``start_offset`` lets callers operate on slices of
+    the original transcript while keeping ``token_index`` values aligned with the
+    global token order, preserving the dependency-derived scorer features.
     """
 
     if not tokens or not breaks:
@@ -706,7 +867,11 @@ def refine_blocks(
         block_start, block_end = boundaries[idx]
         block_tokens = list(tokens[block_start : block_end + 1])
         block_breaks = list(refined[block_start : block_end + 1])
-        block_dicts = [dict(t.__dict__) for t in block_tokens]
+        block_offset = start_offset + block_start
+        block_dicts = [
+            _token_to_row_dict(t, block_offset + offset) or {}
+            for offset, t in enumerate(block_tokens)
+        ]
         block_score = scorer.score_block(block_dicts, block_breaks)
 
         if not _should_refine_block(block_tokens, block_breaks, block_score):
@@ -722,15 +887,33 @@ def refine_blocks(
 
         window_tokens = list(tokens[window_start : window_end + 1])
         window_breaks = list(refined[window_start : window_end + 1])
-        baseline_score = _score_path(window_tokens, window_breaks, scorer, cfg)
+        window_offset = start_offset + window_start
+        baseline_score = _score_path(
+            window_tokens,
+            window_breaks,
+            scorer,
+            cfg,
+            start_offset=window_offset,
+        )
 
         refine_beam = max(cfg.beam_width, LOCAL_REFINEMENT_MIN_BEAM)
         refine_cfg = replace(cfg, beam_width=refine_beam, enable_refinement_pass=False)
-        candidate_segmenter = Segmenter(window_tokens, scorer, refine_cfg)
+        candidate_segmenter = Segmenter(
+            window_tokens,
+            scorer,
+            refine_cfg,
+            start_offset=window_offset,
+        )
         candidate_breaks = candidate_segmenter.run()
         candidate_score = candidate_segmenter.last_path_score
         if candidate_score is None:
-            candidate_score = _score_path(window_tokens, candidate_breaks, scorer, cfg)
+            candidate_score = _score_path(
+                window_tokens,
+                candidate_breaks,
+                scorer,
+                cfg,
+                start_offset=window_offset,
+            )
 
         if candidate_score >= baseline_score + LOCAL_REFINEMENT_IMPROVEMENT:
             refined[window_start : window_end + 1] = candidate_breaks

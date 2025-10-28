@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import math
 import statistics as stats
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -70,6 +70,100 @@ def log_odds(p: float, eps: float = 1e-6) -> float:
     """
     p = min(1 - eps, max(eps, p))
     return math.log(p / (1 - p))
+
+# --- Feature helpers shared with the scorer ---
+def _sanitize_value(value: Optional[str]) -> str:
+    """Normalise spaCy feature strings for stable key generation."""
+    if value is None:
+        return "none"
+    text = str(value).strip()
+    if not text:
+        return "none"
+    return text.lower().replace("|", "+").replace(" ", "_")
+
+
+def _normalize_morph(value: Optional[str]) -> str:
+    """Canonicalise morphological feature strings."""
+    if value is None:
+        return "none"
+    text = str(value).strip()
+    if not text:
+        return "none"
+    parts = [part.strip().lower().replace(" ", "_") for part in text.split("|") if part.strip()]
+    if not parts:
+        return "none"
+    parts.sort()
+    return "+".join(part.replace("|", "+") for part in parts)
+
+
+def lemma_bigram_key(token: dict, nxt: Optional[dict]) -> str:
+    return f"lb:{_sanitize_value(token.get('lemma'))}|{_sanitize_value((nxt or {}).get('lemma'))}"
+
+
+def tag_bigram_key(token: dict, nxt: Optional[dict]) -> str:
+    return f"tb:{_sanitize_value(token.get('tag'))}|{_sanitize_value((nxt or {}).get('tag'))}"
+
+
+def morph_bigram_key(token: dict, nxt: Optional[dict]) -> str:
+    return f"mb:{_normalize_morph(token.get('morph'))}|{_normalize_morph((nxt or {}).get('morph'))}"
+
+
+def dep_bigram_key(token: dict, nxt: Optional[dict]) -> str:
+    return f"db:{_sanitize_value(token.get('dep'))}|{_sanitize_value((nxt or {}).get('dep'))}"
+
+
+def head_position_key(token: dict) -> str:
+    token_idx = token.get("token_index")
+    head_idx = token.get("head_idx")
+    try:
+        token_idx = int(token_idx) if token_idx is not None else None
+        head_idx = int(head_idx) if head_idx is not None else None
+    except (TypeError, ValueError):
+        return "head_pos:unknown"
+
+    if token_idx is None or head_idx is None:
+        return "head_pos:unknown"
+
+    diff = head_idx - token_idx
+    if diff == 0:
+        bucket = "self"
+    elif diff == 1:
+        bucket = "next"
+    elif diff == -1:
+        bucket = "prev"
+    elif diff > 1:
+        bucket = "ahead"
+    else:
+        bucket = "back"
+    return f"head_pos:{bucket}"
+
+
+def dependency_link_key(token: dict, nxt: Optional[dict]) -> str:
+    token_idx = token.get("token_index")
+    nxt = nxt or {}
+    nxt_idx = nxt.get("token_index")
+    head_idx = token.get("head_idx")
+    nxt_head_idx = nxt.get("head_idx")
+
+    try:
+        token_idx = int(token_idx) if token_idx is not None else None
+        nxt_idx = int(nxt_idx) if nxt_idx is not None else None
+        head_idx = int(head_idx) if head_idx is not None else None
+        nxt_head_idx = int(nxt_head_idx) if nxt_head_idx is not None else None
+    except (TypeError, ValueError):
+        return "dep_link:none"
+
+    if token_idx is None or nxt_idx is None:
+        return "dep_link:none"
+
+    link = "none"
+    if head_idx == nxt_idx:
+        link = "token->next"
+    elif nxt_head_idx == token_idx:
+        link = "next->token"
+
+    return f"dep_link:{link}"
+
 
 # --- derive_constraints function (Updated for Dictionary Input) ---
 def derive_constraints(corpus_paths: List[str], fallback_cfg: Config) -> Dict[str, Any]:
@@ -197,11 +291,22 @@ def create_feature_row(row: TokenRow, cfg: Config) -> dict:
         "rel_pos_bin": bin_rel_pos(token.get("relative_position")),
         "break_before_glue": str(token.get("num_unit_glue", False)),
         "is_dangling_eos": str(token.get("is_dangling_eos", False)),
-        "outcome": token.get("break_type"),
+        "outcome": str(token.get("break_type") or "O"),
         "speaker_change": str(token.get("speaker_change", False)),
         "starts_with_dash": str(token.get("starts_with_dialogue_dash", False)),
     }
-    
+
+    base_features.update(
+        {
+            "lemma_bigram": lemma_bigram_key(token, nxt),
+            "tag_bigram": tag_bigram_key(token, nxt),
+            "morph_bigram": morph_bigram_key(token, nxt),
+            "dep_bigram": dep_bigram_key(token, nxt),
+            "head_position": head_position_key(token),
+            "head_link": dependency_link_key(token, nxt),
+        }
+    )
+
     base_features['interact_punct_pause'] = f"pp:{base_features['punct_class']}_{base_features['pause_z_bin']}"
     if base_features['punct_class'] in ['p:comma', 'p:final']:
         base_features['interact_punct_syntax'] = f"ps:{base_features['punct_class']}_{base_features['pos_bigram']}"
@@ -250,6 +355,10 @@ def build_weights(df: pd.DataFrame, cfg: Config, alpha: float = 0.1, sample_weig
         "prosody": ["pause_z_bin"],
         "punctuation": ["punct_class"],
         "syntax": ["pos_bigram"],
+        "lemma": ["lemma_bigram"],
+        "tag": ["tag_bigram"],
+        "morphology": ["morph_bigram"],
+        "dependency": ["dep_bigram", "head_position", "head_link"],
         "capitalization": ["splits_capital"],
         "cohesion": ["break_before_glue"],
         "position": ["rel_pos_bin"],

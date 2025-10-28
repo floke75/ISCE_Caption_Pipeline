@@ -17,7 +17,7 @@ What it adds:
   - Break labels from SRT newlines: O / LB / LB_HARD / SB
   - Per-token break_type (LB_HARD collapsed to LB)
   - spaCy inline: pos/lemma/tag/morph (if spaCy available)
-  - Optional spaCy dependencies: dep, head_i (if enabled and parser is available)
+  - Optional spaCy dependencies: dep, head_idx (if enabled and parser is available)
   - Optional vectors sidecar (.npy, float16) + pointer in meta
 
 SRT dash normalization (in-memory ONLY, never touches your file on disk):
@@ -91,7 +91,7 @@ SETTINGS: Dict[str, Any] = {
     "spacy": {
         "enable": True,                     # turn off to skip spaCy entirely
         "model": "sv_core_news_lg",         # Swedish core model (has parser + vectors)
-        "add_dependencies": True,           # dep, head_i
+        "add_dependencies": True,           # dep, head_idx
         "write_vectors_npy": True,          # save vectors sidecar
     },
 }
@@ -720,10 +720,10 @@ def build_training_pair(
 
                 if want_deps and ("parser" in nlp.pipe_names):
                     try:
-                        tgt["dep"]    = tok.dep_ or None
-                        tgt["head_i"] = int(tok.head.i)
+                        tgt["dep"]     = tok.dep_ or None
+                        tgt["head_idx"] = int(tok.head.i)
                         if "dep" not in added_fields:    added_fields.append("dep")
-                        if "head_i" not in added_fields: added_fields.append("head_i")
+                        if "head_idx" not in added_fields: added_fields.append("head_idx")
                     except Exception:
                         pass
 
@@ -789,8 +789,8 @@ def build_training_pair(
                 "morph": t.get("morph"),
 
                 # Optional deps
-                "dep":    t.get("dep"),
-                "head_i": t.get("head_i"),
+                "dep":     t.get("dep"),
+                "head_idx": t.get("head_idx"),
 
                 # NEW: collapsed per-token break marker (LB_HARD → LB)
                 "break_type": _label_to_break_type(labels[i]),
