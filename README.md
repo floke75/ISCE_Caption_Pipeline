@@ -190,7 +190,8 @@ ISCE uses two main configuration files stored in the repository root. The UI bac
 Several lightweight passes work together to keep the generated subtitles clean without sacrificing operator control:
 
 * **Lookahead-aware beam search:** The segmenter now forwards a small window of future tokens to the scorer so it can anticipate
-  upcoming pauses, punctuation, or speaker changes before committing to a break.
+  upcoming pauses, punctuation, or speaker changes before committing to a break. For a code-level walkthrough of how payloads
+  and indexes propagate, see [`docs/beam_search_walkthrough.md`](docs/beam_search_walkthrough.md).
 * **Bidirectional reconciliation:** When enabled, the pipeline runs the beam search forward and backward, then blends the
   decisions while keeping whichever side produces the higher-scoring segmentation.
 * **Local refinement pass:** Particularly lopsided or low-scoring blocks are revisited with a wider beam and cached path scores,

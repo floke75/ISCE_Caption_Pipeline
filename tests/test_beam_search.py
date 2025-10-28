@@ -1,3 +1,13 @@
+"""Targeted unit tests for the beam-search segmentation helpers.
+
+The suite focuses on the lower-level utilities that orchestrate beam search,
+bidirectional reconciliation, and refinement.  Rather than integrating the
+entire scoring stack, the tests rely on small mock scorer implementations that
+expose only the behaviour under examination (for example, a scorer that records
+``token_index`` propagation).  This keeps the assertions readable for newcomers
+without sacrificing coverage of subtle control-flow edges.
+"""
+
 import unittest
 from collections import Counter
 from dataclasses import replace
@@ -20,6 +30,15 @@ from isce.types import Token
 
 
 class DummyScorer:
+    """Minimal scorer that discourages breaks on selected tokens.
+
+    ``DummyScorer`` keeps the transition logic simple so the tests can reason
+    about which branch of the segmenter should win without juggling unrelated
+    guardrails.  It penalises ``LB``/``SB`` transitions on neutral words, but
+    exposes a narrow preference for words ending in ``"0"`` or ``"2"`` so that
+    the forward beam exhibits predictable behaviour.
+    """
+
     def __init__(self):
         self.sl = {
             "line_length_leniency": 1.0,
@@ -50,6 +69,15 @@ class DummyScorer:
 
 
 class BlockPreferenceScorer:
+    """Scorer that rewards specific block compositions.
+
+    Block-level scoring is notoriously tricky to assert through the primary
+    beam alone, so this helper isolates the scoring to the block stage.  The
+    implementation assigns positive or negative scores to a handful of toy
+    sequences, letting the tests verify that ``_score_path`` and
+    ``refine_blocks`` rebuild scorer payloads correctly.
+    """
+
     def __init__(self):
         self.sl = {
             "line_length_leniency": 1.0,
@@ -76,6 +104,8 @@ class BlockPreferenceScorer:
 
 
 class RefinementScorer:
+    """Transition scorer tuned to exercise refinement heuristics."""
+
     def __init__(self):
         self.sl = {
             "line_length_leniency": 1.0,
@@ -101,6 +131,8 @@ class RefinementScorer:
 
 
 class RecordingScorer:
+    """Utility scorer that records payloads for later inspection."""
+
     def __init__(self, single_word_line_penalty: float = 0.0):
         self.sl = {
             "line_length_leniency": 1.0,
@@ -122,6 +154,14 @@ class RecordingScorer:
 
 
 class TokenIndexRecordingScorer:
+    """Capture ``token_index`` values observed during scoring flows.
+
+    ``TokenIndexRecordingScorer`` mirrors the real scorer API but simply records
+    every index value it receives.  The dedicated test case uses the captured
+    sequences to confirm that ``token_index`` propagates through the forward,
+    bidirectional, and refinement passes without being rewritten.
+    """
+
     def __init__(self):
         self.sl = {
             "line_length_leniency": 1.0,
@@ -133,6 +173,7 @@ class TokenIndexRecordingScorer:
         self.reset()
 
     def reset(self) -> None:
+        """Clear the recorded index buffers between test runs."""
         self.transition_indices: list[int | None] = []
         self.pending_indices: list[tuple[int | None, ...]] = []
         self.lookahead_indices: list[tuple[int | None, ...] | None] = []
@@ -160,6 +201,7 @@ class TokenIndexRecordingScorer:
 
 
 def make_token(word: str, start: float, **overrides) -> Token:
+    """Helper to construct :class:`Token` instances for test scenarios."""
     defaults = dict(w=word, start=start, end=start + 0.2, speaker="A")
     defaults.update(overrides)
     return Token(**defaults)
@@ -190,6 +232,7 @@ def test_token_to_row_dict_normalises_index_and_word() -> None:
     assert payload["token_index"] == 9
 
 class TestBeamSearch(unittest.TestCase):
+    """Behavioural tests covering reconciliation and refinement pathways."""
     def test_reverse_tokens_flip_speaker_change(self) -> None:
         tokens = [
             make_token("hello", 0.0, speaker="A", speaker_change=True),
@@ -403,6 +446,7 @@ class TestBeamSearch(unittest.TestCase):
         self.assertEqual(scorer.block_token_indices, [[11, 12]])
 
     def test_token_index_propagates_through_all_scoring_paths(self) -> None:
+        """``token_index`` should remain stable through every scoring stage."""
         def chunk_sequence(seq, size):
             return [tuple(seq[i : i + size]) for i in range(0, len(seq), size)]
 
