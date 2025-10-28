@@ -10,7 +10,13 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from isce.config import Config
 from isce.model_builder import derive_constraints
-from scripts.train_model import partition_corpus_paths, get_full_feature_table_and_rows
+from isce.scorer import Scorer
+from isce.types import Engineered, TokenRow
+from scripts.train_model import (
+    partition_corpus_paths,
+    get_full_feature_table_and_rows,
+    sanitize_row_for_reweighting,
+)
 
 
 def _write_tokens(path: Path, tokens: list[dict]) -> None:
@@ -156,3 +162,82 @@ def test_get_full_feature_table_includes_spacy_features(tmp_path: Path) -> None:
     assert sparse_row["dep_bigram"] == "db:none|none"
     assert sparse_row["head_position"] == "head_pos:unknown"
     assert sparse_row["head_link"] == "dep_link:none"
+
+
+def _reweighting_config() -> Config:
+    return Config(
+        beam_width=1,
+        min_block_duration_s=0.0,
+        max_block_duration_s=10.0,
+        line_length_constraints={
+            "line": {"soft": 42, "hard": 45},
+            "block": {"soft": 84, "hard": 90},
+        },
+        min_chars_for_single_word_block=0,
+        sliders={},
+        paths={},
+        enable_bidirectional_pass=False,
+        lookahead_width=0,
+        enable_reflow=False,
+        allowed_single_word_proper_nouns=(),
+        enable_refinement_pass=False,
+    )
+
+
+def _base_token(**overrides):
+    token = {
+        "w": "Hello",
+        "pause_z": 0.0,
+        "relative_position": 0.5,
+        "pos": "INTJ",
+        "lemma": "hello",
+        "tag": "UH",
+        "morph": "",
+        "dep": "ROOT",
+        "head_idx": 0,
+        "num_unit_glue": False,
+        "is_dangling_eos": False,
+        "punct_after": None,
+        "speaker_change": False,
+        "starts_with_dialogue_dash": False,
+        "is_sentence_initial": False,
+    }
+    token.update(overrides)
+    return token
+
+
+def test_reweighting_sanitizes_structural_hint():
+    token = _base_token(is_llm_structural_break=True)
+    nxt = _base_token(w="world", lemma="world", is_llm_structural_break=True)
+    lookahead_token = _base_token(w="friend", lemma="friend", is_llm_structural_break=True)
+
+    row = TokenRow(
+        token=token,
+        nxt=nxt,
+        feats=Engineered(),
+        lookahead=(lookahead_token,),
+    )
+
+    sanitized = sanitize_row_for_reweighting(row)
+
+    # Ensure the sanitized payloads are clones with the hint disabled.
+    assert sanitized.token is not row.token
+    assert sanitized.nxt is not row.nxt
+    assert sanitized.lookahead is not None
+    assert sanitized.lookahead[0] is not lookahead_token
+    assert row.token["is_llm_structural_break"] is True
+    assert sanitized.token["is_llm_structural_break"] is False
+    assert sanitized.nxt["is_llm_structural_break"] is False
+    assert sanitized.lookahead[0]["is_llm_structural_break"] is False
+
+    cfg = _reweighting_config()
+    scorer = Scorer(weights={}, constraints={}, sliders={}, cfg=cfg)
+
+    boosted_scores = scorer.score_transition(row)
+    sanitized_scores = scorer.score_transition(sanitized)
+
+    boosted_delta = boosted_scores["SB"] - boosted_scores["O"]
+    sanitized_delta = sanitized_scores["SB"] - sanitized_scores["O"]
+
+    # Removing the hint should drop the SB-vs-O spread by twice the structure boost.
+    assert boosted_delta - sanitized_delta == pytest.approx(2 * scorer.structure_boost)

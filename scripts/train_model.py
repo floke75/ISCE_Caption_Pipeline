@@ -25,9 +25,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any, Optional, Tuple
+
 import pandas as pd
 from tqdm import tqdm
-from typing import Tuple
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -43,6 +44,42 @@ from isce.types import TokenRow, Engineered
 # REFACTORED DATA LOADING
 # =========================================
 RAW_FILENAME_MARKERS = (".raw.", ".raw_")
+
+
+def _clone_token_without_llm_hint(token: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    """Return a shallow copy of ``token`` with the LLM structural hint disabled."""
+
+    if token is None:
+        return None
+
+    cloned = dict(token)
+    cloned["is_llm_structural_break"] = False
+    return cloned
+
+
+def sanitize_row_for_reweighting(row: TokenRow) -> TokenRow:
+    """Clone ``row`` while removing inference-only structural hints for training.
+
+    Iterative reweighting re-scores the cached :class:`TokenRow` instances many
+    times.  Before invoking the scorer we intentionally suppress the
+    ``is_llm_structural_break`` hint so the evaluation depends solely on the
+    learned features.  Cloning keeps the original cached dictionaries intact for
+    subsequent iterations while the sanitized copy carries the training-only
+    adjustments.
+    """
+
+    sanitized_lookahead = (
+        tuple(_clone_token_without_llm_hint(future) for future in row.lookahead)
+        if row.lookahead
+        else None
+    )
+
+    return TokenRow(
+        token=_clone_token_without_llm_hint(row.token),
+        nxt=_clone_token_without_llm_hint(row.nxt),
+        feats=row.feats,
+        lookahead=sanitized_lookahead,
+    )
 
 
 def partition_corpus_paths(corpus_dir: Path) -> Tuple[list[Path], list[Path]]:
@@ -243,7 +280,11 @@ def main():
         
         predictions = []
         for row in tqdm(token_rows, desc=f"Predicting (Iter {i+1})"):
-            scores = scorer.score_transition(row)
+            # During reweighting we intentionally ignore the inference-only
+            # ``is_llm_structural_break`` hint so the evaluation reflects the
+            # learned model rather than the boosted cue metadata.
+            sanitized_row = sanitize_row_for_reweighting(row)
+            scores = scorer.score_transition(sanitized_row)
             prediction = max(scores, key=scores.get)
             predictions.append(prediction)
         
