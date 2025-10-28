@@ -1,3 +1,5 @@
+import copy
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -11,6 +13,8 @@ from build_training_pair_standalone import (
     engineer_features,
     load_asr_words,
     tokenize_srt_cues,
+    DEFAULT_SETTINGS,
+    process_file,
 )
 import spacy
 from spacy.vocab import Vocab
@@ -175,6 +179,60 @@ test
         self.assertEqual(tokens[0].get("lemma"), "hello")
         # Verify guardrail features
         self.assertTrue(tokens[0].get("speaker_change"))
+
+    def test_emit_asr_style_training_copy_preserves_breaks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+
+            srt_path = tmp_path / "lb_test.srt"
+            srt_content = (
+                "1\n"
+                "00:00:00,000 --> 00:00:02,000\n"
+                "Hello world\n"
+                "Line break\n\n"
+            )
+            srt_path.write_text(srt_content, encoding="utf-8")
+
+            asr_path = tmp_path / "lb_test.asr.json"
+            asr_words = {
+                "words": [
+                    {"w": "Hello", "start": 0.0, "end": 0.5, "speaker": "S1"},
+                    {"w": "world", "start": 0.5, "end": 1.0, "speaker": "S1"},
+                    {"w": "Line", "start": 1.0, "end": 1.5, "speaker": "S1"},
+                    {"w": "break", "start": 1.5, "end": 2.0, "speaker": "S1"},
+                ]
+            }
+            asr_path.write_text(json.dumps(asr_words), encoding="utf-8")
+
+            paths = {
+                "out_training_dir": tmp_path / "train_out",
+                "out_inference_dir": tmp_path / "infer_out",
+            }
+
+            settings = copy.deepcopy(DEFAULT_SETTINGS["build_pair"])
+            settings["spacy_enable"] = False
+            settings["emit_asr_style_training_copy"] = True
+
+            process_file(
+                primary_path=srt_path,
+                asr_reference_path=asr_path,
+                paths=paths,
+                settings=settings,
+            )
+
+            edited_path = paths["out_training_dir"] / "lb_test.train.words.json"
+            raw_path = paths["out_training_dir"] / "lb_test.train.raw.words.json"
+
+            self.assertTrue(edited_path.exists())
+            self.assertTrue(raw_path.exists())
+
+            edited_tokens = json.loads(edited_path.read_text(encoding="utf-8"))["tokens"]
+            raw_tokens = json.loads(raw_path.read_text(encoding="utf-8"))["tokens"]
+
+            edited_breaks = [token.get("break_type") for token in edited_tokens]
+            raw_breaks = [token.get("break_type") for token in raw_tokens]
+
+            self.assertEqual(raw_breaks, edited_breaks)
 
 
 if __name__ == "__main__":
