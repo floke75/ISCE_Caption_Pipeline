@@ -17,7 +17,10 @@ The training process involves several stages:
     c. The examples that the model gets wrong ("hard examples") are identified.
     d. The sample weight of these hard examples is increased.
     This forces the model in the next iteration to pay more attention to the
-    examples it previously failed on, leading to a more robust final model.
+    examples it previously failed on, leading to a more robust final model. The
+    scorer used during this evaluation now honours the same slider profile as
+    inference so boosts such as ``structure_boost`` influence both paths
+    consistently.
 4.  **Final Model Saving**: After the final iteration, the script saves the
     fully trained model weights.
 """
@@ -175,6 +178,18 @@ def get_full_feature_table_and_rows(corpus_paths: list[str], cfg: Config) -> tup
             
     return pd.DataFrame(all_breakpoints_data), all_token_rows
 
+
+def _build_training_scorer(weights: dict[str, Any], cfg: Config) -> Scorer:
+    """Construct a :class:`Scorer` using the training-time slider profile."""
+
+    return Scorer(
+        weights=weights,
+        constraints={},
+        sliders=dict(cfg.sliders),
+        cfg=cfg,
+    )
+
+
 def main():
     """
     Main entry point for the command-line model training script.
@@ -276,7 +291,7 @@ def main():
             break
 
         print("Evaluating model on training data to find hard examples...")
-        scorer = Scorer(weights=current_weights, constraints={}, sliders={}, cfg=cfg)
+        scorer = _build_training_scorer(current_weights, cfg)
         
         predictions = []
         for row in tqdm(token_rows, desc=f"Predicting (Iter {i+1})"):

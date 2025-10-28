@@ -10,12 +10,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from isce.config import Config
 from isce.model_builder import derive_constraints
-from isce.scorer import Scorer
 from isce.types import Engineered, TokenRow
 from scripts.train_model import (
     partition_corpus_paths,
     get_full_feature_table_and_rows,
     sanitize_row_for_reweighting,
+    _build_training_scorer,
 )
 
 
@@ -174,7 +174,7 @@ def _reweighting_config() -> Config:
             "block": {"soft": 84, "hard": 90},
         },
         min_chars_for_single_word_block=0,
-        sliders={},
+        sliders={"structure_boost": 22.0},
         paths={},
         enable_bidirectional_pass=False,
         lookahead_width=0,
@@ -231,7 +231,8 @@ def test_reweighting_sanitizes_structural_hint():
     assert sanitized.lookahead[0]["is_llm_structural_break"] is False
 
     cfg = _reweighting_config()
-    scorer = Scorer(weights={}, constraints={}, sliders={}, cfg=cfg)
+    scorer = _build_training_scorer({}, cfg)
+    assert scorer.structure_boost == pytest.approx(cfg.sliders["structure_boost"])
 
     boosted_scores = scorer.score_transition(row)
     sanitized_scores = scorer.score_transition(sanitized)
@@ -240,4 +241,5 @@ def test_reweighting_sanitizes_structural_hint():
     sanitized_delta = sanitized_scores["SB"] - sanitized_scores["O"]
 
     # Removing the hint should drop the SB-vs-O spread by twice the structure boost.
-    assert boosted_delta - sanitized_delta == pytest.approx(2 * scorer.structure_boost)
+    expected_delta = 2 * cfg.sliders["structure_boost"]
+    assert boosted_delta - sanitized_delta == pytest.approx(expected_delta)
