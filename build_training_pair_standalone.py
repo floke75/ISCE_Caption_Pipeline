@@ -163,7 +163,13 @@ def morph_to_str(m) -> Optional[str]:
 # =========================
 _PUNCT_EDGES_RE = re.compile(r"^\W+|\W+$", flags=re.UNICODE)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
+_BR_TAG_RE = re.compile(r"<\s*br\s*/?\s*>", flags=re.IGNORECASE)
 _STYLE_TAG_RE = re.compile(r"\{[^}]*\}")
+
+
+def _convert_html_linebreaks(text: str) -> str:
+    """Normalizes HTML `<br>` tags into newline characters."""
+    return _BR_TAG_RE.sub("\n", text)
 
 def _norm_token(s: str) -> str:
     """Normalizes a token for robust comparison."""
@@ -173,7 +179,8 @@ def _norm_token(s: str) -> str:
 
 def strip_rendered_markup(text: str) -> str:
     """Removes markup tags that do not appear in rendered captions."""
-    without_styles = _STYLE_TAG_RE.sub("", text)
+    with_linebreaks = _convert_html_linebreaks(text)
+    without_styles = _STYLE_TAG_RE.sub("", with_linebreaks)
     without_html = _HTML_TAG_RE.sub("", without_styles)
     return without_html
 
@@ -787,7 +794,8 @@ def _assign_labels_using_timestamps(tokens: List[Dict[str, Any]], cues: List[Dic
         if not cue:
             continue
 
-        lines = [line.strip() for line in cue["text"].split("\n") if line.strip()]
+        normalized_text = _convert_html_linebreaks(cue["text"])
+        lines = [line.strip() for line in normalized_text.split("\n") if line.strip()]
         if len(lines) < 2:
             continue
 

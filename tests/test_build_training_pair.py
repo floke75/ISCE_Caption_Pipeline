@@ -138,6 +138,45 @@ test
             ["O", "SB", "O", "LB", "O", "SB"],
         )
 
+    def test_tokenize_srt_cues_preserves_br_linebreaks(self):
+        cues = [
+            {"id": 5, "start": 0.0, "end": 1.0, "text": "Hello<br>world"},
+            {"id": 6, "start": 1.0, "end": 2.5, "text": "Keep going<br />buddy <br>line"},
+        ]
+
+        tokens, cue_ids = tokenize_srt_cues(cues)
+
+        self.assertEqual([t["w"] for t in tokens], [
+            "Hello", "world", "Keep", "going", "buddy", "line",
+        ])
+        self.assertEqual(cue_ids, [5, 5, 6, 6, 6, 6])
+        self.assertEqual(
+            [t["is_llm_structural_break"] for t in tokens],
+            [True, False, False, True, True, False],
+        )
+
+    def test_generate_labels_from_cues_marks_lb_for_br_linebreaks(self):
+        cues = [{"id": 7, "start": 0.0, "end": 2.0, "text": "First<br>Second"}]
+        processed_tokens, cue_ids = tokenize_srt_cues(cues)
+
+        tokens = []
+        for idx, source_token in enumerate(processed_tokens):
+            tokens.append(
+                {
+                    "w": source_token["w"],
+                    "start": float(idx),
+                    "end": float(idx) + 0.5,
+                    "is_llm_structural_break": source_token.get("is_llm_structural_break", False),
+                }
+            )
+
+        alignment_sources = list(range(len(processed_tokens)))
+        settings = {"time_tolerance_s": 0.01}
+
+        generate_labels_from_cues(tokens, cues, settings, alignment_sources, cue_ids)
+
+        self.assertEqual([t.get("break_type") for t in tokens], ["LB", "SB"])
+
     @patch("build_training_pair_standalone.spacy.load")
     def test_engineer_features(self, mock_spacy_load):
         # Mock spacy model and its return values
