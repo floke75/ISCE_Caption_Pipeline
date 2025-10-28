@@ -194,6 +194,10 @@ class Segmenter:
         Instance responsible for scoring transition and block level decisions.
     cfg:
         The loaded :class:`~isce.config.Config` describing constraints.
+    start_offset:
+        Absolute index of ``tokens[0]`` within the original transcript. This is
+        propagated to every scorer payload so dependency-aware feature keys stay
+        aligned when the segmenter operates on slices during refinement.
     beam:
         Mutable collection of the best :class:`PathState` hypotheses explored
         so far.
