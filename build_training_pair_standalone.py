@@ -876,11 +876,13 @@ def process_file(
         cue_list: List[Dict[str, Any]],
         alignment_list: List[Optional[int]],
         cue_id_list: List[int],
-        is_training: bool
+        is_training: bool,
+        *,
+        reuse_existing_labels: bool = False,
     ) -> List[Dict[str, Any]]:
         """Applies speaker correction, labeling, and feature engineering."""
         correct_speaker_labels(token_list, settings)
-        if is_training:
+        if is_training and not reuse_existing_labels:
             generate_labels_from_cues(token_list, cue_list, settings, alignment_list, cue_id_list)
         engineer_features(token_list, settings)
 
@@ -912,7 +914,14 @@ def process_file(
                 # Mark this as a non-edited transcript
                 token["is_edited_transcript"] = False
 
-            final_simulated_tokens = _enrich_and_finalize(simulated_asr_tokens, cues, alignment_sources, cue_ids, is_training=True)
+            final_simulated_tokens = _enrich_and_finalize(
+                simulated_asr_tokens,
+                cues,
+                alignment_sources,
+                cue_ids,
+                is_training=True,
+                reuse_existing_labels=True,
+            )
             out_path_simulated = paths["out_training_dir"] / f"{base}.train.raw.words.json"
             _save_json({"tokens": final_simulated_tokens}, out_path_simulated)
             print(f"[OK] Wrote SIMULATED ASR training data to: {out_path_simulated.name}")
