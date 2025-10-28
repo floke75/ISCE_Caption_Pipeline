@@ -106,6 +106,27 @@ test
         self.assertEqual(len(alignment_sources), len(tokens))
         self.assertEqual(cue_ids, [])
 
+    def test_process_txt_preserves_br_break_hints(self):
+        txt_content = "Hello<br>world this is a test"
+        txt_file = self.test_dir / "test_breaks.txt"
+        with open(txt_file, "w") as f:
+            f.write(txt_content)
+
+        asr_words = load_asr_words(self.asr_file)
+        tokens, cues, alignment_sources, cue_ids = _process_txt(
+            primary_path=txt_file,
+            asr_words=asr_words,
+            settings={},
+        )
+
+        self.assertEqual([t["w"] for t in tokens], [
+            "Hello", "world", "this", "is", "a", "test",
+        ])
+        self.assertTrue(tokens[0]["is_llm_structural_break"])
+        self.assertFalse(tokens[-1]["is_llm_structural_break"])
+        for idx in range(1, len(tokens) - 1):
+            self.assertFalse(tokens[idx]["is_llm_structural_break"])
+
     def test_alignment_based_labeling_resists_timestamp_drift(self):
         cues = [
             {"id": 0, "start": 0.0, "end": 2.0, "text": "Hello world"},

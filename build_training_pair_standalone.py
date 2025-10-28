@@ -424,7 +424,8 @@ def _process_txt(
     """Handles the TXT-based inference case."""
     print(f"Loading TXT for inference from: {primary_path.name}")
     raw_text = primary_path.read_text(encoding="utf-8")
-    hint_groups = raw_text.strip().split('\n')
+    normalized_text = _convert_html_linebreaks(raw_text)
+    hint_groups = normalized_text.strip().split('\n')
 
     processed_tokens_with_hints = []
     for group in hint_groups:

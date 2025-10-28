@@ -121,6 +121,14 @@ except Exception:
 # -------------------------------
 # Small utilities / normalization
 # -------------------------------
+_BR_TAG_RE = re.compile(r"<\s*br\s*/?\s*>", flags=re.IGNORECASE)
+
+
+def _convert_html_linebreaks(text: str) -> str:
+    """Normalize HTML break tags so downstream line logic sees explicit newlines."""
+    return _BR_TAG_RE.sub("\n", str(text or ""))
+
+
 def _as_set(x) -> set:
     if isinstance(x, set): return x
     if isinstance(x, (list, tuple)): return set(x)
@@ -200,6 +208,7 @@ def srt_read(path: str, cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     for i, it in enumerate(srt):
         raw_text = (it.text or "").replace("\r", "")
+        raw_text = _convert_html_linebreaks(raw_text)
         lines = raw_text.splitlines()
 
         if do_clean and lines:
@@ -422,7 +431,8 @@ def assign_tokens_to_cues(tokens: List[Dict[str, Any]], cues: List[Dict[str, Any
     return ids
 
 def _cue_lines(text: str) -> list[str]:
-    return [ln.strip() for ln in (text or "").splitlines()]
+    normalized = _convert_html_linebreaks(text)
+    return [ln.strip() for ln in normalized.splitlines()]
 
 def _lb_boundary_index_for_cue(tokens_slice: list[dict], line1_len_chars: int) -> Optional[int]:
     """
