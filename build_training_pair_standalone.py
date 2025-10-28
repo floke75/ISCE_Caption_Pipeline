@@ -395,7 +395,7 @@ def load_asr_words(path: Path) -> List[Dict[str, Any]]:
 # =========================
 def _process_asr_only(
     asr_words: List[Dict[str, Any]]
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]], List[int]]:
     """Handles the ASR-only inference case."""
     print("Operating in ASR-only mode. Skipping primary text alignment.")
     tokens = [
@@ -409,11 +409,11 @@ def _process_asr_only(
         }
         for word in asr_words
     ]
-    return tokens, [], list(range(len(tokens)))
+    return tokens, [], list(range(len(tokens))), []
 
 def _process_txt(
     primary_path: Path, asr_words: List[Dict[str, Any]], settings: Dict
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]], List[int]]:
     """Handles the TXT-based inference case."""
     print(f"Loading TXT for inference from: {primary_path.name}")
     raw_text = primary_path.read_text(encoding="utf-8")
@@ -451,16 +451,16 @@ def _process_txt(
     for token in tokens:
         token["is_edited_transcript"] = True
 
-    return tokens, [], alignment_sources
+    return tokens, [], alignment_sources, []
 
 
 def _process_srt(
     primary_path: Path, asr_words: List[Dict[str, Any]], settings: Dict
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Optional[int]], List[int]]:
     """Handles the SRT-based training case."""
     print(f"Loading SRT for training from: {primary_path.name}")
     cues = read_srt_cues(primary_path)
-    processed_tokens_with_hints, _ = tokenize_srt_cues(cues)
+    processed_tokens_with_hints, cue_ids = tokenize_srt_cues(cues)
     primary_tokens = [d['w'] for d in processed_tokens_with_hints]
 
     print("Aligning primary text to ASR reference...")
@@ -482,7 +482,7 @@ def _process_srt(
     for token in tokens:
         token["is_edited_transcript"] = True
 
-    return tokens, cues, alignment_sources
+    return tokens, cues, alignment_sources, cue_ids
 
 # =========================
 # Speaker Correction Logic
@@ -716,26 +716,52 @@ def serialize_token(token: Dict[str, Any], token_index: int, settings: Dict[str,
 # =========================
 # Labeling Logic (For Training Mode)
 # =========================
-def generate_labels_from_cues(tokens: List[Dict[str, Any]], cues: List[Dict[str, Any]], settings: Dict):
-    """
-    Generates ground-truth break labels for tokens based on SRT cues.
+def _assign_labels_using_alignment(
+    tokens: List[Dict[str, Any]],
+    cues: List[Dict[str, Any]],
+    alignment_sources: Optional[List[Optional[int]]],
+    cue_ids: Optional[List[int]],
+) -> bool:
+    """Assign labels by following the alignment back to the original cues."""
+    if not alignment_sources or not cue_ids:
+        return False
 
-    This function assigns each token to an SRT cue based on time proximity.
-    It then iterates through the tokens within each cue to assign `break_type`
-    labels ('O', 'LB', 'SB'). The last token of a cue is always 'SB'. If a
-    cue contains a newline, a token is marked as 'LB' at the approximate
-    position of the newline.
+    cue_to_tokens: Dict[int, List[Dict[str, Any]]] = {}
+    has_valid_mapping = False
 
-    Args:
-        tokens: The list of timed word dictionaries.
-        cues: The list of cue dictionaries read from the ground-truth SRT file.
-        settings: A configuration dictionary.
-    """
+    for idx, token in enumerate(tokens):
+        source_idx = alignment_sources[idx] if idx < len(alignment_sources) else None
+        cue_id = -1
+        if source_idx is not None and 0 <= source_idx < len(cue_ids):
+            cue_id = cue_ids[source_idx]
+            has_valid_mapping = True
+        token["cue_id"] = cue_id
+        token.setdefault("is_llm_structural_break", False)
+        token["break_type"] = "O"
+        cue_to_tokens.setdefault(cue_id, []).append(token)
+
+    if not has_valid_mapping:
+        return False
+
+    cue_id_set = {cue.get("id") for cue in cues}
+    for cue_id, cue_tokens in cue_to_tokens.items():
+        if cue_id not in cue_id_set or not cue_tokens:
+            continue
+        cue_tokens[-1]["break_type"] = "SB"
+        for token in cue_tokens:
+            if token.get("is_llm_structural_break") and token["break_type"] != "SB":
+                token["break_type"] = "LB"
+
+    return True
+
+
+def _assign_labels_using_timestamps(tokens: List[Dict[str, Any]], cues: List[Dict[str, Any]], settings: Dict):
+    """Fallback labeling that approximates cue membership using timestamps."""
     tol = settings.get("time_tolerance_s", 0.15)
     for token in tokens:
         mid_time = (token["start"] + token["end"]) / 2
         best_cue_id = -1
-        min_dist = float('inf')
+        min_dist = float("inf")
         for cue in cues:
             if cue["start"] - tol <= mid_time <= cue["end"] + tol:
                 best_cue_id = cue["id"]
@@ -746,25 +772,27 @@ def generate_labels_from_cues(tokens: List[Dict[str, Any]], cues: List[Dict[str,
                 best_cue_id = cue["id"]
         token["cue_id"] = best_cue_id
 
-    cue_to_tokens = {}
+    cue_to_tokens: Dict[int, List[Dict[str, Any]]] = {}
     for token in tokens:
         cue_id = token.get("cue_id", -1)
-        if cue_id not in cue_to_tokens: cue_to_tokens[cue_id] = []
-        cue_to_tokens[cue_id].append(token)
+        token["break_type"] = "O"
+        cue_to_tokens.setdefault(cue_id, []).append(token)
 
     for cue_id, cue_tokens in cue_to_tokens.items():
-        if not cue_tokens: continue
-        for t in cue_tokens: t["break_type"] = "O"
+        if not cue_tokens:
+            continue
         cue_tokens[-1]["break_type"] = "SB"
 
         cue = next((c for c in cues if c["id"] == cue_id), None)
-        if not cue: continue
+        if not cue:
+            continue
 
-        lines = [line.strip() for line in cue["text"].split('\n') if line.strip()]
-        if len(lines) < 2: continue
+        lines = [line.strip() for line in cue["text"].split("\n") if line.strip()]
+        if len(lines) < 2:
+            continue
 
         line1_clean = strip_rendered_markup(lines[0])
-        line1_text = re.sub(r'\s+', ' ', line1_clean).strip()
+        line1_text = re.sub(r"\s+", " ", line1_clean).strip()
         line1_char_len = len(line1_text)
 
         current_char_count = 0
@@ -774,6 +802,23 @@ def generate_labels_from_cues(tokens: List[Dict[str, Any]], cues: List[Dict[str,
                 if token["break_type"] != "SB":
                     token["break_type"] = "LB"
                 break
+
+
+def generate_labels_from_cues(
+    tokens: List[Dict[str, Any]],
+    cues: List[Dict[str, Any]],
+    settings: Dict,
+    alignment_sources: Optional[List[Optional[int]]] = None,
+    cue_ids: Optional[List[int]] = None,
+):
+    """Generate ground-truth break labels for training tokens."""
+    if not tokens:
+        return
+
+    if _assign_labels_using_alignment(tokens, cues, alignment_sources, cue_ids):
+        return
+
+    _assign_labels_using_timestamps(tokens, cues, settings)
 
 # =========================
 # Main Pipeline
@@ -811,13 +856,15 @@ def process_file(
     # --- Data Loading and Pre-processing ---
     tokens: List[Dict[str, Any]] = []
     cues: List[Dict[str, Any]] = []
+    alignment_sources: List[Optional[int]] = []
+    cue_ids: List[int] = []
 
     if asr_only_mode:
-        tokens, _, _ = _process_asr_only(asr_words)
+        tokens, _, alignment_sources, cue_ids = _process_asr_only(asr_words)
     elif is_training_mode:
-        tokens, cues, _ = _process_srt(primary_path, asr_words, settings)
+        tokens, cues, alignment_sources, cue_ids = _process_srt(primary_path, asr_words, settings)
     else: # TXT mode
-        tokens, _, _ = _process_txt(primary_path, asr_words, settings)
+        tokens, _, alignment_sources, cue_ids = _process_txt(primary_path, asr_words, settings)
 
     if not tokens:
         print("[WARN] Alignment produced no tokens. Skipping.")
@@ -827,12 +874,14 @@ def process_file(
     def _enrich_and_finalize(
         token_list: List[Dict[str, Any]],
         cue_list: List[Dict[str, Any]],
+        alignment_list: List[Optional[int]],
+        cue_id_list: List[int],
         is_training: bool
     ) -> List[Dict[str, Any]]:
         """Applies speaker correction, labeling, and feature engineering."""
         correct_speaker_labels(token_list, settings)
         if is_training:
-            generate_labels_from_cues(token_list, cue_list, settings)
+            generate_labels_from_cues(token_list, cue_list, settings, alignment_list, cue_id_list)
         engineer_features(token_list, settings)
 
         serialized_tokens = [
@@ -846,7 +895,7 @@ def process_file(
     if is_training_mode:
         # 1. Process the original, edited transcript
         print("\n--- Processing EDITED version for training ---")
-        edited_tokens = _enrich_and_finalize(tokens, cues, is_training=True)
+        edited_tokens = _enrich_and_finalize(tokens, cues, alignment_sources, cue_ids, is_training=True)
         out_path_edited = paths["out_training_dir"] / f"{base}.train.words.json"
         _save_json({"tokens": edited_tokens}, out_path_edited)
         print(f"[OK] Wrote EDITED training data to: {out_path_edited.name}")
@@ -863,7 +912,7 @@ def process_file(
                 # Mark this as a non-edited transcript
                 token["is_edited_transcript"] = False
 
-            final_simulated_tokens = _enrich_and_finalize(simulated_asr_tokens, cues, is_training=True)
+            final_simulated_tokens = _enrich_and_finalize(simulated_asr_tokens, cues, alignment_sources, cue_ids, is_training=True)
             out_path_simulated = paths["out_training_dir"] / f"{base}.train.raw.words.json"
             _save_json({"tokens": final_simulated_tokens}, out_path_simulated)
             print(f"[OK] Wrote SIMULATED ASR training data to: {out_path_simulated.name}")
@@ -871,7 +920,7 @@ def process_file(
             print("\n--- Skipping SIMULATED ASR copy (disabled via emit_asr_style_training_copy) ---")
 
     else: # Inference Mode
-        final_tokens = _enrich_and_finalize(tokens, cues, is_training=False)
+        final_tokens = _enrich_and_finalize(tokens, cues, alignment_sources, cue_ids, is_training=False)
         out_path = paths["out_inference_dir"] / f"{base}.enriched.json"
         _save_json({"tokens": final_tokens}, out_path)
         print(f"[OK] Wrote INFERENCE data to: {out_path.name}")

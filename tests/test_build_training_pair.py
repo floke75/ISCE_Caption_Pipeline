@@ -7,8 +7,10 @@ import pysrt
 from build_training_pair_standalone import (
     _process_srt,
     _process_txt,
+    generate_labels_from_cues,
     engineer_features,
     load_asr_words,
+    tokenize_srt_cues,
 )
 import spacy
 from spacy.vocab import Vocab
@@ -58,7 +60,7 @@ test
 
         # Run the processing
         asr_words = load_asr_words(self.asr_file)
-        tokens, cues, _ = _process_srt(
+        tokens, cues, alignment_sources, cue_ids = _process_srt(
             primary_path=srt_file,
             asr_words=asr_words,
             settings={},
@@ -74,6 +76,8 @@ test
         self.assertTrue(tokens[4]["is_llm_structural_break"])
         self.assertEqual(tokens[5]["w"], "test")
         self.assertFalse(tokens[5]["is_llm_structural_break"])
+        self.assertEqual(len(alignment_sources), len(tokens))
+        self.assertEqual(len(cue_ids), len(tokens))
 
     def test_process_txt(self):
         # Mock TXT file
@@ -84,7 +88,7 @@ test
 
         # Run the processing
         asr_words = load_asr_words(self.asr_file)
-        tokens, cues, _ = _process_txt(
+        tokens, cues, alignment_sources, cue_ids = _process_txt(
             primary_path=txt_file,
             asr_words=asr_words,
             settings={},
@@ -95,6 +99,40 @@ test
         self.assertEqual(tokens[0]["w"], "Hello")
         self.assertEqual(tokens[5]["w"], "test")
         self.assertFalse(tokens[1]["is_llm_structural_break"])
+        self.assertEqual(len(alignment_sources), len(tokens))
+        self.assertEqual(cue_ids, [])
+
+    def test_alignment_based_labeling_resists_timestamp_drift(self):
+        cues = [
+            {"id": 0, "start": 0.0, "end": 2.0, "text": "Hello world"},
+            {"id": 1, "start": 2.0, "end": 4.0, "text": "This is\nA test"},
+        ]
+        processed_tokens, cue_ids = tokenize_srt_cues(cues)
+
+        tokens = []
+        for idx, source_token in enumerate(processed_tokens):
+            tokens.append(
+                {
+                    "w": source_token["w"],
+                    "start": 100.0 + idx,
+                    "end": 100.5 + idx,
+                    "is_llm_structural_break": source_token.get("is_llm_structural_break", False),
+                }
+            )
+
+        alignment_sources = list(range(len(processed_tokens)))
+        settings = {"time_tolerance_s": 0.01}
+
+        generate_labels_from_cues(tokens, cues, settings, alignment_sources, cue_ids)
+
+        cue_id_sequence = [token.get("cue_id") for token in tokens]
+        break_type_sequence = [token.get("break_type") for token in tokens]
+
+        self.assertEqual(cue_id_sequence, [0, 0, 1, 1, 1, 1])
+        self.assertEqual(
+            break_type_sequence,
+            ["O", "SB", "O", "LB", "O", "SB"],
+        )
 
     @patch("build_training_pair_standalone.spacy.load")
     def test_engineer_features(self, mock_spacy_load):
