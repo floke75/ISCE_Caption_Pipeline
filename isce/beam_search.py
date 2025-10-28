@@ -42,11 +42,28 @@ BALANCE_RATIO_THRESHOLD = 2.5
 def _token_to_row_dict(token: Optional[Token | dict[str, Any]], idx: Optional[int] = None) -> Optional[dict[str, Any]]:
     """Normalise token-like objects into scorer-ready dictionaries.
 
-    The heavy lifting is delegated to :func:`~isce.token_utils.normalize_token_payload`
-    so both the beam search and the training pipeline apply identical
-    sanitisation rules.  We keep the helper local to preserve the existing
-    import surface and to document why the beam search depends on the utility
-    module.
+    Parameters
+    ----------
+    token:
+        Either a ``Token`` dataclass instance or a dictionary-like payload as
+        produced by the training corpus.  ``None`` inputs remain ``None`` so the
+        caller can safely skip optional lookahead rows.
+    idx:
+        Explicit token index to fall back on when the payload does not already
+        contain a ``token_index`` entry.  This mirrors the behaviour documented
+        in :func:`isce.token_utils.normalize_token_payload`.
+
+    Returns
+    -------
+    dict[str, Any] | None
+        Normalised token metadata suitable for :class:`~isce.scorer.Scorer`
+        consumption, or ``None`` when ``token`` itself was ``None``.
+
+    Notes
+    -----
+    All heavy lifting is delegated to :func:`~isce.token_utils.normalize_token_payload`
+    so that every subsystem—beam search, scorer, and training—shares a single
+    definition of "clean" token data.
     """
 
     return normalize_token_payload(token, idx)
@@ -91,7 +108,32 @@ def _get_lookahead_slice(
 
 
 def _estimate_second_line_window(tokens: Sequence[Token], current_idx: int, cfg: Config) -> tuple[int, int]:
-    """Estimate characters and words available for a prospective second line."""
+    """Estimate space for a second line when evaluating ``LB`` transitions.
+
+    Parameters
+    ----------
+    tokens:
+        Full list of tokens being segmented.
+    current_idx:
+        Index of the token immediately before the potential ``LB``.
+    cfg:
+        Active :class:`~isce.config.Config`.  Its soft target for line 2 length
+        is used as an upper bound for the exploratory window.
+
+    Returns
+    -------
+    tuple[int, int]
+        A ``(length, words)`` pair describing how many characters and whole
+        words could populate the second line before we hit the soft target or a
+        natural stopping point (speaker change, punctuation, etc.).
+
+    Notes
+    -----
+    This heuristic is intentionally conservative: it stops after two words,
+    encountering punctuation, or exceeding the length soft target.  The beam
+    search uses the estimate to decide whether an ``LB`` would lead to a badly
+    under-filled second line.
+    """
 
     if current_idx + 1 >= len(tokens):
         return 0, 0

@@ -47,7 +47,30 @@ RAW_FILENAME_MARKERS = (".raw.", ".raw_")
 
 
 def partition_corpus_paths(corpus_dir: Path) -> Tuple[list[Path], list[Path]]:
-    """Split corpus files into human-edited and simulated ASR variants."""
+    """Split training files into human-edited and simulated-ASR variants.
+
+    Parameters
+    ----------
+    corpus_dir:
+        Directory expected to contain ``*.train.words.json`` files.  Both the
+        hand-aligned transcripts and the optional ``*.raw`` synthetic variants
+        live side-by-side in this location.
+
+    Returns
+    -------
+    tuple[list[Path], list[Path]]
+        Two lists of paths ``(human_paths, raw_paths)`` filtered to exclude
+        unrelated JSON sidecars.  The first element contains the gold-standard
+        human alignments while the second contains WhisperX style synthetic
+        copies that can be optionally folded into training.
+
+    Notes
+    -----
+    The heavy filtering is intentionally duplicated here so that corpus
+    partitioning stays consistent with the old CLI behaviour.  The verbose
+    filtering steps prevent ``notes.json`` or other metadata sidecars from
+    sneaking into the training set and upsetting feature generation.
+    """
 
     human_paths: list[Path] = []
     raw_paths: list[Path] = []
@@ -83,28 +106,31 @@ def partition_corpus_paths(corpus_dir: Path) -> Tuple[list[Path], list[Path]]:
 
 
 def get_full_feature_table_and_rows(corpus_paths: list[str], cfg: Config) -> tuple[pd.DataFrame, list[TokenRow]]:
-    """
-    Loads and processes the entire training corpus into a feature DataFrame.
+    """Materialise feature tables and ``TokenRow`` objects from the corpus.
 
-    This function iterates through all the pre-enriched training JSON files in
-    the corpus. For each decision point (boundary between two tokens), it calls
-    `create_feature_row` to generate a flat dictionary of discrete features.
+    Parameters
+    ----------
+    corpus_paths:
+        Ordered collection of enriched ``*.train.words.json`` file paths.
+    cfg:
+        Loaded :class:`~isce.config.Config` containing feature engineering
+        settings.
 
-    It produces two key outputs:
-    1.  A pandas DataFrame where each row is a decision point and each column
-        is a feature. This is the primary input for the `build_weights` function.
-    2.  A parallel list of `TokenRow` objects, which is used during the
-        iterative reweighting process to re-score the training data with an
-        updated model.
+    Returns
+    -------
+    tuple[pd.DataFrame, list[TokenRow]]
+        * A pandas ``DataFrame`` with one row per decision point and columns for
+          every engineered feature.
+        * A list of :class:`~isce.types.TokenRow` instances mirroring the rows in
+          the DataFrame.  These objects are used during iterative reweighting to
+          rescore the corpus with fresh weights.
 
-    Args:
-        corpus_paths: A list of file paths to the training JSON files.
-        cfg: The main `Config` object.
-
-    Returns:
-        A tuple containing:
-        - The featurized pandas DataFrame.
-        - A parallel list of `TokenRow` objects.
+    Notes
+    -----
+    The function performs the exact same normalisation as the live scorer by
+    invoking :func:`isce.token_utils.normalize_token_payload` on every token
+    pair.  This keeps feature keys (for example, lemma bigrams) stable between
+    training and inference even when the source JSON has mixed types.
     """
     all_breakpoints_data = []
     all_token_rows = []

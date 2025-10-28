@@ -258,24 +258,31 @@ def derive_constraints(corpus_paths: List[str], fallback_cfg: Config) -> Dict[st
 
 # --- Centralized Feature Extraction Logic (Updated for Dictionary Input) ---
 def create_feature_row(row: TokenRow, cfg: Config) -> dict:
-    """
-    Creates a flat dictionary of discrete features for a single decision point.
+    """Create a flat dictionary of discrete features for one decision point.
 
-    This function takes a `TokenRow` (representing the boundary between two
-    tokens) and transforms its rich, continuous data into a set of discrete,
-    string-based features that can be used by the statistical model. It uses
-    the various `bin_*` and `*_class` helper functions to perform this
-    discretization. It also creates interaction features by combining
-    individual features.
+    Parameters
+    ----------
+    row:
+        :class:`~isce.types.TokenRow` describing the current token, the next
+        token, and their engineered context.
+    cfg:
+        Active :class:`~isce.config.Config`.  It is currently unused but kept in
+        the signature for future feature toggles.
 
-    Args:
-        row: The `TokenRow` object containing the current and next tokens as dicts.
-        cfg: The main `Config` object (currently unused but kept for future
-             compatibility).
+    Returns
+    -------
+    dict
+        Mapping of feature keys to discrete, stringified values ready for model
+        training.
 
-    Returns:
-        A dictionary where keys are feature names and values are the
-        discretized feature values for the given decision point.
+    Notes
+    -----
+    Both ``row.token`` and ``row.nxt`` are normalised through
+    :func:`isce.token_utils.normalize_token_payload` before any feature logic is
+    executed.  This keeps engineered keys (lemma bigrams, dependency links, and
+    so on) consistent regardless of whether the caller supplied dataclasses or
+    raw JSON dictionaries.  Interaction features are appended using predictable
+    prefixes (``pb:``, ``ps:``) to simplify downstream debugging.
     """
     token = normalize_token_payload(row.token) or {}
     nxt = normalize_token_payload(row.nxt) or {}
