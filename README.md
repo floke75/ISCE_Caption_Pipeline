@@ -312,10 +312,20 @@ Structurally identical to the enriched tokens, but `break_type` is pre-populated
 
 Training never looks at WhisperX-only hypotheses when deciding where a cue should end. Instead, we rebuild the human editor’s structure directly from the SRT:
 
-1. `tokenize_srt_cues()` splits every cue into individual words, records the cue ID for each token, and notes which token capped an interior newline. The helper returns both the flattened tokens and the parallel list of cue IDs so later steps can recover the original block membership.
-2. After the tokens are aligned back onto the ASR timeline, `generate_labels_from_cues()` walks each cue and reassigns `break_type`: the final token of the cue becomes `SB`, the token closest to the human newline becomes `LB`, and everything else stays `O`. The newline detection uses the literal cue text (character counts after markup stripping), so the labels mirror the editor’s two-line layout.
+1. `tokenize_srt_cues()` splits every cue into individual words, records the cue ID for each token, and notes which token capped an interior newline. The helper returns both the flattened tokens and the parallel list of cue IDs so later steps can recover the original block membership. Every marker is attached to the **last word before the visual break** so the position matches how the scorer evaluates break decisions later in the pipeline.
+2. After the tokens are aligned back onto the ASR timeline, `generate_labels_from_cues()` walks each cue and reassigns `break_type`: the final token of the cue becomes `SB`, the token closest to the human newline becomes `LB`, and everything else stays `O`. The newline detection uses the literal cue text (character counts after markup stripping), so the labels mirror the editor’s two-line layout and keep the “last word before the break” convention intact.
 
-This pipeline means the model learns directly from the human-authored cue and line breaks. The newline bookkeeping performed by `tokenize_srt_cues()` feeds the labeling step; during training it has no bearing on the `break_type` labels beyond identifying the human newline, while at inference the same field can carry LLM-refined hints that bias the scorer without altering the ground-truth corpus.
+This pipeline means the model learns directly from the human-authored cue and line breaks. The newline bookkeeping performed by `tokenize_srt_cues()` feeds the labeling step; during training it has no bearing on the `break_type` labels beyond identifying the human newline. During inference, the same `is_llm_structural_break` field is populated from the LLM-refined plain-text transcript to provide a **hint** that biases the scorer toward starting a new cue block. The statistical model never trains on that hint channel, preserving the distinction between supervised `LB`/`SB` outcomes (human decisions) and inference-time nudges (LLM suggestions).
+
+#### Relationship between `is_llm_structural_break`, `LB`, and `SB`
+
+| Marker | When it is set | Meaning | Placement |
+| --- | --- | --- | --- |
+| `is_llm_structural_break` | Training: recorded only as metadata during cue flattening.<br>Inference: copied from LLM-provided newlines in the refined transcript. | Hint that the next break should start a new block. Used only by the scorer during decoding. | Last word before the suggested break. |
+| `LB` | Assigned by `generate_labels_from_cues()` while rebuilding training labels. | Human editor split the cue into a top and bottom line. | Last word on the first line. |
+| `SB` | Assigned by `generate_labels_from_cues()` and forced by the decoder on the final word. | Close the cue block and move to the next one. | Last word of the cue. |
+
+The shared placement keeps metadata, supervision, and inference hints consistent across training artifacts, runtime features, and the final SRT writer.
 
 ### 4. Final Deliverables
 

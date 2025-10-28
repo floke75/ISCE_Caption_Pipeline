@@ -68,6 +68,12 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 - **Reflow safeguards and block profiling** – `isce/postprocess.py` documents the merge heuristics; the same README section covers when to enable reflow and how it cooperates with speaker boundaries.
 - **Backend config surface updates** – UI metadata lives under `ui/backend/services/config_service.py`. Cross-check with `config.yaml` and the README defaults to keep slider descriptions consistent when changing operator-facing labels.
 
+## Break Markers Cheat Sheet (`is_llm_structural_break`, `LB`, `SB`)
+- **Placement rule:** All three markers describe the **word immediately before** the visual break that follows. `isce/srt_writer` expects this convention, and the scorer boosts/penalizes transitions based on the current token’s metadata.
+- **Training data (`*.train.words.json`):** `generate_labels_from_cues()` sets `LB` on the first-line closing word and `SB` on the last word in each cue. `is_llm_structural_break` is present only as carry-over metadata from `tokenize_srt_cues()` so the newline location survives alignment—it is *not* used as a feature when fitting models.
+- **Inference data (`*.enriched.json`):** `is_llm_structural_break` is populated from LLM-refined plaintext newlines to hint that the next break should be an `SB`. The decoder reads the hint inside `Scorer.score_transition()` but still chooses among `O`/`LB`/`SB` using the learned weights and guardrails.
+- **Why both:** `LB`/`SB` are the supervised outcomes the trainer learns from human SRTs. `is_llm_structural_break` is a reusable hint channel so inference can respect human-edit-style nudges without leaking answers into training.
+
 ## Testing Environment
 
 The test suite is run using `pytest`. Due to issues with the `requirements.txt` file and the agent environment, it is recommended to install dependencies in batches.
