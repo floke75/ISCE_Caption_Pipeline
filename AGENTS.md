@@ -32,7 +32,7 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 - **`scripts/install.py`** – Provisions the virtual environment, installs SpaCy assets, and bootstraps frontend dependencies. The `Installer` class docstring lists supported flags.
 
 ### Web Control Center (`ui/`)
-- **Backend (`ui/backend/`)** – FastAPI service exposing health, configuration, and job lifecycle APIs. `app.py` wires routes, dependency injection, and SSE log streaming. `pipelines.py` stages inputs, launches the CLI pipeline per job, and records artifacts. `services/config_service.py` materializes editable config metadata consumed by the SPA. `api/routes/files.py` powers the filesystem allowlist endpoints. See each router/service docstring for endpoint-level behaviour.
+- **Backend (`ui/backend/`)** – FastAPI service exposing health, configuration, and job lifecycle APIs. `app.py` wires routes, dependency injection, and SSE log streaming. `pipelines.py` stages inputs, launches the CLI pipeline per job, and records artifacts. `config_service.py` materializes editable config metadata consumed by the SPA, merging stored overrides with the repo defaults via `effective_config` and persisting changes with `save_overrides`/`apply_patch`. `api/routes/files.py` powers the filesystem allowlist endpoints. See each router/service docstring for endpoint-level behaviour.
 - **Frontend (`ui/frontend/`)** – Vite/React SPA with tabbed workflows (inference, training pair generation, model training, configuration editing) and a live job monitor. Components such as `ConfigPanel`, `OverrideEditor`, `JobBoard`, and `FilePathPicker` orchestrate API interactions. Component-level comments document prop contracts.
 - **Integration surface** – REST endpoints for job creation (`/api/jobs`), status (`/api/jobs/{id}`), and configuration (`/api/config`), plus SSE streaming (`/api/jobs/{id}/logs/stream`) for real-time logs. Overrides persist under `ui_data/config/pipeline_overrides.yaml`.
 - **Assets & outputs** – Job artifacts, cached configs, and uploads live under `ui_data/`.
@@ -40,7 +40,7 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 ### Configuration Surface
 - **`pipeline_config.yaml`** – Declares hot-folder roots, WhisperX/diarization toggles, and defaults consumed by CLI scripts and the UI backend. Inline comments call out required fields.
 - **`config.yaml`** – Holds ISCE beam-search settings, slider defaults, and model paths. The YAML comments reference the matching slider IDs used by `ConfigService`.
-- **UI overrides** – Persisted under `ui_data/config/pipeline_overrides.yaml` and merged by `ConfigService.merge_overrides`. See the method docstring for precedence rules.
+- **UI overrides** – Persisted under `ui_data/config/pipeline_overrides.yaml`, merged with the repo defaults by `ConfigService.effective_config`, and updated through `save_overrides` or `apply_patch` depending on whether the UI submits a full file or a partial patch.
 
 ## Data Flow
 
@@ -66,7 +66,7 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 - **Lookahead-aware beam search** – `docs/beam_search_walkthrough.md` and the `_get_lookahead_slice` docstring explain index propagation. Review `tests/test_beam_search.py::test_token_index_propagates_through_all_scoring_paths` for expectations.
 - **Guardrail penalties for short/imbalanced cues** – Read `isce/scorer.py` (`Scorer.score_transition`, `Scorer._apply_guardrails`) alongside the README section “Segmentation safeguards at a glance” to understand slider interplay.
 - **Reflow safeguards and block profiling** – `isce/postprocess.py` documents the merge heuristics; the same README section covers when to enable reflow and how it cooperates with speaker boundaries.
-- **Backend config surface updates** – UI metadata lives under `ui/backend/services/config_service.py`. Cross-check with `config.yaml` and the README defaults to keep slider descriptions consistent when changing operator-facing labels.
+- **Backend config surface updates** – UI metadata lives under `ui/backend/config_service.py`. Cross-check with `config.yaml` and the README defaults to keep slider descriptions consistent when changing operator-facing labels.
 
 ## Break Markers Cheat Sheet (`is_llm_structural_break`, `LB`, `SB`)
 - **Placement rule:** All three markers describe the **word immediately before** the visual break that follows. `isce/srt_writer` expects this convention, and the scorer boosts/penalizes transitions based on the current token’s metadata.
