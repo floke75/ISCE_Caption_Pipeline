@@ -127,6 +127,12 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 - **Training tokens (simulated ASR copy, optional):** When `emit_asr_style_training_copy` is true, a normalized lowercased copy (`*.train.raw.words.json`) reuses labels to reduce training/serving skew.【F:build_training_pair_standalone.py†L915-L937】【F:pipeline_config.yaml†L54-L65】
 - **Structural hint bookkeeping:** `tokenize_srt_cues()` attaches `is_llm_structural_break` to the last word before each human newline; the hint survives alignment and later biases inference without entering training labels.【F:build_training_pair_standalone.py†L338-L367】【F:build_training_pair_standalone.py†L812-L938】
 
+### Break markers (concise)
+- **Placement rule:** `SB`, `LB`, and `is_llm_structural_break` always annotate the **word immediately before** the upcoming visual break; SRT emission reads the current token’s `break_type` to place cue/line endings.【F:build_training_pair_standalone.py†L754-L813】【F:isce/srt_writer.py†L35-L96】
+- **Training data conventions:** `generate_labels_from_cues()` marks the last word in each cue as `SB` and the first-line end as `LB`, while `is_llm_structural_break` is only preserved as carry-over metadata from `tokenize_srt_cues()` so training labels stay clean.【F:build_training_pair_standalone.py†L338-L367】【F:build_training_pair_standalone.py†L754-L813】
+- **Inference behavior:** `is_llm_structural_break` hints that the next break should be an `SB`, but the scorer still weighs features and guardrails to pick among `O`/`LB`/`SB`.【F:build_training_pair_standalone.py†L700-L718】【F:isce/scorer.py†L172-L219】
+- **Why keep both:** `LB`/`SB` remain the supervised targets the model learns from edited SRTs, while `is_llm_structural_break` is a reusable hint channel for inference-time nudges without leaking answers into training.【F:build_training_pair_standalone.py†L754-L813】【F:isce/scorer.py†L172-L219】
+
 ## 10) Operational tips / known gaps
 
 - Increase `file_settle_delay_seconds` if large uploads race the hot-folder poller (`run_pipeline.py` or `ui/backend/pipelines.py`).【F:run_pipeline.py†L1-L118】【F:ui/backend/pipelines.py†L31-L83】
