@@ -19,7 +19,7 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 - **`run_pipeline.py`** – Hot-folder supervisor that sequences the CLI scripts for inference/training, handles archival moves, and logs lifecycle events (`process_inference_file` / `process_training_file`).
 - **`align_make.py`** – Extracts audio, invokes WhisperX + diarization, and emits timestamped ASR JSON (`process_file`).
 - **`build_training_pair_standalone.py`** – Aligns human text/SRT to ASR tokens, enriches linguistic/prosodic features, and emits `.enriched.json` / `.train.words.json`. Core logic: `align_text_to_asr`, `_apply_spacy`, `_apply_guardrails`. For a self-contained, tutorial-style version see `docs/alt_build_training_pair_standalone.py`.
-- **`main.py`** – Loads enriched tokens and statistical weights, runs the ISCE beam search (`isce/beam_search.py`), scores transitions via `isce/scorer.py`, and writes `.srt` output. The `main.segment_file` docstring links back to both orchestrators.
+- **`main.py`** – CLI entry for the segmentation stage that loads enriched tokens and statistical weights, runs the ISCE beam search (`isce/beam_search.py`), scores transitions via `isce/scorer.py`, and writes `.srt` output. Use the module docstring and argparse help text for flag details.
 
 ### Core ISCE Library (`isce/`)
 - **`beam_search.py`** – Constrained search over break decisions using learned weights, hard limits, and heuristic boosts. Key docstrings: `_token_to_row_dict`, `Segmenter._build_transition_context`, `_run_forward_breaks`, `_reconcile_bidirectional_breaks`, `refine_blocks`, and `segment` (entry point describing configuration toggles).
@@ -34,7 +34,7 @@ Transform a media file plus an edited transcript into a broadcast-ready `.srt`. 
 ### Web Control Center (`ui/`)
 - **Backend (`ui/backend/`)** – FastAPI service exposing health, configuration, and job lifecycle APIs. `app.py` wires routes, dependency injection, and SSE log streaming. `pipelines.py` stages inputs, launches the CLI pipeline per job, and records artifacts. `config_service.py` materializes editable config metadata consumed by the SPA, merging stored overrides with the repo defaults via `effective_config` and persisting changes with `save_overrides`/`apply_patch`. `api/routes/files.py` powers the filesystem allowlist endpoints. See each router/service docstring for endpoint-level behaviour.
 - **Frontend (`ui/frontend/`)** – Vite/React SPA with tabbed workflows (inference, training pair generation, model training, configuration editing) and a live job monitor. Components such as `ConfigPanel`, `OverrideEditor`, `JobBoard`, and `FilePathPicker` orchestrate API interactions. Component-level comments document prop contracts.
-- **Integration surface** – REST endpoints for job creation (`/api/jobs`), status (`/api/jobs/{id}`), and configuration (`/api/config`), plus SSE streaming (`/api/jobs/{id}/logs/stream`) for real-time logs. Overrides persist under `ui_data/config/pipeline_overrides.yaml`.
+- **Integration surface** – REST endpoints for job creation (`/api/jobs`), status (`/api/jobs/{id}`), and configuration (`/api/config/pipeline` and `/api/config/segmentation`), plus SSE streaming (`/api/jobs/{id}/logs/stream`) for real-time logs. Pipeline overrides persist under `ui_data/config/pipeline_overrides.yaml`; segmentation overrides live at `ui_data/config/segmentation_overrides.yaml`.
 - **Assets & outputs** – Job artifacts, cached configs, and uploads live under `ui_data/`.
 
 ### Configuration Surface
