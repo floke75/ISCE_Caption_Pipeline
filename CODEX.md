@@ -116,6 +116,7 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 - Primary unit coverage: `tests/test_beam_search.py` for segmentation, reconciliation, and refinement edge cases.【F:tests/test_beam_search.py†L1-L188】
 - Install dependencies via `python scripts/install.py` (provisions `.venv`, installs `requirements.txt`, downloads the Swedish SpaCy model, and optionally npm deps) or manually with `pip install -r requirements.txt` before running `pytest`.【F:scripts/install.py†L1-L178】【F:README.md†L72-L258】
 - External prerequisites still apply when exercising the full pipeline (e.g., `ffmpeg`, Node/npm for the UI, HF token, first-run model downloads, GPU optional but recommended for WhisperX).【F:README.md†L55-L63】
+- **Testing environment (batched installs):** When `requirements.txt` fails in this sandbox, install dependencies in batches before `pytest`: core (`pip install pyyaml pandas numpy rapidfuzz tqdm pysrt`), speech (`pip install pyannote.audio torch ffmpeg-python`), NLP (`pip install "spacy>=3.7,<4.0" && python -m spacy download sv_core_news_lg`), and web/test (`pip install fastapi pydantic "uvicorn[standard]" pytest httpx`).
 
 ---
 
@@ -138,6 +139,7 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 - Increase `file_settle_delay_seconds` if large uploads race the hot-folder poller (`run_pipeline.py` or `ui/backend/pipelines.py`).【F:run_pipeline.py†L1-L118】【F:ui/backend/pipelines.py†L31-L83】
 - Set `skip_if_asr_exists: true` in `pipeline_config.yaml:align_make` when iterating downstream stages to avoid re-running WhisperX.【F:pipeline_config.yaml†L45-L52】
 - **Discrepancy noted:** `pipeline_config.yaml` ships with a placeholder `hf_token` string. The code reads it literally unless the `HF_TOKEN` env var is set, so avoid committing real secrets and prefer environment-based injection.【F:pipeline_config.yaml†L33-L52】【F:align_make.py†L315-L362】
+- **Known gaps:** Frontend output-directory validation is stricter than the backend (which will create missing folders), and UI sliders for `project_root` / `pipeline_root` are currently overridden server-side—keep these mismatches in mind when adjusting UI messaging or behaviors.
 
 ---
 
