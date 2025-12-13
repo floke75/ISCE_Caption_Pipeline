@@ -23,7 +23,7 @@ This pipeline is intended to replace the inefficient and error-prone step of usi
 *   **Hybrid Model:** Combines a statistical model trained on human captioning patterns with robust, rule-based guardrails.
 *   **Two-Stage Alignment:** Uses a sophisticated process to transfer hyper-accurate word-level timestamps from an ASR transcript onto a perfect, human- or LLM-edited text.
 *   **Advanced Feature Engineering:** Enriches each word with prosodic (pauses), linguistic (SpaCy), and heuristic features to inform segmentation decisions.
-*   **Robust Speaker Correction:** Implements a two-stage strategy ("Sole Winner" + "Guardrail") to correct and handle common speaker diarization errors from the ASR.
+*   **Robust Speaker Correction:** Smooths diarization with a sliding-window "sole winner" pass before scoring, so local speaker flips are corrected before guardrail boosts penalize breaks that ignore detected speaker changes.
 *   **LLM Hint Integration (Inference Only):** During inference, recognizes newlines in the LLM-refined input text as a strong suggestion to open a new caption line or block, while training relies solely on human-authored SRT boundaries without this flag.
 *   **Automated Workflow:** A master orchestrator script (`run_pipeline.py`) manages the entire process using a "hot folder" system.
 *   **Web UI:** A full-stack control center for running jobs, managing configuration, and monitoring progress.

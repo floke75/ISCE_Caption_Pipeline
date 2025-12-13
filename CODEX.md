@@ -37,8 +37,8 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 
 - **Hybrid scorer:** Learned weights + guardrails + optional UI slider overrides (`Scorer.score_transition` / `score_block`).【F:isce/scorer.py†L16-L37】【F:isce/scorer.py†L223-L360】
 - **Two-stage alignment:** Global alignment of edited tokens onto ASR words with timestamp interpolation (`align_text_to_asr`).【F:build_training_pair_standalone.py†L242-L341】
-- **Feature engineering:** Prosody (pause durations), SpaCy dependency features, heuristic flags before segmentation; see `_apply_spacy_features` and `_apply_guardrails` equivalents in Stage 2 and scorer guardrails in Stage 3.【F:build_training_pair_standalone.py†L658-L782】【F:isce/scorer.py†L247-L360】
-- **Speaker correction:** Sole-winner + guardrail scoring paths baked into scorer penalties/boosts; diarization passed through ASR output.【F:isce/scorer.py†L251-L336】【F:align_make.py†L315-L405】
+- **Feature engineering:** `engineer_features` adds pause metrics, optional SpaCy tags/deps, and structural heuristics (speaker_change, dialogue dash, dangling EOS) that feed the scorer’s learned weights and guardrails.【F:build_training_pair_standalone.py†L549-L619】【F:isce/scorer.py†L150-L214】
+- **Speaker correction:** A sliding-window "sole winner" relabels diarization before scoring so structural boosts respond to stable speaker_change flags; diarization itself comes straight from WhisperX.【F:build_training_pair_standalone.py†L500-L544】【F:align_make.py†L315-L368】
 - **LLM structural hints (inference only):** `is_llm_structural_break` preserved in enriched tokens and read by the scorer as a hint, not a label.【F:isce/scorer.py†L167-L218】【F:build_training_pair_standalone.py†L812-L874】
 - **Post-segmentation cleanup:** Optional reflow merges or rebalances short cues without crossing speaker changes (`postprocess`).【F:isce/postprocess.py†L1-L175】【F:main.py†L103-L118】
 - **Automation surfaces:**
