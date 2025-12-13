@@ -114,7 +114,8 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 ## 8) Testing
 
 - Primary unit coverage: `tests/test_beam_search.py` for segmentation, reconciliation, and refinement edge cases.【F:tests/test_beam_search.py†L1-L188】
-- Run `pytest` from the repository root after installing dependencies in `requirements.txt`.【F:README.md†L250-L264】
+- Install dependencies via `python scripts/install.py` (provisions `.venv`, installs `requirements.txt`, downloads the Swedish SpaCy model, and optionally npm deps) or manually with `pip install -r requirements.txt` before running `pytest`.【F:scripts/install.py†L1-L178】【F:README.md†L72-L258】
+- External prerequisites still apply when exercising the full pipeline (e.g., `ffmpeg`, Node/npm for the UI, HF token, first-run model downloads, GPU optional but recommended for WhisperX).【F:README.md†L55-L63】
 
 ---
 
