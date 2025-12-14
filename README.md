@@ -2,6 +2,8 @@
 
 ISCE is a complete, end-to-end pipeline for transforming raw audio/video and a corrected transcript into professionally segmented, broadcast-quality subtitles. It is designed as a "glass box" alternative to opaque machine learning models, combining a data-driven statistical model with explicit, common-sense rules for maximum control and interpretability.
 
+**Canonical orchestrator:** Use the Web Control Center (FastAPI backend + React frontend) for day-to-day runs. The `run_pipeline.py` hot-folder watcher remains available for batch or air-gapped workflows but is secondary.
+
 This pipeline is intended to replace the inefficient and error-prone step of using a generic LLM for subtitle block formatting.
 
 ## Table of Contents
@@ -25,7 +27,7 @@ This pipeline is intended to replace the inefficient and error-prone step of usi
 *   **Advanced Feature Engineering:** Enriches each word with prosodic (pauses), linguistic (SpaCy), and heuristic features to inform segmentation decisions.
 *   **Robust Speaker Correction:** Smooths diarization with a sliding-window "sole winner" pass before scoring, so local speaker flips are corrected before guardrail boosts penalize breaks that ignore detected speaker changes.
 *   **LLM Hint Integration (Inference Only):** During inference, recognizes newlines in the LLM-refined input text as a strong suggestion to open a new caption line or block, while training relies solely on human-authored SRT boundaries without this flag.
-*   **Automated Workflow:** A master orchestrator script (`run_pipeline.py`) manages the entire process using a "hot folder" system.
+*   **Automated Workflow:** The Web Control Center drives the canonical orchestration path. A legacy hot-folder script (`run_pipeline.py`) remains for automation or offline use.
 *   **Web UI:** A full-stack control center for running jobs, managing configuration, and monitoring progress.
 
 ## Architecture Overview
