@@ -1,0 +1,9 @@
+{
+  "text": "hello world demo clip",
+  "words": [
+    {"w": "hello", "start": 0.0, "end": 0.4, "speaker": "A"},
+    {"w": "world", "start": 0.5, "end": 0.9, "speaker": "A"},
+    {"w": "demo", "start": 1.0, "end": 1.3, "speaker": "A"},
+    {"w": "clip", "start": 1.4, "end": 1.7, "speaker": "A"}
+  ]
+}
