@@ -154,6 +154,19 @@ def _save_json(obj: dict, p: Path):
     ensure_dirs(p.parent)
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
+
+def run_mock_mode(input_file: Path, mock_asr_json: Path, align_dir: Path):
+    """Write a mocked ASR+diarization output for testing without heavy deps."""
+
+    if not mock_asr_json.exists():
+        raise FileNotFoundError(f"Mock ASR JSON not found: {mock_asr_json}")
+
+    base = base_of(input_file)
+    destination = align_dir / f"{base}.asr.visual.words.diar.json"
+    print(f"[MOCK] Writing mock ASR output to: {destination}")
+    payload = json.loads(mock_asr_json.read_text(encoding="utf-8"))
+    _save_json(payload, destination)
+
 # =========================
 # Audio Processing
 # =========================
@@ -333,6 +346,14 @@ def main():
     parser.add_argument("--input-file", required=True, type=Path, help="Path to the audio/video file to process.")
     parser.add_argument("--out-root", type=Path, help="Root directory for output artifacts.")
     parser.add_argument("--config-file", type=Path, help="Path to the pipeline_config.yaml file.")
+    parser.add_argument(
+        "--mock-asr-json",
+        type=Path,
+        help=(
+            "Path to a precomputed ASR+diarization JSON. When provided, the script "
+            "skips audio processing and copies the JSON to the expected align output."
+        ),
+    )
     args = parser.parse_args()
 
     config = load_pipeline_config(
@@ -343,17 +364,21 @@ def main():
         script_settings.get("out_root", Path(config.get("pipeline_root", ".")) / "_intermediate")
     )
 
-    set_env_tokens(script_settings.get("hf_token"))
-    device = pick_device()
-
-    if not args.input_file.exists():
-        raise FileNotFoundError(f"Input file not found: {args.input_file}")
-
     paths = {
         "asr_dir": out_root / "_asr",
         "align_dir": out_root / "_align",
     }
     ensure_dirs(paths["asr_dir"]); ensure_dirs(paths["align_dir"])
+
+    if not args.input_file.exists():
+        raise FileNotFoundError(f"Input file not found: {args.input_file}")
+
+    if args.mock_asr_json:
+        run_mock_mode(args.input_file, args.mock_asr_json, paths["align_dir"])
+        return
+
+    set_env_tokens(script_settings.get("hf_token"))
+    device = pick_device()
 
     print(f"[INFO] Processing single specified file: {args.input_file.name}")
     print(f"[INFO] Outputting artifacts to: {out_root}")

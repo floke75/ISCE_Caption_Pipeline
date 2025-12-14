@@ -1,0 +1,14 @@
+project_root: .
+pipeline_root: "{project_root}/tests/_artifacts"
+
+align_make:
+  out_root: "{pipeline_root}"
+  cache_dir: "{pipeline_root}/_cache"
+  whisper_model_id: "KBLab/kb-whisper-large"
+  align_model_id: "KBLab/wav2vec2-large-voxrex-swedish"
+  language: "sv"
+  compute_type: "float16"
+  batch_size: 1
+  hf_token: "HF_TOKEN"
+  do_diarization: false
+  skip_if_asr_exists: false

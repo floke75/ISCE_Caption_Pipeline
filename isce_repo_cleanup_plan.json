@@ -217,7 +217,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "You must create `tests/fixtures/demo.mp4` as a tiny placeholder file (can be empty); mock mode must not read it.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S06",
