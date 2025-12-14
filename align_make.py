@@ -34,6 +34,7 @@ import importlib
 import importlib.util
 import ffmpeg
 import warnings
+import numpy as np
 from pipeline_config import load_pipeline_config
 
 # =========================
@@ -155,6 +156,40 @@ def _save_json(obj: dict, p: Path):
     p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def load_audio_native(file_path: str, target_sr: int = 16000) -> np.ndarray:
+    """
+    Loads an audio file into a 16kHz mono numpy array using torchaudio.
+
+    This serves as a fallback when ffmpeg is not available or when we want
+    to bypass subprocess calls. It mimics the output format of whisperx.load_audio.
+
+    Args:
+        file_path: Path to the input audio file.
+        target_sr: Target sample rate (default: 16000).
+
+    Returns:
+        A numpy array containing the audio samples (float32).
+    """
+    torchaudio = _load_dependency("torchaudio", "load audio natively")
+    torch = _load_dependency("torch", "load audio natively")
+
+    try:
+        waveform, sample_rate = torchaudio.load(file_path)
+    except Exception as e:
+        raise RuntimeError(f"Failed to load audio with torchaudio: {e}")
+
+    if sample_rate != target_sr:
+        resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sr)
+        waveform = resampler(waveform)
+
+    # Mix to mono if multi-channel
+    if waveform.shape[0] > 1:
+        waveform = torch.mean(waveform, dim=0, keepdim=True)
+
+    # Flatten to 1D array
+    return waveform.squeeze().numpy()
+
+
 def run_mock_mode(input_file: Path, mock_asr_json: Path, align_dir: Path):
     """Write a mocked ASR+diarization output for testing without heavy deps."""
 
@@ -175,8 +210,8 @@ def extract_and_convert_audio(video_path: Path, temp_dir: Path) -> Path:
     Extracts audio from a media file and converts it to a standardized format.
 
     Uses ffmpeg to convert the audio from any supported video or audio file
-    into a 16kHz mono WAV file, which is the required format for the
-    WhisperX ASR model.
+    into a 16kHz mono WAV file. If ffmpeg is missing, falls back to a native
+    Python implementation using torchaudio/soundfile (supports WAV/FLAC/MP3).
 
     Args:
         video_path: Path to the input media file.
@@ -184,14 +219,12 @@ def extract_and_convert_audio(video_path: Path, temp_dir: Path) -> Path:
 
     Returns:
         The path to the newly created WAV file.
-
-    Raises:
-        ffmpeg.Error: If ffmpeg encounters an error during conversion.
-        FileNotFoundError: If the `ffmpeg` executable is not found in the system's PATH.
-        IOError: If ffmpeg runs but fails to create the output file.
     """
     output_wav_path = temp_dir / f"{video_path.stem}_16khz_mono.wav"
     print(f"[AUDIO] Extracting and converting audio to: {output_wav_path.name}")
+
+    # Try ffmpeg first
+    ffmpeg_success = False
     try:
         (
             ffmpeg
@@ -200,15 +233,24 @@ def extract_and_convert_audio(video_path: Path, temp_dir: Path) -> Path:
             .overwrite_output()
             .run(cmd='ffmpeg', capture_stdout=True, capture_stderr=True)
         )
-    except ffmpeg.Error as e:
-        print("[ERROR] ffmpeg failed to convert the audio.")
-        print("--- ffmpeg STDERR ---")
-        print(e.stderr.decode(errors='ignore'))
-        raise
-    except FileNotFoundError:
-        raise FileNotFoundError("ERROR: `ffmpeg` command not found. Please ensure it is in your system's PATH.")
-    if not output_wav_path.exists():
-        raise IOError(f"ffmpeg ran but the output file was not created: {output_wav_path}")
+        ffmpeg_success = True
+    except (ffmpeg.Error, FileNotFoundError):
+        print("[WARN] ffmpeg failed or not found. Attempting fallback with torchaudio/soundfile...")
+
+    if ffmpeg_success:
+        if not output_wav_path.exists():
+            raise IOError(f"ffmpeg ran but the output file was not created: {output_wav_path}")
+        return output_wav_path
+
+    # Fallback path
+    try:
+        sf = _load_dependency("soundfile", "save converted audio")
+        audio_data = load_audio_native(str(video_path))
+        sf.write(str(output_wav_path), audio_data, 16000)
+        print(f"[FALLBACK] Successfully converted audio using torchaudio/soundfile.")
+    except Exception as e:
+        raise RuntimeError(f"Fallback audio conversion failed: {e}. Please install ffmpeg.") from e
+
     return output_wav_path
 
 # =========================
@@ -260,7 +302,8 @@ def process_file(audio_path: Path, device: str, paths: Dict[str, Path], settings
         print(f"[SETUP] Using WhisperX cache at: {cache_path}")
 
         print(f"[PIPELINE] Loading audio from: {converted_audio_path.name}")
-        audio = whisperx.load_audio(str(converted_audio_path))
+        # Use native loader to avoid calling ffmpeg subprocess in whisperx.load_audio
+        audio = load_audio_native(str(converted_audio_path))
 
         # 1. Transcribe
         print("[PIPELINE] 1/3: Transcribing...")
