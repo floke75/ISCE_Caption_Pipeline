@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 0/0 passed, 0 failed, 0 in progress (initial draft)
+**Step status summary:** 0/11 passed, 0 failed, 0 in progress (initial draft)
 
 ---
 
@@ -59,8 +59,13 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S01 — Baseline UI capture and navigation audit](#s01-baseline-ui-capture-and-navigation-audit) — ⬜ Not started
 - [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ⬜ Not started
 - [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ⬜ Not started
-- [S04 — Interaction flow review for training and inference](#s04-interaction-flow-review-for-training-and-inference) — ⬜ Not started
-- [S05 — Visibility of artifacts and system health signals](#s05-visibility-of-artifacts-and-system-health-signals) — ⬜ Not started
+- [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ⬜ Not started
+- [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ⬜ Not started
+- [S06 — Submission feedback, validation errors, and recovery](#s06-submission-feedback-validation-errors-and-recovery) — ⬜ Not started
+- [S07 — Job monitoring baseline and navigation](#s07-job-monitoring-baseline-and-navigation) — ⬜ Not started
+- [S08 — Artifact visibility and preview widgets](#s08-artifact-visibility-and-preview-widgets) — ⬜ Not started
+- [S09 — System health signals and observability hooks](#s09-system-health-signals-and-observability-hooks) — ⬜ Not started
+- [S10 — Insight verification and test harness planning](#s10-insight-verification-and-test-harness-planning) — ⬜ Not started
 
 ---
 
@@ -206,72 +211,260 @@ cd ui/frontend && npm run lint
 
 ---
 
-## S04 — Interaction flow review for training and inference
+## S04 — Training flow input clarity and validation
 
 **Status:** ⬜ Not started
 
-**Objective:** Evaluate end-to-end usability of the training and inference flows, focusing on clarity of required inputs, parameter affordances, and inline guidance for non-experts.
+**Objective:** Evaluate end-to-end usability of the training flow specifically, focusing on clarity of required inputs, validation feedback, and inline guidance for non-experts.
 
 **Actions to perform:**
-- Using the running frontend (from S01), walk through submitting representative training and inference jobs with sample inputs (real or mock paths as allowed).
-- Capture screenshots of each critical step (file selection, parameter tuning, submission confirmation, and job monitoring). Save under `docs/screenshots/S04/` with descriptive names.
-- Note friction points: unclear placeholders, missing validation, confusing error messages, or non-intuitive parameter labels.
-- Propose concrete UX improvements (tooltips, helper text, presets) in the notes.
+- Using the running frontend (from S01), walk through submitting a representative training job with sample inputs (real or mock paths as allowed).
+- Capture screenshots of each critical step in the training flow (file selection, parameter tuning, submission confirmation, and immediate post-submit state). Save under `docs/screenshots/S04/` with descriptive names.
+- Note friction points: unclear placeholders, missing validation, confusing error messages, or non-intuitive parameter labels for training inputs.
+- Propose concrete UX improvements for training (tooltips, helper text, presets) in the notes.
 
 **Deliverables:**
-- Screenshots under `docs/screenshots/S04/` covering the interaction flow.
-- `docs/notes/interaction_flow.md` summarizing observations and recommended UX adjustments.
+- Screenshots under `docs/screenshots/S04/` covering the training interaction flow.
+- `docs/notes/training_flow.md` summarizing observations and recommended UX adjustments for training.
 
 **Verification test:**
-- **Name:** Interaction flow documented
+- **Name:** Training flow documented
 - **Commands:**
 
 ```text
 test -d docs/screenshots/S04
-test -f docs/notes/interaction_flow.md
+test -f docs/notes/training_flow.md
 find docs/screenshots/S04 -maxdepth 1 -type f | head -n 1
 ```
 - **Expected results:**
   - Screenshot directory exists and contains at least one file
-  - Interaction flow notes exist
+  - Training flow notes exist
 - **Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
 
 **Notes:**
-- Include any console/network errors encountered while submitting jobs and suggested mitigations.
+- Include any console/network errors encountered while submitting training jobs and suggested mitigations.
 
 ---
 
-## S05 — Visibility of artifacts and system health signals
+## S05 — Inference flow guidance and presets
 
 **Status:** ⬜ Not started
 
-**Objective:** Assess how well the UI surfaces interpretable artifacts (SRT previews, alignment diffs, timelines) and backend health signals, then define target improvements for transparency and trust.
+**Objective:** Evaluate the inference flow for clarity of required inputs, preset usefulness, and non-expert guidance.
 
 **Actions to perform:**
-- Audit the job detail/monitoring views for available artifacts (e.g., generated SRT, enriched JSON, logs) and note how they are presented.
-- Capture screenshots of artifact presentation and any health indicators (status chips, progress bars, error banners) under `docs/screenshots/S05/`.
-- Identify missing insight features (e.g., waveform snippets, cue previews, scoring summaries) and map them to potential data sources.
-- Document desired verification and test hooks (e.g., API endpoint checks, artifact schema validations) to support future implementation.
+- Using the running frontend (from S01), walk through submitting a representative inference job with sample inputs.
+- Capture screenshots of each critical step in the inference flow (file selection, parameter overrides, submission confirmation, immediate post-submit state). Save under `docs/screenshots/S05/` with descriptive names.
+- Assess the clarity and defaults of inference parameters (e.g., diarization toggles, slider presets) and note where presets or explanations would help.
+- Propose UX improvements tailored to inference (tooltips, presets, warnings for unsafe combinations).
 
 **Deliverables:**
-- Screenshots under `docs/screenshots/S05/` showcasing current artifact and health visibility.
-- `docs/notes/system_insights.md` detailing observed signals, gaps, and proposed insight widgets/tests.
+- Screenshots under `docs/screenshots/S05/` covering the inference interaction flow.
+- `docs/notes/inference_flow.md` summarizing observations and recommended UX adjustments for inference.
 
 **Verification test:**
-- **Name:** System insight baseline captured
+- **Name:** Inference flow documented
 - **Commands:**
 
 ```text
 test -d docs/screenshots/S05
-test -f docs/notes/system_insights.md
+test -f docs/notes/inference_flow.md
 find docs/screenshots/S05 -maxdepth 1 -type f | head -n 1
 ```
 - **Expected results:**
   - Screenshot directory exists and has at least one file
-  - System insights notes exist
+  - Inference flow notes exist
 - **Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
 
 **Notes:**
-- For future steps, align proposed tests with backend endpoints (FastAPI) and frontend renderers to ensure artifacts/health data are validated end-to-end.
+- Capture any console/network errors specific to inference submission and proposed mitigations.
 
 ---
+
+## S06 — Submission feedback, validation errors, and recovery
+
+**Status:** ⬜ Not started
+
+**Objective:** Assess how the UI communicates submission success/failure and validation issues, ensuring users can recover quickly.
+
+**Actions to perform:**
+- Trigger both successful and intentionally invalid submissions (for training and inference) to observe validation and error states.
+- Capture screenshots of validation errors, toasts/banners, and retry/recovery affordances. Save under `docs/screenshots/S06/`.
+- Map which fields lack inline validation or have unclear error text, and propose concrete fixes.
+- Note whether submissions indicate backend processing status clearly (e.g., spinner vs. silent fail).
+
+**Deliverables:**
+- Screenshots under `docs/screenshots/S06/` illustrating validation and error handling states.
+- `docs/notes/submission_feedback.md` documenting current feedback patterns and recommended improvements.
+
+**Verification test:**
+- **Name:** Submission feedback documented
+
+**Commands:**
+
+```text
+test -d docs/screenshots/S06
+test -f docs/notes/submission_feedback.md
+find docs/screenshots/S06 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot directory exists and contains at least one file
+  - Submission feedback notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
+
+**Notes:**
+- Highlight any missing retry paths or unhelpful error text and suggest concrete wording or UX patterns.
+
+---
+
+## S07 — Job monitoring baseline and navigation
+
+**Status:** ⬜ Not started
+
+**Objective:** Review the job board/monitor for usability, navigation, and clarity of statuses across both training and inference jobs.
+
+**Actions to perform:**
+- Navigate to job listings and detail views for at least one training and one inference job (mock or real where possible).
+- Capture screenshots of list and detail views, including status chips, timestamps, and navigation controls. Save under `docs/screenshots/S07/`.
+- Note any confusing labels, missing timestamps, or pagination/filter gaps.
+- Propose improvements for distinguishing job types and surfacing progress.
+
+**Deliverables:**
+- Screenshots under `docs/screenshots/S07/` covering job list and detail navigation.
+- `docs/notes/job_monitoring.md` summarizing navigation flow, status clarity, and proposed UX adjustments.
+
+**Verification test:**
+- **Name:** Job monitoring documented
+
+**Commands:**
+
+```text
+test -d docs/screenshots/S07
+test -f docs/notes/job_monitoring.md
+find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot directory exists and contains at least one file
+  - Job monitoring notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
+
+**Notes:**
+- Record any missing differentiation between training vs. inference jobs and how filters/sorting could help.
+
+---
+
+## S08 — Artifact visibility and preview widgets
+
+**Status:** ⬜ Not started
+
+**Objective:** Audit how artifacts (SRT, enriched JSON, logs, waveform cues) are exposed and previewed in the UI, and identify quick wins for visual validation.
+
+**Actions to perform:**
+- Inspect job detail views for artifact links/previews and note what file types are surfaced versus hidden.
+- Capture screenshots of current artifact presentation (or absence) under `docs/screenshots/S08/`.
+- Identify missing preview widgets (cue tables, waveform snippets, alignment diffs) and map them to available data sources.
+- Propose a prioritized list of preview components to implement, with data availability notes.
+
+**Deliverables:**
+- Screenshots under `docs/screenshots/S08/` showcasing artifact visibility.
+- `docs/notes/artifact_visibility.md` detailing current coverage, gaps, and proposed preview widgets.
+
+**Verification test:**
+- **Name:** Artifact visibility baseline captured
+
+**Commands:**
+
+```text
+test -d docs/screenshots/S08
+test -f docs/notes/artifact_visibility.md
+find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot directory exists and contains at least one file
+  - Artifact visibility notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
+
+**Notes:**
+- Call out which artifacts already exist in `ui_data/jobs/<id>/artifacts` and how they could be previewed safely in-browser.
+
+---
+
+## S09 — System health signals and observability hooks
+
+**Status:** ⬜ Not started
+
+**Objective:** Assess how the UI and backend expose operational health (statuses, backend errors, resource warnings) and define the signals needed for trustworthy usage.
+
+**Actions to perform:**
+- Review UI components for health indicators (status chips, banners, spinners) and note when they appear or fail to appear.
+- Capture screenshots of health/alert states under `docs/screenshots/S09/`.
+- Inspect available backend endpoints/log surfaces (FastAPI) that could provide health data and note gaps.
+- Propose specific observability hooks (heartbeat endpoint checks, queue depth indicators, error surfacing) to add.
+
+**Deliverables:**
+- Screenshots under `docs/screenshots/S09/` covering current health signals.
+- `docs/notes/system_health.md` detailing observed signals, gaps, and recommended observability hooks.
+
+**Verification test:**
+- **Name:** System health baseline captured
+
+**Commands:**
+
+```text
+test -d docs/screenshots/S09
+test -f docs/notes/system_health.md
+find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot directory exists and has at least one file
+  - System health notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
+
+**Notes:**
+- Tie proposed hooks to concrete endpoints or UI surfaces for later implementation and testing.
+
+---
+
+## S10 — Insight verification and test harness planning
+
+**Status:** ⬜ Not started
+
+**Objective:** Define the test strategy and harnesses needed to verify artifact previews and health signals once implemented.
+
+**Actions to perform:**
+- Enumerate automated and manual tests required for the planned preview widgets and health indicators (e.g., component tests, API contract checks, e2e smoke tests).
+- Identify sample data or fixtures needed to exercise previews (SRT, enriched JSON, alignment outputs) and where to store them.
+- Outline commands to be used later (frontend unit tests, backend API tests, screenshot-based visual checks) and how to record evidence.
+- Capture a summary screenshot (e.g., checklist or doc snippet) under `docs/screenshots/S10/` showing the planned test matrix or harness layout.
+
+**Deliverables:**
+- Screenshots under `docs/screenshots/S10/` illustrating the planned test matrix or harness notes.
+- `docs/notes/insight_verification_plan.md` describing test coverage, fixtures, and tooling to be used in later steps.
+
+**Verification test:**
+- **Name:** Insight verification plan documented
+
+**Commands:**
+
+```text
+test -d docs/screenshots/S10
+test -f docs/notes/insight_verification_plan.md
+find docs/screenshots/S10 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot directory exists and contains at least one file
+  - Insight verification plan notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
+
+**Notes:**
+- Explicitly call out which tests are required versus optional, and how results will be captured for future steps.
