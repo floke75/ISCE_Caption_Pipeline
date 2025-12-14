@@ -8,11 +8,15 @@ cache/
 _intermediate/
 _output/
 _processed/
+tests/_artifacts/
 
 # IDE and OS files
 .vscode/
 .idea/
 *.DS_Store
+
+# Local secrets/config overrides
+pipeline_config.local.yaml
 
 # Node
 ui/frontend/node_modules

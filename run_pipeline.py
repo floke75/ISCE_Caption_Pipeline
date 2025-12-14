@@ -2,6 +2,12 @@
 # -*- coding: utf-8 -*-
 """Master orchestration script for the ISCE Pipeline.
 
+# === Legacy hot-folder orchestrator ===
+# The canonical path for running ISCE is the Web Control Center
+# (FastAPI backend + React frontend). This script remains supported for
+# batch/air-gapped workflows but is considered secondary. See README for
+# guidance.
+
 This script monitors a set of "hot folders" for new media files and triggers
 the appropriate processing pipeline (either inference or training data
 preparation). It orchestrates the execution of several worker scripts in
@@ -12,27 +18,33 @@ The pipeline is designed to be robust, with error handling and file management
 to ensure that processed files are archived and failed jobs are isolated.
 
 It operates based on a configuration that can be defined in this file
-(DEFAULT_SETTINGS) and overridden by a `pipeline_config.py` file.
+(DEFAULT_SETTINGS) and overridden by a YAML file (e.g.,
+`pipeline_config.yaml`) that is loaded and merged by
+`pipeline_config.load_pipeline_config`. When run manually, provide
+``--config-file`` to point at an alternative YAML.
 
 Attributes:
     DEFAULT_SETTINGS (Dict[str, Any]): A dictionary containing the default
         configuration for the pipeline, including root paths, folder locations,
-        and orchestrator settings. This is used as a fallback if
-        `pipeline_config.py` is not found or does not override a setting.
+        and orchestrator settings. These defaults are merged with any YAML
+        overrides provided to ``load_pipeline_config``.
 """
-import time
-import sys
-import subprocess
+import argparse
 import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Dict, Any
+
+from pipeline_config import load_pipeline_config
 
 # =========================
 # DEFAULT SETTINGS (Self-Contained)
 # =========================
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "project_root": r"C:\dev\Captions_Formatter\Formatter_machine",
-    "pipeline_root": r"T:\AI-Subtitles\Pipeline",
+    "project_root": ".",
+    "pipeline_root": "{project_root}/pipeline_data",
     
     "drop_folder_inference": "{pipeline_root}/1_DROP_FOLDER_INFERENCE",
     "drop_folder_training":  "{pipeline_root}/2_DROP_FOLDER_TRAINING",
@@ -82,6 +94,26 @@ def setup_directories(cfg: Dict[str, Any]):
     (Path(cfg["processed_dir"]) / "training").mkdir(exist_ok=True)
     (Path(cfg["processed_dir"]) / "srt").mkdir(exist_ok=True)
     (Path(cfg["processed_dir"]) / "txt").mkdir(exist_ok=True)
+
+
+def load_configuration(config_file: Path | None) -> Dict[str, Any]:
+    """Load configuration defaults merged with optional YAML overrides."""
+
+    yaml_path = str(config_file) if config_file else "pipeline_config.yaml"
+    return load_pipeline_config(DEFAULT_SETTINGS, yaml_path=yaml_path)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments for overriding config paths."""
+
+    parser = argparse.ArgumentParser(description="Run the ISCE hot-folder orchestrator")
+    parser.add_argument(
+        "--config-file",
+        type=Path,
+        default=Path("pipeline_config.yaml"),
+        help="Path to the pipeline_config YAML file used to override DEFAULT_SETTINGS.",
+    )
+    return parser.parse_args(argv)
 
 def get_project_path(cfg: Dict[str, Any], script_name: str) -> Path:
     """Constructs the absolute path to a script within the project directory.
@@ -410,16 +442,13 @@ def main_loop(cfg: Dict[str, Any]):
             print("Restarting poll in 30 seconds...")
             time.sleep(30)
 
+def main(argv: list[str] | None = None) -> None:
+    """Entry point that loads configuration and starts the orchestrator loop."""
+
+    args = parse_args(argv)
+    config = load_configuration(args.config_file)
+    main_loop(config)
+
+
 if __name__ == "__main__":
-    # The entry point of the script. It attempts to load configuration from
-    # `pipeline_config.py` and falls back to the `DEFAULT_SETTINGS` if the
-    # file does not exist or fails to load.
-    try:
-        from pipeline_config import load_pipeline_config
-    except ImportError:
-        print("[FATAL ERROR] pipeline_config.py not found. The application cannot start.")
-        sys.exit(1)
-    
-    # Load configuration and start the main processing loop.
-    CONFIG = load_pipeline_config(DEFAULT_SETTINGS)
-    main_loop(CONFIG)
+    main()

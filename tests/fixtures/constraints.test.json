@@ -1,0 +1,10 @@
+{
+  "ideal_cps_iqr": [10.0, 18.0],
+  "ideal_cps_median": 14.0,
+  "ideal_balance_iqr": [0.8, 1.2],
+  "min_block_duration_s": 0.4,
+  "max_block_duration_s": 4.0,
+  "line1": {"soft_target": 32, "hard_limit": 36},
+  "line2": {"soft_target": 32, "hard_limit": 36},
+  "block": {"min_total_chars": 4, "min_last_line_chars": 2}
+}

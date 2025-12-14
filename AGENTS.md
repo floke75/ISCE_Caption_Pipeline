@@ -8,9 +8,13 @@ This is the **fact-checked field guide** for the ISCE Caption Pipeline. It is wr
 
 Transform a **media file** plus an **edited transcript** into a **broadcast-ready `.srt`**, using an interpretable hybrid of **statistical scoring** and **explicit guardrail rules** instead of a black-box, LLM-only formatter.
 
+> Baseline snapshot for this cleanup lives at `docs/BASELINE.md`.
+
 ---
 
 ## 1) Quick orientation for an agent
+
+See `docs/ENTRYPOINTS.md` for the canonical entrypoints and exact CLI flags. The FastAPI job runner (`ui/backend/pipelines.py`) is the primary orchestrator; `run_pipeline.py` remains as the legacy hot-folder path.
 
 1. **Inference chain is linear:** `align_make.py` → `build_training_pair_standalone.py` → `main.py` → `.srt` (this is the exact order invoked by both orchestrators).【F:run_pipeline.py†L156-L241】【F:ui/backend/pipelines.py†L56-L189】
 2. **Two orchestrators run the same chain:**
@@ -71,7 +75,7 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 - **UI job workspaces** – Each backend job copies inputs into `ui_data/jobs/<id>/inputs`, stages artifacts under `ui_data/jobs/<id>/artifacts`, and streams logs via `JobContext`.【F:ui/backend/pipelines.py†L72-L189】
 
 ### Documentation / tests
-- `docs/beam_search_walkthrough.md`, `docs/spacy_feature_impact.md`, `docs/build_training_pair_comparison.md`, `docs/alt_build_training_pair_standalone.py`.
+- `docs/beam_search_walkthrough.md`, `docs/spacy_feature_impact.md`, `docs/build_training_pair_comparison.md`, `experiments/alt_build_training_pair_standalone.py`.
 - `tests/test_beam_search.py` – literate tests for the segmenter and reconciliation helpers.【F:tests/test_beam_search.py†L1-L188】
 
 ---
@@ -151,6 +155,6 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 - `docs/beam_search_walkthrough.md` – lookahead, reconciliation, refinement payloads.
 - `docs/spacy_feature_impact.md` – dependency feature rationale.
 - `docs/build_training_pair_comparison.md` – rationale for Stage 2 implementation.
-- `docs/alt_build_training_pair_standalone.py` – tutorial version of Stage 2.
+- `experiments/alt_build_training_pair_standalone.py` – tutorial version of Stage 2.
 - `tests/test_beam_search.py` – executable examples of beam search behavior.【F:tests/test_beam_search.py†L1-L188】
 

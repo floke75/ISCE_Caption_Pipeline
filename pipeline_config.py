@@ -12,6 +12,13 @@ The key features of this loader are:
     defaults, allowing users to override only specific nested values.
 -   **Path Resolution**: Automatically resolves path placeholders (like
     `{project_root}` or `{pipeline_root}`) to create absolute, portable paths.
+
+Recommended defaults keep `project_root` at the repository root (".") and set
+`pipeline_root` to a sibling like `{project_root}/pipeline_data` so hot folders
+and intermediate artifacts stay under the checkout without hard-coded machine
+paths. Users can override these values in `pipeline_config.yaml` or
+`pipeline_config.local.yaml`, but the placeholder pattern remains the same
+across platforms.
 """
 from __future__ import annotations
 import yaml
@@ -46,7 +53,9 @@ def _resolve_paths(config: Dict[str, Any], context: Dict[str, str]) -> Dict[str,
 
     Recursively iterates through a configuration dictionary and formats any
     string values that contain `{placeholder}` style variables using the
-    provided context dictionary.
+    provided context dictionary. When a value is resolved, the context is also
+    updated so later placeholders can reference newly formatted values (e.g.,
+    resolving ``pipeline_root`` before ``drop_folder_inference``).
 
     Args:
         config: The configuration dictionary with unresolved path strings.
@@ -56,14 +65,19 @@ def _resolve_paths(config: Dict[str, Any], context: Dict[str, str]) -> Dict[str,
         The configuration dictionary with path placeholders resolved.
     """
     for k, v in config.items():
-        if isinstance(v, str) and "{" in v and "}" in v:
-            try:
-                config[k] = v.format(**context)
-            except KeyError:
-                # Ignore if a placeholder key is not in the context.
-                pass
+        if isinstance(v, str):
+            if "{" in v and "}" in v:
+                try:
+                    resolved = v.format(**context)
+                    config[k] = resolved
+                    context[k] = resolved
+                except KeyError:
+                    # Ignore if a placeholder key is not in the context.
+                    pass
+            else:
+                context.setdefault(k, v)
         elif isinstance(v, dict):
-            # Recurse into nested dictionaries.
+            # Recurse into nested dictionaries with the shared context.
             config[k] = _resolve_paths(v, context)
     return config
 

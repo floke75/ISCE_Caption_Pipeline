@@ -2,6 +2,8 @@
 
 ISCE is a complete, end-to-end pipeline for transforming raw audio/video and a corrected transcript into professionally segmented, broadcast-quality subtitles. It is designed as a "glass box" alternative to opaque machine learning models, combining a data-driven statistical model with explicit, common-sense rules for maximum control and interpretability.
 
+**Canonical orchestrator:** Use the Web Control Center (FastAPI backend + React frontend) for day-to-day runs. The `run_pipeline.py` hot-folder watcher remains available for batch or air-gapped workflows but is secondary.
+
 This pipeline is intended to replace the inefficient and error-prone step of using a generic LLM for subtitle block formatting.
 
 ## Table of Contents
@@ -25,7 +27,7 @@ This pipeline is intended to replace the inefficient and error-prone step of usi
 *   **Advanced Feature Engineering:** Enriches each word with prosodic (pauses), linguistic (SpaCy), and heuristic features to inform segmentation decisions.
 *   **Robust Speaker Correction:** Smooths diarization with a sliding-window "sole winner" pass before scoring, so local speaker flips are corrected before guardrail boosts penalize breaks that ignore detected speaker changes.
 *   **LLM Hint Integration (Inference Only):** During inference, recognizes newlines in the LLM-refined input text as a strong suggestion to open a new caption line or block, while training relies solely on human-authored SRT boundaries without this flag.
-*   **Automated Workflow:** A master orchestrator script (`run_pipeline.py`) manages the entire process using a "hot folder" system.
+*   **Automated Workflow:** The Web Control Center drives the canonical orchestration path. A legacy hot-folder script (`run_pipeline.py`) remains for automation or offline use.
 *   **Web UI:** A full-stack control center for running jobs, managing configuration, and monitoring progress.
 
 ## Architecture Overview
@@ -58,7 +60,7 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 *   **ffmpeg:** Must be installed and accessible in your system's PATH.
 *   **Node.js and npm:** Required for the web UI.
 *   **GPU (Recommended):** A CUDA-enabled GPU dramatically accelerates WhisperX; CPU-only runs are supported but slower on long-form audio.
-*   **Hugging Face Token:** Required for speaker diarization. Provide it via the `HF_TOKEN` environment variable or the `hf_token` field in `pipeline_config.yaml`.
+*   **Hugging Face Token:** Required for speaker diarization. Provide it via the `HF_TOKEN` environment variable or the `hf_token` field in `pipeline_config.yaml`. Keep secrets out of version control—store them in `pipeline_config.local.yaml` or the environment instead.
 *   **First-Run Network Access:** Allow outbound access the first time you install or run the pipeline so WhisperX, PyAnnote, and the SpaCy Swedish model can download required assets.
 
 ### 2. Installation
@@ -90,9 +92,14 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 ### 3. Configuration
 
-1.  **Update `pipeline_config.yaml`:** This file lives in the repository root. Replace placeholder paths for `project_root` and `pipeline_root` with locations on your system and set an `hf_token` (or rely on the `HF_TOKEN` environment variable).
+1.  **Create your local config:** Copy `pipeline_config.example.yaml` to `pipeline_config.local.yaml` and adjust paths or diarization settings for your machine. The local file is ignored by git.
 
-2.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior.
+    * Both `pipeline_config.yaml` and `pipeline_config.example.yaml` live in the repository root and ship with portable defaults: `project_root` stays at the checkout root (`.`) and `pipeline_root` points to `{project_root}/pipeline_data` so all hot folders and intermediates stay beside the code on any platform.
+    * Path placeholders are resolved by `pipeline_config.py`, so keep `project_root` and `pipeline_root` relative (or placeholder-based) even in your local override to avoid hard-coding machine-specific absolute paths.
+
+2.  **Update `pipeline_config.yaml`:** Keep `hf_token` as a placeholder (`HF_TOKEN` or empty) and ensure defaults remain safe for teammates. Runtime will merge `pipeline_config.yaml` with any values in `pipeline_config.local.yaml` or the `HF_TOKEN` environment variable. See `docs/SECURITY_NOTES.md` for guidance on keeping secrets out of git.
+
+3.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior.
     *   Use the **Search strategy** section to adjust `beam_width` and `lookahead_width`. Increasing lookahead lets the scorer peek ahead a few tokens and plan around upcoming speaker changes or punctuation.
     *   Toggle options in **Search safeguards** to enable `enable_bidirectional_pass` and `enable_refinement_pass` when you need extra robustness, and switch on the **Post-processing** reflow toggle to even out short or imbalanced cues without risking speaker merges.
     *   Under **Line constraints**, tune `min_chars_for_single_word_block` to decide when genuinely single-word cues need manual review. Multi-word lines ignore this threshold so normal short phrases remain eligible.

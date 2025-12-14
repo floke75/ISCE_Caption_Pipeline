@@ -1,0 +1,22 @@
+beam_width: 3
+lookahead_width: 0
+enable_bidirectional_pass: false
+enable_reflow: false
+enable_refinement_pass: false
+constraints:
+  line_length_soft_target: 32
+  line_length_hard_limit: 36
+  min_total_chars_per_block: 4
+  min_last_line_chars: 2
+  min_block_duration_s: 0.4
+  max_block_duration_s: 4.0
+  min_chars_for_single_word_block: 2
+paths:
+  constraints: constraints.test.json
+  model_weights: model_weights.test.json
+sliders:
+  flow: 1.0
+  density: 1.0
+  balance: 1.0
+  structure: 1.0
+allowed_single_word_proper_nouns: []

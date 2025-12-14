@@ -1,0 +1,23 @@
+project_root: .
+pipeline_root: "{project_root}/tests/_artifacts"
+
+align_make:
+  out_root: "{pipeline_root}"
+  cache_dir: "{pipeline_root}/_cache"
+  whisper_model_id: "KBLab/kb-whisper-large"
+  align_model_id: "KBLab/wav2vec2-large-voxrex-swedish"
+  language: "sv"
+  compute_type: "float16"
+  batch_size: 1
+  hf_token: "HF_TOKEN"
+  do_diarization: false
+  skip_if_asr_exists: false
+
+build_pair:
+  out_inference_dir: "{pipeline_root}/_inference_input"
+  out_training_dir: "{pipeline_root}/_training"
+  language: "en"
+  spacy_enable: false
+  spacy_add_dependencies: false
+  emit_asr_style_training_copy: false
+  speaker_correction_window_size: 2
