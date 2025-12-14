@@ -1,0 +1,25 @@
+line-length = 120
+target-version = "py310"
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+    "ui/frontend",
+    "ui_data",
+    "_intermediate",
+    "tests/_artifacts",
+]
+
+[lint]
+select = ["E", "F", "I"]
+extend-ignore = [
+    "E203",  # whitespace before ':' (compatible with black-style slicing)
+    "E402",  # legacy module-level imports guarded by path tweaks
+    "E501",  # line length handled by context
+    "E701",  # multi-statement lines in legacy code paths
+    "E702",  # multi-statement lines in legacy code paths
+    "F401",  # unused imports in legacy modules kept for API parity
+    "I001",  # import reformatting deferred for legacy files
+]

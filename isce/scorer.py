@@ -22,7 +22,7 @@ The scoring is divided into two main components:
     the final output remains readable and evenly shaped.
 """
 from __future__ import annotations
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from .model_builder import (
     bin_pause_z,
