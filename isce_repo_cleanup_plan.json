@@ -258,8 +258,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
-      "relevance_review": "Relevant as groundwork: tiny fixtures underpin later deterministic tests and align with existing tests/fixtures layout; ensure they stay minimal for offline runs.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S07",
