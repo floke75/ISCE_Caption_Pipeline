@@ -13,8 +13,12 @@
 - Vite dev server logged repeated proxy errors to `/api/*` (jobs, config, files) since no backend was available on port 8000. These did not block tab rendering but left Job board entries empty.
 
 ## Captured assets
-- Binary screenshots were removed from version control to keep the PR free of large image files. The intended captures and
-  recreation steps are documented in `docs/screenshots/S01/README.md`.
+- Screenshots (stored under `docs/screenshots/S01/`):
+- `inference-form.png`
+- `training-pair-form.png`
+- `model-training-form.png`
+- `config-panel.png`
+- `job-board.png`
 
 ## Verification commands
 - Executed: `test -d docs/screenshots/S01`, `test -f docs/notes/ui_baseline.md`, `find docs/screenshots/S01 -maxdepth 1 -type f | head -n 1`.
