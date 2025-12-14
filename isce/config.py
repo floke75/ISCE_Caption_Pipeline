@@ -108,7 +108,16 @@ def load_config(path: str = "config.yaml") -> Config:
     
     # Attempt to load the learned constraints.json file
     constraints_json = {}
-    constraints_path_str = y.get("paths", {}).get("constraints")
+    paths = dict(y.get("paths", {}))
+
+    # Support historical key names by aliasing `weights` to `model_weights`
+    # when the newer field is absent. This keeps older test fixtures and
+    # configs compatible with `main.py` without requiring the caller to rename
+    # their paths in place.
+    if "model_weights" not in paths and "weights" in paths:
+        paths["model_weights"] = paths["weights"]
+
+    constraints_path_str = paths.get("constraints")
     if constraints_path_str:
         full_constraints_path = Path(path).parent / constraints_path_str
         if full_constraints_path.exists():
@@ -150,7 +159,7 @@ def load_config(path: str = "config.yaml") -> Config:
             constraints_yaml.get("min_chars_for_single_word_block", 10)
         ),
         sliders=dict(y.get("sliders", {})),
-        paths=dict(y.get("paths", {})),
+        paths=paths,
         enable_bidirectional_pass=bool(y.get("enable_bidirectional_pass", False)),
         lookahead_width=int(y.get("lookahead_width", 0)),
         enable_reflow=bool(y.get("enable_reflow", False)),

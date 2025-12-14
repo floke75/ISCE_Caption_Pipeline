@@ -8,6 +8,7 @@ cache/
 _intermediate/
 _output/
 _processed/
+tests/_artifacts/
 
 # IDE and OS files
 .vscode/
