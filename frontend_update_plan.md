@@ -22,6 +22,8 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - If a step fails, do not proceed—fix within the same step until tests pass.
 - Keep changes offline-friendly; avoid WhisperX/model downloads unless explicitly required by the step.
 - Document all deviations or skipped items in the step's Notes.
+- Update the status markers (in the index and per-step header) immediately after each step, and include the executed command
+  outputs in Notes to preserve traceability.
 - **Tests are integral for code changes:**
   - Every code-affecting step must specify at least one verification command (unit test, lint, type check, or script) OR justify why no executable test is applicable.
   - Record actual command outputs in Notes when executed; passing tests are required before marking a step as ✅.
@@ -29,6 +31,8 @@ Create a structured, auditable plan to stabilize and improve the user interface 
   - Capture at least one screenshot of the relevant UI after completing the step for both LLM-agent verification and human review.
   - Store screenshots under `docs/screenshots/<step_id>/` with descriptive filenames.
   - Reference the screenshot path in the step's Notes once captured.
+- **Milestone gates:** Treat S03 (build/lint baseline) and S08 (artifact visibility baseline) as go/no-go checkpoints before
+  shipping UX changes or visualization work; unresolved blockers at these steps must be documented with mitigation plans.
 
 ---
 
@@ -48,6 +52,13 @@ Create a structured, auditable plan to stabilize and improve the user interface 
   - `docs/notes/` — optional scratch notes or observations captured during steps.
 - **Fixture references (if needed):** reuse existing fixtures under `tests/fixtures` for smoke checks.
 - **Status markers:** ⬜ Not started | 🔄 In progress | ✅ Passed | ⚠️ Blocked | ❌ Failed
+
+### Phase ordering (do not reorder)
+
+- **Baseline & readiness:** S00–S03 (must be green before altering UX components).
+- **Core flows & feedback:** S04–S08 (captures training/inference UX, error handling, monitoring, and artifact surfacing).
+- **Alignment & insights:** S09–S12 (alignment visuals, health signals, test harness definitions).
+- **Guidance & acceleration:** S13–S15 (templates/presets, quality dashboards, embedded help).
 
 ---
 
@@ -210,12 +221,14 @@ find docs/screenshots/S02 -maxdepth 1 -type f | head -n 1
 cd ui/frontend && npm install
 cd ui/frontend && npm run build
 cd ui/frontend && npm run lint
+cd ui/frontend && npm test -- --runInBand || npm run test:unit
 ```
 - **Expected results:**
   - Dependency install succeeds
   - Build completes without errors
   - Lint passes (or explicitly documents lint gaps if command is unavailable)
-- **Pass criteria:** All commands exit with code 0 OR documented blockers with proposed mitigation in `docs/notes/frontend_reliability.md`.
+  - At least one automated test command runs; if no test script exists, note the absence explicitly in the reliability notes
+- **Pass criteria:** All commands exit with code 0 OR documented blockers with proposed mitigation in `docs/notes/frontend_reliability.md` (including rationale when tests are unavailable or intentionally skipped).
 
 **Notes:**
 - Record actual command outputs and durations in the notes; if certain commands are unavailable, justify and adjust the verification accordingly.
@@ -238,7 +251,8 @@ cd ui/frontend && npm run lint
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S04/` covering the training interaction flow.
-- `docs/notes/training_flow.md` summarizing observations and recommended UX adjustments for training.
+- `docs/notes/training_flow.md` summarizing observations and recommended UX adjustments for training, including any job IDs or
+  mock submissions used during the walkthrough.
 
 **Verification test:**
 - **Name:** Training flow documented
@@ -275,7 +289,8 @@ find docs/screenshots/S04 -maxdepth 1 -type f | head -n 1
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S05/` covering the inference interaction flow.
-- `docs/notes/inference_flow.md` summarizing observations and recommended UX adjustments for inference.
+- `docs/notes/inference_flow.md` summarizing observations and recommended UX adjustments for inference, including any job IDs or
+  mock submissions used during the walkthrough.
 
 **Verification test:**
 - **Name:** Inference flow documented
@@ -312,7 +327,8 @@ find docs/screenshots/S05 -maxdepth 1 -type f | head -n 1
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S06/` illustrating validation and error handling states.
-- `docs/notes/submission_feedback.md` documenting current feedback patterns and recommended improvements.
+- `docs/notes/submission_feedback.md` documenting current feedback patterns, recommended improvements, and any job IDs or
+  request payloads used to trigger success/failure states.
 
 **Verification test:**
 - **Name:** Submission feedback documented
@@ -392,7 +408,8 @@ find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S08/` showcasing artifact visibility.
-- `docs/notes/artifact_visibility.md` detailing current coverage, gaps, and proposed preview widgets.
+- `docs/notes/artifact_visibility.md` detailing current coverage, gaps, and proposed preview widgets, including a per-job
+  inventory of artifacts observed (filenames and types).
 
 **Verification test:**
 - **Name:** Artifact visibility baseline captured
