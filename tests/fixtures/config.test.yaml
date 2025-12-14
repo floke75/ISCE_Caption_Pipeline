@@ -12,8 +12,8 @@ constraints:
   max_block_duration_s: 4.0
   min_chars_for_single_word_block: 2
 paths:
-  constraints: tests/fixtures/constraints.test.json
-  weights: tests/fixtures/model_weights.test.json
+  constraints: constraints.test.json
+  model_weights: model_weights.test.json
 sliders:
   flow: 1.0
   density: 1.0

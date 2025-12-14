@@ -360,7 +360,7 @@
       },
       "notes": "If you do not want to commit `demo.enriched.json`, add a small helper in tests to generate it on the fly before running main.py.",
       "relevance_review": "Relevant and consistent with beam search focus: validating deterministic Stage 3 output on fixtures keeps segmentation reproducible with current tiny configs; safe to run offline.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S10",
