@@ -24,37 +24,37 @@ This document compares the two implementations with respect to completeness, fle
 
 ### Scope & Responsibilities
 - **Repo variant**: Handles token alignment from raw TXT/SRT inputs, performs feature engineering, applies speaker correction, and serializes outputs for both training and inference paths, all orchestrated inside `process_file` with CLI argument parsing for integrations.【F:build_training_pair_standalone.py†L499-L639】
-- **Submitted variant**: Starts from an already aligned visual-words dataset, applies cue-aware labeling/feature steps, and writes training outputs without any alignment or inference pathway; configuration is edited directly in the script and is executed via a plain `main()` call.【F:docs/alt_build_training_pair_standalone.py†L193-L614】【F:docs/alt_build_training_pair_standalone.py†L695-L741】
+- **Submitted variant**: Starts from an already aligned visual-words dataset, applies cue-aware labeling/feature steps, and writes training outputs without any alignment or inference pathway; configuration is edited directly in the script and is executed via a plain `main()` call.【F:experiments/alt_build_training_pair_standalone.py†L193-L614】【F:experiments/alt_build_training_pair_standalone.py†L695-L741】
 
 **Impact:** The repo variant covers the full pipeline expected by the rest of the project. The submitted variant would require external tooling to produce compatible enriched inference data, limiting its usefulness as a drop-in replacement.
 
 ### Configuration & Extensibility
 - **Repo variant**: Supports YAML overlays and CLI overrides via `_recursive_update`, `_resolve_paths`, and the argparse interface, making it easy to adapt to different environments or experiments.【F:build_training_pair_standalone.py†L33-L116】【F:build_training_pair_standalone.py†L600-L639】
-- **Submitted variant**: Offers a single `SETTINGS` dictionary with absolute Windows paths that must be edited before every run; no CLI or external config hooks exist.【F:docs/alt_build_training_pair_standalone.py†L33-L108】【F:docs/alt_build_training_pair_standalone.py†L695-L741】
+- **Submitted variant**: Offers a single `SETTINGS` dictionary with absolute Windows paths that must be edited before every run; no CLI or external config hooks exist.【F:experiments/alt_build_training_pair_standalone.py†L33-L108】【F:experiments/alt_build_training_pair_standalone.py†L695-L741】
 
 **Impact:** The repo variant is substantially more maintainable in multi-environment deployments. The submitted variant creates churn for path changes and complicates automation.
 
 ### Alignment & Token Integrity
 - **Repo variant**: Implements global alignment (`_global_align` + `align_text_to_asr`) so that TXT or SRT edits inherit precise timestamps from the ASR reference.【F:build_training_pair_standalone.py†L131-L263】 This is critical for both inference and training parity.
-- **Submitted variant**: Assumes timestamps are already perfect in the visual-words JSON (`load_visual_words`) and only reassigns cue IDs based on time windows; there is no mechanism to align edited text.【F:docs/alt_build_training_pair_standalone.py†L223-L371】【F:docs/alt_build_training_pair_standalone.py†L475-L614】
+- **Submitted variant**: Assumes timestamps are already perfect in the visual-words JSON (`load_visual_words`) and only reassigns cue IDs based on time windows; there is no mechanism to align edited text.【F:experiments/alt_build_training_pair_standalone.py†L223-L371】【F:experiments/alt_build_training_pair_standalone.py†L475-L614】
 
 **Impact:** Without alignment, the submitted variant cannot ingest manual TXT edits, so inference parity with the model pipeline is lost.
 
 ### Speaker Handling
 - **Repo variant**: Provides the "sole winner" speaker correction algorithm to clean diarization mistakes sentence-by-sentence.【F:build_training_pair_standalone.py†L312-L349】
-- **Submitted variant**: Propagates majority speakers per cue based on pre-existing diarization labels and offers no correction step.【F:docs/alt_build_training_pair_standalone.py†L550-L592】
+- **Submitted variant**: Propagates majority speakers per cue based on pre-existing diarization labels and offers no correction step.【F:experiments/alt_build_training_pair_standalone.py†L550-L592】
 
 **Impact:** The repo variant actively mitigates diarization noise; the submitted variant assumes upstream data is already correct.
 
 ### Feature Engineering & Labeling
 - **Repo variant**: Adds prosody (pause_after_ms), spaCy fields, guardrail heuristics, and cue-derived labels, covering both training and inference features.【F:build_training_pair_standalone.py†L354-L495】
-- **Submitted variant**: Adds both pause_before/after, pause_z, optional spaCy with dependency heads, dialogue dash detection, numeric-unit glue, and LB hardening logic that can emit `LB_HARD` in labels and collapse to `break_type` per token.【F:docs/alt_build_training_pair_standalone.py†L402-L687】
+- **Submitted variant**: Adds both pause_before/after, pause_z, optional spaCy with dependency heads, dialogue dash detection, numeric-unit glue, and LB hardening logic that can emit `LB_HARD` in labels and collapse to `break_type` per token.【F:experiments/alt_build_training_pair_standalone.py†L402-L687】
 
 **Impact:** Feature sets overlap but differ in emphasis. The submitted variant introduces richer prosody metadata (pause_before_ms, pause_z) and explicit `LB_HARD` handling, which could be valuable if integrated, yet this comes at the expense of missing inference support.
 
 ### Outputs & Sidecars
 - **Repo variant**: Emits a single JSON per run (training or inference) and does not manage vector sidecars.【F:build_training_pair_standalone.py†L567-L590】
-- **Submitted variant**: Always writes both tokens and labels files and can optionally persist spaCy vectors to `.npy` files for downstream consumption.【F:docs/alt_build_training_pair_standalone.py†L614-L687】
+- **Submitted variant**: Always writes both tokens and labels files and can optionally persist spaCy vectors to `.npy` files for downstream consumption.【F:experiments/alt_build_training_pair_standalone.py†L614-L687】
 
 **Impact:** The submitted variant's vector export is a nice-to-have but requires numpy and additional storage management; the repo variant keeps I/O minimal and aligned with existing consumers.
 
@@ -72,14 +72,14 @@ This document compares the two implementations with respect to completeness, fle
 
 ### Submitted Variant
 **Pros**
-- Rich prosody analytics (pause_before_ms, pause_after_ms, pause_z) and LB hardening rules generate nuanced training signals.【F:docs/alt_build_training_pair_standalone.py†L402-L532】【F:docs/alt_build_training_pair_standalone.py†L632-L687】
-- Optional spaCy dependency export and vector sidecar writer enhance downstream ML workflows.【F:docs/alt_build_training_pair_standalone.py†L592-L687】
-- Conservative transformation toggles (hyphen split/merge, dash stripping) allow experimentation without touching raw alignment by default.【F:docs/alt_build_training_pair_standalone.py†L331-L474】
+- Rich prosody analytics (pause_before_ms, pause_after_ms, pause_z) and LB hardening rules generate nuanced training signals.【F:experiments/alt_build_training_pair_standalone.py†L402-L532】【F:experiments/alt_build_training_pair_standalone.py†L632-L687】
+- Optional spaCy dependency export and vector sidecar writer enhance downstream ML workflows.【F:experiments/alt_build_training_pair_standalone.py†L592-L687】
+- Conservative transformation toggles (hyphen split/merge, dash stripping) allow experimentation without touching raw alignment by default.【F:experiments/alt_build_training_pair_standalone.py†L331-L474】
 
 **Cons**
-- Hard-coded paths and lack of CLI/config make automation and cross-environment use fragile.【F:docs/alt_build_training_pair_standalone.py†L33-L108】【F:docs/alt_build_training_pair_standalone.py†L695-L741】
-- No mechanism to align raw TXT/SRT edits with ASR; assumes pre-aligned data and thus cannot replace the repo tool for inference.【F:docs/alt_build_training_pair_standalone.py†L223-L371】【F:docs/alt_build_training_pair_standalone.py†L695-L741】
-- Speaker correction is limited to majority-vote propagation, offering no remediation for diarization errors.【F:docs/alt_build_training_pair_standalone.py†L550-L592】
+- Hard-coded paths and lack of CLI/config make automation and cross-environment use fragile.【F:experiments/alt_build_training_pair_standalone.py†L33-L108】【F:experiments/alt_build_training_pair_standalone.py†L695-L741】
+- No mechanism to align raw TXT/SRT edits with ASR; assumes pre-aligned data and thus cannot replace the repo tool for inference.【F:experiments/alt_build_training_pair_standalone.py†L223-L371】【F:experiments/alt_build_training_pair_standalone.py†L695-L741】
+- Speaker correction is limited to majority-vote propagation, offering no remediation for diarization errors.【F:experiments/alt_build_training_pair_standalone.py†L550-L592】
 
 ## Recommendation
 Retain the repo variant as the canonical implementation for production workflows. Cherry-pick ideas from the submitted variant (e.g., pause_z, LB hardening, optional vector dumps) by porting them into the repo codebase if those features are desired. Integrating them directly will preserve configuration flexibility and alignment support while gaining the richer annotations.

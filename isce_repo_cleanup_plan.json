@@ -482,7 +482,7 @@
       },
       "notes": "",
       "relevance_review": "Relevant with caution: alt tutorial scripts exist under docs/; moving non-canonical code into experiments/ or legacy/ reduces clutter but must preserve import paths used in docs and avoid breaking tests.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S14",
