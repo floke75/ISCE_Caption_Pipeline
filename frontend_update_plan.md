@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 1/16 passed, 0 failed, 0 in progress
+**Step status summary:** 2/16 passed, 0 failed, 0 in progress
 
 ---
 
@@ -73,7 +73,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 ### Index
 
 - [S00 — Establish current frontend state and data collection protocol](#s00-establish-current-frontend-state-and-data-collection-protocol) — ✅ Passed
-- [S01 — Baseline UI capture and navigation audit](#s01-baseline-ui-capture-and-navigation-audit) — ⬜ Not started
+- [S01 — Baseline UI capture and navigation audit](#s01-baseline-ui-capture-and-navigation-audit) — ✅ Passed
 - [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ⬜ Not started
 - [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ⬜ Not started
 - [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ⬜ Not started
@@ -94,7 +94,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 | Step | Approx. lines | Status |
 | --- | --- | --- |
 | S00 | ~L117–156 | ✅ |
-| S01 | ~L157–193 | ⬜ |
+| S01 | ~L157–193 | ✅ |
 | S02 | ~L194–228 | ⬜ |
 | S03 | ~L229–268 | ⬜ |
 | S04 | ~L269–306 | ⬜ |
@@ -156,7 +156,7 @@ grep -q "frontend dev" docs/notes/frontend_readiness.md
 
 ## S01 — Baseline UI capture and navigation audit
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Run the current frontend, capture baseline screenshots of key views, and map navigation flows to anchor future comparisons.
 
