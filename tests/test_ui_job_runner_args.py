@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-import ui.backend.pipelines as pipelines
+from ui.backend import pipelines
 
 
 class FakeContext:
