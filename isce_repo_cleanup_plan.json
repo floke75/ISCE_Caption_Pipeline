@@ -452,7 +452,7 @@
         ],
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
-      "notes": "",
+      "notes": "Audit 2025-05-29: Added missing imports in tests/test_ui_job_runner_args.py so the mock-based argument-construction test executes successfully.",
       "relevance_review": "Relevant documentation gap: AGENTS.md already summarizes the canonical chain; a dedicated ENTRYPOINTS.md plus AGENTS.md link keeps production path explicit and low-risk.",
       "passed": true
     },
@@ -480,7 +480,7 @@
         ],
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
-      "notes": "",
+      "notes": "Audit 2025-05-29: Added missing imports in tests/test_ui_job_runner_args.py so the mock-based argument-construction test executes successfully.",
       "relevance_review": "Relevant with caution: alt tutorial scripts exist under docs/; moving non-canonical code into experiments/ or legacy/ reduces clutter but must preserve import paths used in docs and avoid breaking tests.",
       "passed": true
     },
@@ -589,7 +589,7 @@
         ],
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
-      "notes": "",
+      "notes": "Audit 2025-05-29: Added missing imports in tests/test_ui_job_runner_args.py so the mock-based argument-construction test executes successfully.",
       "relevance_review": "Relevant and safe: ui/backend/pipelines.py builds command lists for stage scripts; a mock-based pytest that inspects ctx.stream_command arguments can validate flag coverage without hitting WhisperX or external downloads.",
       "passed": true
     },
