@@ -53,7 +53,9 @@ def _resolve_paths(config: Dict[str, Any], context: Dict[str, str]) -> Dict[str,
 
     Recursively iterates through a configuration dictionary and formats any
     string values that contain `{placeholder}` style variables using the
-    provided context dictionary.
+    provided context dictionary. When a value is resolved, the context is also
+    updated so later placeholders can reference newly formatted values (e.g.,
+    resolving ``pipeline_root`` before ``drop_folder_inference``).
 
     Args:
         config: The configuration dictionary with unresolved path strings.
@@ -63,14 +65,19 @@ def _resolve_paths(config: Dict[str, Any], context: Dict[str, str]) -> Dict[str,
         The configuration dictionary with path placeholders resolved.
     """
     for k, v in config.items():
-        if isinstance(v, str) and "{" in v and "}" in v:
-            try:
-                config[k] = v.format(**context)
-            except KeyError:
-                # Ignore if a placeholder key is not in the context.
-                pass
+        if isinstance(v, str):
+            if "{" in v and "}" in v:
+                try:
+                    resolved = v.format(**context)
+                    config[k] = resolved
+                    context[k] = resolved
+                except KeyError:
+                    # Ignore if a placeholder key is not in the context.
+                    pass
+            else:
+                context.setdefault(k, v)
         elif isinstance(v, dict):
-            # Recurse into nested dictionaries.
+            # Recurse into nested dictionaries with the shared context.
             config[k] = _resolve_paths(v, context)
     return config
 

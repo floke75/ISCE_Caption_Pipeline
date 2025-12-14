@@ -511,7 +511,7 @@
       },
       "notes": "It is still fine for the module to be named pipeline_config.py; the fix is to clarify the YAML mechanism.",
       "relevance_review": "Relevant: run_pipeline.py and docs still mention YAML overrides; clarifying terminology avoids confusion between module vs config file and is safe documentation-only work plus any small string updates.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S15",
@@ -538,7 +538,7 @@
       },
       "notes": "",
       "relevance_review": "Relevant and low risk: DEFAULT_SETTINGS still contain placeholders/paths that should stay portable across align_make.py, build_training_pair_standalone.py, and run_pipeline.py; adding a small pytest to assert resolution under test dirs matches current config loader behaviour.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S16",
@@ -566,7 +566,7 @@
       },
       "notes": "If you prefer not to add ruff, substitute with flake8; keep the test command explicit.",
       "relevance_review": "Already implemented: ruff.toml exists with E/F/I rules and scripts/lint.sh runs ruff on core paths. Step is redundant; mark as satisfied without new work unless scope changes.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S17",
@@ -591,7 +591,7 @@
       },
       "notes": "",
       "relevance_review": "Relevant and safe: ui/backend/pipelines.py builds command lists for stage scripts; a mock-based pytest that inspects ctx.stream_command arguments can validate flag coverage without hitting WhisperX or external downloads.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S18",
