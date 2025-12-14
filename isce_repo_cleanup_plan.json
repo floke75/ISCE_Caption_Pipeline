@@ -550,6 +550,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If you prefer not to add ruff, substitute with flake8; keep the test command explicit.",
+      "relevance_review": "Already implemented: ruff.toml exists with E/F/I rules and scripts/lint.sh runs ruff on core paths. Step is redundant; mark as satisfied without new work unless scope changes.",
       "passed": false
     },
     {
@@ -574,6 +575,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant and safe: ui/backend/pipelines.py builds command lists for stage scripts; a mock-based pytest that inspects ctx.stream_command arguments can validate flag coverage without hitting WhisperX or external downloads.",
       "passed": false
     },
     {
@@ -603,6 +605,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant documentation alignment: README currently presents both hot-folder and UI paths; adding a clear canonical recommendation plus banner comment is low-risk and keeps users aligned.",
       "passed": false
     },
     {
@@ -629,6 +632,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If any doubt remains about a file, move it to legacy/ instead of deleting.",
+      "relevance_review": "Relevant but requires caution: run vulture/static analysis with excludes for orchestrators and UI to avoid false positives; prefer moving uncertain files into legacy/ and document removals in docs/DELETIONS.md.",
       "passed": false
     }
   ]
