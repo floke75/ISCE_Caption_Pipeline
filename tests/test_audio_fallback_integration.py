@@ -1,6 +1,5 @@
 import pytest
 import numpy as np
-import scipy.io.wavfile
 import soundfile as sf
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -15,7 +14,7 @@ def create_dummy_wav(filename, duration=0.1, rate=44100):
     t = np.linspace(0, duration, int(rate * duration), endpoint=False)
     audio = 0.5 * np.sin(2 * np.pi * 440 * t)
     audio_int16 = (audio * 32767).astype(np.int16)
-    scipy.io.wavfile.write(filename, rate, audio_int16)
+    sf.write(filename, audio_int16, rate)
 
 @pytest.fixture
 def dummy_wav(tmp_path):
