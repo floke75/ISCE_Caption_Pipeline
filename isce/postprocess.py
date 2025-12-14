@@ -16,6 +16,7 @@ from typing import Iterable, List, Sequence
 
 from .config import Config
 from .scorer import Scorer
+from .token_normalization import normalize_token_payload
 from .types import BreakType, Token
 
 __all__ = ["postprocess"]
@@ -69,10 +70,8 @@ def _tokens_to_dicts(tokens: Iterable[Token], start_index: int = 0) -> List[dict
     """
     dicts: List[dict] = []
     for offset, token in enumerate(tokens):
-        payload = dict(token.__dict__)
-        if payload.get("token_index") is None:
-            payload["token_index"] = start_index + offset
-        dicts.append(payload)
+        payload = normalize_token_payload(token, start_index + offset)
+        dicts.append(payload or {})
     return dicts
 
 
