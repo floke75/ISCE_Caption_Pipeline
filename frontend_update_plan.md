@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 0/13 passed, 0 failed, 0 in progress (initial draft)
+**Step status summary:** 0/16 passed, 0 failed, 0 in progress (initial draft)
 
 ---
 
@@ -68,6 +68,9 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S10 — Inference alignment visualization design (LLM ↔ ASR/NW)](#s10-inference-alignment-visualization-design-llm--asrnw) — ⬜ Not started
 - [S11 — System health signals and observability hooks](#s11-system-health-signals-and-observability-hooks) — ⬜ Not started
 - [S12 — Insight verification and test harness planning](#s12-insight-verification-and-test-harness-planning) — ⬜ Not started
+- [S13 — Guided job templates and presets](#s13-guided-job-templates-and-presets) — ⬜ Not started
+- [S14 — Data quality dashboard and cue diagnostics](#s14-data-quality-dashboard-and-cue-diagnostics) — ⬜ Not started
+- [S15 — Embedded help center and onboarding tours](#s15-embedded-help-center-and-onboarding-tours) — ⬜ Not started
 
 ---
 
@@ -550,3 +553,116 @@ find docs/screenshots/S12 -maxdepth 1 -type f | head -n 1
 
 **Notes:**
 - Explicitly call out which tests are required versus optional, and how results will be captured for future steps.
+
+---
+
+## S13 — Guided job templates and presets
+
+**Status:** ⬜ Not started
+
+**Objective:** Define a template-driven flow that lets users pick common scenarios (e.g., short clip inference, long-form training refresh, alignment QA) and auto-populates safe defaults, with the ability to save/load custom presets.
+
+**Actions to perform:**
+- Review training and inference forms to identify fields suitable for templating (file pickers, diarization toggles, scoring overrides, reflow options) and map them to preset values.
+- Draft UX for selecting a template at form entry (dropdown or wizard landing) and for saving/updating user presets; capture mockups under `docs/screenshots/S13/`.
+- Specify validation and guardrails for templates (e.g., warn when presets reference missing paths or incompatible flags) and how to surface them inline.
+- Outline how templates will be persisted (local storage vs. backend) and synchronized across sessions, noting any security constraints.
+
+**Deliverables:**
+- Screenshots or mockups under `docs/screenshots/S13/` showing the proposed template/preset selector and save/update flows.
+- `docs/notes/job_templates_design.md` describing template schemas, default bundles, validation rules, and persistence approach.
+
+**Verification test:**
+- **Name:** Job templates design documented
+- **Commands:**
+
+```text
+test -d docs/screenshots/S13
+test -f docs/notes/job_templates_design.md
+find docs/screenshots/S13 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot/mockup directory exists and contains at least one file
+  - Job templates design notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
+
+**Notes:**
+- Include copy/wording guidance for presets so non-experts understand when to choose each template and how to revert to defaults.
+
+---
+
+## S14 — Data quality dashboard and cue diagnostics
+
+**Status:** ⬜ Not started
+
+**Objective:** Plan a data quality view that surfaces interpretable metrics from training and inference artifacts (e.g., diarization consistency, pause distributions, alignment gaps, cue length outliers) to help non-experts judge readiness and spot issues quickly.
+
+**Actions to perform:**
+- Catalog available metrics/features in emitted artifacts (e.g., pause_ms, speaker_change flags, alignment gap markers, structural hints) and decide which to visualize for quality assessment.
+- Design dashboard panels (charts/tables) for per-job summaries and per-cue drilldowns; capture mockups under `docs/screenshots/S14/`.
+- Define thresholds and highlighting rules for common problems (overlong cues, dense speaker changes, large alignment gaps) and how to present remediation tips inline.
+- Outline data retrieval strategy (which endpoints/artifact files) and performance considerations for large jobs.
+
+**Deliverables:**
+- Screenshots or mockups under `docs/screenshots/S14/` showing the proposed data quality dashboard and cue diagnostics views.
+- `docs/notes/data_quality_dashboard.md` detailing metrics, thresholds, visualization types, and data loading approach.
+
+**Verification test:**
+- **Name:** Data quality dashboard design recorded
+
+- **Commands:**
+
+```text
+test -d docs/screenshots/S14
+test -f docs/notes/data_quality_dashboard.md
+find docs/screenshots/S14 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot/mockup directory exists and contains at least one file
+  - Data quality dashboard notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
+
+**Notes:**
+- Emphasize plain-language labels and legends so average users can interpret metrics without domain knowledge; include suggestions for tooltips and “what this means” text.
+
+---
+
+## S15 — Embedded help center and onboarding tours
+
+**Status:** ⬜ Not started
+
+**Objective:** Define an in-app help center with glossary, quickstart checklists, and guided tours that orient new users across training, inference, and monitoring views without leaving the UI.
+
+**Actions to perform:**
+- Identify the top questions/confusions from prior steps (training/inference inputs, alignment visuals, artifact previews) and draft concise answers/glossary entries.
+- Design entry points for help (e.g., persistent “Help” button, contextual “?” icons) and guided tour steps; capture mockups under `docs/screenshots/S15/`.
+- Map help content to existing docs (README, FRONTEND.md) and propose inline anchors or embedded markdown rendering.
+- Specify how tours will be triggered/dismissed, saved per user/session, and localized if needed.
+
+**Deliverables:**
+- Screenshots or mockups under `docs/screenshots/S15/` showing the help center, glossary, and guided tour overlays.
+- `docs/notes/help_center_plan.md` describing content structure, triggering logic, tour steps, and documentation links.
+
+**Verification test:**
+- **Name:** Help center plan documented
+
+- **Commands:**
+
+```text
+test -d docs/screenshots/S15
+test -f docs/notes/help_center_plan.md
+find docs/screenshots/S15 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot/mockup directory exists and contains at least one file
+  - Help center plan notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
+
+**Notes:**
+- Include accessibility considerations (keyboard navigation, ARIA labels) for all help/tour entry points and overlays.
