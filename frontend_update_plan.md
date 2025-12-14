@@ -53,6 +53,12 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - **Fixture references (if needed):** reuse existing fixtures under `tests/fixtures` for smoke checks.
 - **Status markers:** ⬜ Not started | 🔄 In progress | ✅ Passed | ⚠️ Blocked | ❌ Failed
 
+### Navigation aids (line pointers)
+
+- **Purpose:** Reduce search churn in this long document by keeping approximate line ranges for each step alongside the index.
+- **Maintenance:** Line ranges must be refreshed whenever step content materially changes. Use `nl -ba frontend_update_plan.md | rg "^ *[0-9]+ +## S"` to locate headers and adjust the table below. Treat these as hints (not strict references) and update them as part of any edit touching a step section.
+- **Drift cautions:** Because line numbers shift with edits, stale pointers can mislead automation and reviewers. Refresh the table whenever you update a step or reorder content.
+
 ### Phase ordering (do not reorder)
 
 - **Baseline & readiness:** S00–S03 (must be green before altering UX components).
@@ -82,6 +88,29 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S13 — Guided job templates and presets](#s13-guided-job-templates-and-presets) — ⬜ Not started
 - [S14 — Data quality dashboard and cue diagnostics](#s14-data-quality-dashboard-and-cue-diagnostics) — ⬜ Not started
 - [S15 — Embedded help center and onboarding tours](#s15-embedded-help-center-and-onboarding-tours) — ⬜ Not started
+
+### Line pointers (refresh on edit)
+
+| Step | Approx. lines | Status |
+| --- | --- | --- |
+| S00 | ~L117–154 | ⬜ |
+| S01 | ~L155–191 | ⬜ |
+| S02 | ~L192–226 | ⬜ |
+| S03 | ~L227–266 | ⬜ |
+| S04 | ~L267–304 | ⬜ |
+| S05 | ~L305–342 | ⬜ |
+| S06 | ~L343–383 | ⬜ |
+| S07 | ~L384–423 | ⬜ |
+| S08 | ~L424–464 | ⬜ |
+| S09 | ~L465–506 | ⬜ |
+| S10 | ~L507–548 | ⬜ |
+| S11 | ~L549–588 | ⬜ |
+| S12 | ~L589–628 | ⬜ |
+| S13 | ~L629–665 | ⬜ |
+| S14 | ~L666–705 | ⬜ |
+| S15 | ~L706–742 | ⬜ |
+
+*Pointers are hints—update after any content change to keep navigation reliable.*
 
 ---
 
