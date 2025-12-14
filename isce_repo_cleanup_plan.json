@@ -102,7 +102,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If a token was previously committed, rotate it immediately. Optional but recommended: rewrite git history to purge the secret.",
-        "passed": true
+      "passed": true
     },
     {
       "id": "S02",
@@ -132,8 +132,8 @@
       "notes": "",
       "passed": true
     },
-      {
-        "id": "S03",
+    {
+      "id": "S03",
       "title": "Standardize config loading across stage scripts",
       "objective": "Remove duplicate config merge/path-resolution code and make all stage scripts use `pipeline_config.load_pipeline_config`.",
       "actions": [
@@ -187,7 +187,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If your dev environment already has whisperx installed, this still passes; the key is that import must not crash when it is absent.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S05",
