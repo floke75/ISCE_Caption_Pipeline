@@ -66,6 +66,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Already completed and still relevant as historical context: baseline snapshot in docs/BASELINE.md with command outputs helps anchor subsequent cleanup; no further action needed beyond retaining the record.",
       "passed": true
     },
     {
@@ -102,6 +103,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If a token was previously committed, rotate it immediately. Optional but recommended: rewrite git history to purge the secret.",
+      "relevance_review": "Completed but important to keep: configs remain sanitized with placeholders and local override guidance in README/pipeline_config.example.yaml; keeping this state avoids accidental secret reintroduction.",
       "passed": true
     },
     {
@@ -130,6 +132,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Completed and still applicable: portable defaults in pipeline_config.yaml/example keep paths repository-relative, matching current pipeline_config.py resolution and README guidance.",
       "passed": true
     },
     {
@@ -161,6 +164,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Completed and aligned: scripts now rely on pipeline_config.load_pipeline_config, removing duplicate loaders; documenting this keeps stage scripts consistent with orchestrators.",
       "passed": true
     },
     {
@@ -187,6 +191,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If your dev environment already has whisperx installed, this still passes; the key is that import must not crash when it is absent.",
+      "relevance_review": "Completed and still relevant: import-lazy refactor prevents whisperx/torch from blocking basic imports, matching current align_make.py behavior and keeping installs lightweight.",
       "passed": true
     },
     {
@@ -217,6 +222,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "You must create `tests/fixtures/demo.mp4` as a tiny placeholder file (can be empty); mock mode must not read it.",
+      "relevance_review": "Relevant and already implemented: mock ASR flag supports deterministic outputs for tests without heavy deps; keep fixture-based path intact for smoke coverage.",
       "passed": true
     },
     {
@@ -252,6 +258,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant as groundwork: tiny fixtures underpin later deterministic tests and align with existing tests/fixtures layout; ensure they stay minimal for offline runs.",
       "passed": false
     },
     {
@@ -353,6 +360,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If you do not want to commit `demo.enriched.json`, add a small helper in tests to generate it on the fly before running main.py.",
+      "relevance_review": "Relevant and consistent with beam search focus: validating deterministic Stage 3 output on fixtures keeps segmentation reproducible with current tiny configs; safe to run offline.",
       "passed": false
     },
     {
@@ -382,6 +390,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant integration guardrail: end-to-end smoke command using mock ASR ties stages together without WhisperX, matching orchestrator expectations and safe for CI.",
       "passed": false
     },
     {
