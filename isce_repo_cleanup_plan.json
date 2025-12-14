@@ -648,7 +648,7 @@
       },
       "notes": "If any doubt remains about a file, move it to legacy/ instead of deleting.",
       "relevance_review": "Relevant but requires caution: run vulture/static analysis with excludes for orchestrators and UI to avoid false positives; prefer moving uncertain files into legacy/ and document removals in docs/DELETIONS.md.",
-      "passed": false
+      "passed": true
     }
   ]
 }
