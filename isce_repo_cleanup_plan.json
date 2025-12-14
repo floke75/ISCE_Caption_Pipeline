@@ -285,6 +285,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If the output schema differs, standardize it to a single canonical top-level key (recommended: `words`). If you change schema, also update stage3 loader accordingly.",
+      "relevance_review": "Relevant and safe: build_training_pair_standalone.py already guards spaCy imports and exposes the listed flags via orchestrators; confirming spaCy-disabled paths and schema consistency aligns with current usage and avoids extra dependencies.",
       "passed": false
     },
     {
@@ -315,6 +316,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant: training generation remains part of README and scripts/train_model.py flow; fixtures are small so producing labels from SRT+ASR is safe and keeps training path exercised.",
       "passed": false
     },
     {
@@ -412,6 +414,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If additional lightweight dependencies are required for imports (e.g., numpy), add them to the install list and document in requirements-dev.",
+      "relevance_review": "Relevant and aligned: main.py consumes enriched tokens produced in S07; validating deterministic SRT output on fixtures is consistent with existing beam search tests and is safe with tiny configs.",
       "passed": false
     },
     {
@@ -442,6 +445,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant documentation gap: AGENTS.md already summarizes the canonical chain; a dedicated ENTRYPOINTS.md plus AGENTS.md link keeps production path explicit and low-risk.",
       "passed": false
     },
     {
@@ -469,6 +473,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant with caution: alt tutorial scripts exist under docs/; moving non-canonical code into experiments/ or legacy/ reduces clutter but must preserve import paths used in docs and avoid breaking tests.",
       "passed": false
     },
     {
@@ -497,6 +502,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "It is still fine for the module to be named pipeline_config.py; the fix is to clarify the YAML mechanism.",
+      "relevance_review": "Relevant: run_pipeline.py and docs still mention YAML overrides; clarifying terminology avoids confusion between module vs config file and is safe documentation-only work plus any small string updates.",
       "passed": false
     },
     {
@@ -523,6 +529,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant and low risk: DEFAULT_SETTINGS still contain placeholders/paths that should stay portable across align_make.py, build_training_pair_standalone.py, and run_pipeline.py; adding a small pytest to assert resolution under test dirs matches current config loader behaviour.",
       "passed": false
     },
     {
