@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 0/11 passed, 0 failed, 0 in progress (initial draft)
+**Step status summary:** 0/13 passed, 0 failed, 0 in progress (initial draft)
 
 ---
 
@@ -64,8 +64,10 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S06 — Submission feedback, validation errors, and recovery](#s06-submission-feedback-validation-errors-and-recovery) — ⬜ Not started
 - [S07 — Job monitoring baseline and navigation](#s07-job-monitoring-baseline-and-navigation) — ⬜ Not started
 - [S08 — Artifact visibility and preview widgets](#s08-artifact-visibility-and-preview-widgets) — ⬜ Not started
-- [S09 — System health signals and observability hooks](#s09-system-health-signals-and-observability-hooks) — ⬜ Not started
-- [S10 — Insight verification and test harness planning](#s10-insight-verification-and-test-harness-planning) — ⬜ Not started
+- [S09 — Training alignment visualization design (SRT ↔ ASR/NW)](#s09-training-alignment-visualization-design-srt--asrnw) — ⬜ Not started
+- [S10 — Inference alignment visualization design (LLM ↔ ASR/NW)](#s10-inference-alignment-visualization-design-llm--asrnw) — ⬜ Not started
+- [S11 — System health signals and observability hooks](#s11-system-health-signals-and-observability-hooks) — ⬜ Not started
+- [S12 — Insight verification and test harness planning](#s12-insight-verification-and-test-harness-planning) — ⬜ Not started
 
 ---
 
@@ -395,7 +397,87 @@ find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
 
 ---
 
-## S09 — System health signals and observability hooks
+## S09 — Training alignment visualization design (SRT ↔ ASR/NW)
+
+**Status:** ⬜ Not started
+
+**Objective:** Define a synchronized, side-by-side visualization that compares the human-edited SRT cues to WhisperX ASR word-level timestamps aligned via Needleman–Wunsch during training, highlighting matches, insertions, and timing deltas.
+
+**Actions to perform:**
+- Inventory available training artifacts for alignment: `.train.words.json`, `.asr.visual.words.diar.json`, and any intermediate alignment matrices produced during Stage 2.
+- Specify the UI layout for side-by-side cue vs. word-level timelines (e.g., dual columns with synchronized scrolling, match/gap coloring, hover tooltips for timestamps and diffs).
+- Identify interaction affordances (scrub/playback hooks if audio is available, filtering by cue, toggling diarization/speaker labels).
+- Capture wireframe or mock screenshot(s) illustrating the proposed training alignment view and save under `docs/screenshots/S09/`.
+- Document data-loading strategy (which endpoint or artifact path) and performance considerations for large files.
+
+**Deliverables:**
+- Screenshots or mockups under `docs/screenshots/S09/` showing the proposed training alignment visualization.
+- `docs/notes/training_alignment_design.md` describing layout, interactions, data sources, and fallbacks.
+
+**Verification test:**
+- **Name:** Training alignment design recorded
+
+**Commands:**
+
+```text
+test -d docs/screenshots/S09
+test -f docs/notes/training_alignment_design.md
+find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot/mockup directory exists and contains at least one file
+  - Training alignment design notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
+
+**Notes:**
+- Explicitly call out how Needleman–Wunsch alignment output (matches, insertions, deletions) will be visualized and kept synchronized with cue timing.
+- Prefer designs that reuse existing artifact formats to avoid new backend dependencies unless justified.
+
+---
+
+## S10 — Inference alignment visualization design (LLM ↔ ASR/NW)
+
+**Status:** ⬜ Not started
+
+**Objective:** Plan a synchronized visualization for inference that compares the LLM-edited/refined transcript to WhisperX ASR word-level timestamps after Needleman–Wunsch alignment, emphasizing timing quality and structural cues.
+
+**Actions to perform:**
+- Catalog inference-time artifacts that hold aligned word-level timestamps (e.g., enriched JSON with `is_llm_structural_break`, ASR reference files, alignment outputs) and note their locations per job.
+- Define the UI for side-by-side comparison (LLM text vs. ASR words) with synchronized scrolling, highlighting of alignment matches/mismatches, and visual indicators for timing gaps or uncertain alignments.
+- Specify how to surface cue-level timing deltas, confidence/score overlays if available, and toggles for showing LLM structural break hints.
+- Capture wireframe or mock screenshot(s) of the proposed inference alignment view and save under `docs/screenshots/S10/`.
+- Note any shared components with the training alignment view to maximize reuse and ensure consistent UX.
+
+**Deliverables:**
+- Screenshots or mockups under `docs/screenshots/S10/` for the inference alignment visualization.
+- `docs/notes/inference_alignment_design.md` detailing layout, interactions, data sources, and reuse strategy relative to training.
+
+**Verification test:**
+- **Name:** Inference alignment design recorded
+
+**Commands:**
+
+```text
+test -d docs/screenshots/S10
+test -f docs/notes/inference_alignment_design.md
+find docs/screenshots/S10 -maxdepth 1 -type f | head -n 1
+```
+
+**Expected results:**
+  - Screenshot/mockup directory exists and contains at least one file
+  - Inference alignment design notes exist
+
+**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
+
+**Notes:**
+- Document how Needleman–Wunsch alignment results will be kept in sync across text panes and any fallback behavior if alignment data is incomplete.
+- Consider visual consistency with training alignment while accounting for LLM-specific metadata (e.g., `is_llm_structural_break`).
+
+---
+
+## S11 — System health signals and observability hooks
 
 **Status:** ⬜ Not started
 
@@ -403,12 +485,12 @@ find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
 
 **Actions to perform:**
 - Review UI components for health indicators (status chips, banners, spinners) and note when they appear or fail to appear.
-- Capture screenshots of health/alert states under `docs/screenshots/S09/`.
+- Capture screenshots of health/alert states under `docs/screenshots/S11/`.
 - Inspect available backend endpoints/log surfaces (FastAPI) that could provide health data and note gaps.
 - Propose specific observability hooks (heartbeat endpoint checks, queue depth indicators, error surfacing) to add.
 
 **Deliverables:**
-- Screenshots under `docs/screenshots/S09/` covering current health signals.
+- Screenshots under `docs/screenshots/S11/` covering current health signals.
 - `docs/notes/system_health.md` detailing observed signals, gaps, and recommended observability hooks.
 
 **Verification test:**
@@ -417,9 +499,9 @@ find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
 **Commands:**
 
 ```text
-test -d docs/screenshots/S09
+test -d docs/screenshots/S11
 test -f docs/notes/system_health.md
-find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
+find docs/screenshots/S11 -maxdepth 1 -type f | head -n 1
 ```
 
 **Expected results:**
@@ -433,7 +515,7 @@ find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
 
 ---
 
-## S10 — Insight verification and test harness planning
+## S12 — Insight verification and test harness planning
 
 **Status:** ⬜ Not started
 
@@ -443,10 +525,10 @@ find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
 - Enumerate automated and manual tests required for the planned preview widgets and health indicators (e.g., component tests, API contract checks, e2e smoke tests).
 - Identify sample data or fixtures needed to exercise previews (SRT, enriched JSON, alignment outputs) and where to store them.
 - Outline commands to be used later (frontend unit tests, backend API tests, screenshot-based visual checks) and how to record evidence.
-- Capture a summary screenshot (e.g., checklist or doc snippet) under `docs/screenshots/S10/` showing the planned test matrix or harness layout.
+- Capture a summary screenshot (e.g., checklist or doc snippet) under `docs/screenshots/S12/` showing the planned test matrix or harness layout.
 
 **Deliverables:**
-- Screenshots under `docs/screenshots/S10/` illustrating the planned test matrix or harness notes.
+- Screenshots under `docs/screenshots/S12/` illustrating the planned test matrix or harness notes.
 - `docs/notes/insight_verification_plan.md` describing test coverage, fixtures, and tooling to be used in later steps.
 
 **Verification test:**
@@ -455,9 +537,9 @@ find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
 **Commands:**
 
 ```text
-test -d docs/screenshots/S10
+test -d docs/screenshots/S12
 test -f docs/notes/insight_verification_plan.md
-find docs/screenshots/S10 -maxdepth 1 -type f | head -n 1
+find docs/screenshots/S12 -maxdepth 1 -type f | head -n 1
 ```
 
 **Expected results:**
