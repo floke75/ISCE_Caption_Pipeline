@@ -390,7 +390,7 @@
       },
       "notes": "",
       "relevance_review": "Relevant integration guardrail: end-to-end smoke command using mock ASR ties stages together without WhisperX, matching orchestrator expectations and safe for CI.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S11",
