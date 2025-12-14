@@ -30,15 +30,11 @@ import gc
 from pathlib import Path
 from typing import Any, Dict
 import argparse
+import importlib
+import importlib.util
 import ffmpeg
 import warnings
 from pipeline_config import load_pipeline_config
-
-# =========================
-# Dependency guards
-# =========================
-import whisperx
-import torch
 
 # =========================
 # DEFAULT SETTINGS (Self-Contained)
@@ -89,6 +85,14 @@ def _resource_error(stage: str, exc: Exception) -> RuntimeError:
     )
     return RuntimeError(f"{hint}\nOriginal error: {exc}")
 
+
+def _load_dependency(module_name: str, stage: str):
+    """Import a heavy dependency lazily with a descriptive error if missing."""
+
+    if importlib.util.find_spec(module_name) is None:
+        raise _resource_error(stage, ModuleNotFoundError(f"No module named '{module_name}'"))
+    return importlib.import_module(module_name)
+
 def set_env_tokens(token: str):
     """
     Sets the Hugging Face authentication token as an environment variable.
@@ -115,6 +119,8 @@ def pick_device(device_cfg: str = "auto") -> str:
     Returns:
         A string representing the selected device, either "cuda" or "cpu".
     """
+    torch = _load_dependency("torch", "select computation device")
+
     if device_cfg == "cuda" and not torch.cuda.is_available():
         print("[WARN] CUDA specified but not available. Falling back to CPU.")
         return "cpu"
@@ -230,6 +236,9 @@ def process_file(audio_path: Path, device: str, paths: Dict[str, Path], settings
         if settings.get("skip_if_asr_exists") and asr_final_json.exists():
             print(f"[SKIP] Final ASR file already exists: {asr_final_json.name}")
             return
+
+        whisperx = _load_dependency("whisperx", "run WhisperX ASR and diarization")
+        torch = _load_dependency("torch", "run WhisperX ASR and diarization")
 
         cache_dir_setting = settings.get("cache_dir") or str(Path.home() / ".cache" / "whisperx")
         cache_path = Path(cache_dir_setting)
