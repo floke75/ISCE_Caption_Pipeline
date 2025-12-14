@@ -14,6 +14,8 @@ Transform a **media file** plus an **edited transcript** into a **broadcast-read
 
 ## 1) Quick orientation for an agent
 
+See `docs/ENTRYPOINTS.md` for the canonical entrypoints and exact CLI flags. The FastAPI job runner (`ui/backend/pipelines.py`) is the primary orchestrator; `run_pipeline.py` remains as the legacy hot-folder path.
+
 1. **Inference chain is linear:** `align_make.py` → `build_training_pair_standalone.py` → `main.py` → `.srt` (this is the exact order invoked by both orchestrators).【F:run_pipeline.py†L156-L241】【F:ui/backend/pipelines.py†L56-L189】
 2. **Two orchestrators run the same chain:**
    - `run_pipeline.py`: hot-folder supervisor (CLI).【F:run_pipeline.py†L1-L340】
