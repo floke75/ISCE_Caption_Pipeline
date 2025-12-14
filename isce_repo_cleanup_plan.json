@@ -454,7 +454,7 @@
       },
       "notes": "",
       "relevance_review": "Relevant documentation gap: AGENTS.md already summarizes the canonical chain; a dedicated ENTRYPOINTS.md plus AGENTS.md link keeps production path explicit and low-risk.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S13",
