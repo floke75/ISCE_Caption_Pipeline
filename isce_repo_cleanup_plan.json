@@ -130,7 +130,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S03",
@@ -161,7 +161,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S04",

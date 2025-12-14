@@ -5,7 +5,11 @@
 # for your machine. Secrets should stay out of version control.
 
 # --- Core Paths ---
-project_root: "/abs/path/to/isce_caption_pipeline"
+# `project_root` anchors relative placeholders to this repository. The default
+# keeps everything under the checked-out repo so the config is portable across
+# machines.
+project_root: "."
+pipeline_root: "{project_root}/pipeline_data"
 
 # --- Hot Folders & Archives (resolved from pipeline_root) ---
 drop_folder_inference: "{pipeline_root}/1_DROP_FOLDER_INFERENCE"

@@ -45,9 +45,10 @@ from typing import List, Dict, Any, Optional, Tuple
 import argparse
 import unicodedata
 import copy
+
 from rapidfuzz import fuzz
 import pysrt
-import yaml
+from pipeline_config import load_pipeline_config
 
 # =========================
 # Dependency guards
@@ -63,8 +64,8 @@ except ImportError:
 # DEFAULT SETTINGS (Self-Contained)
 # =========================
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "project_root": r"C:\dev\Captions_Formatter\Formatter_machine",
-    "pipeline_root": r"T:\AI-Subtitles\Pipeline",
+    "project_root": ".",
+    "pipeline_root": "{project_root}/pipeline_data",
     "build_pair": {
         "in_txt_dir":          "{pipeline_root}/4_MANUAL_TXT_PLACEMENT",
         "in_srt_dir":          "{pipeline_root}/3_MANUAL_SRT_PLACEMENT",
@@ -85,48 +86,6 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "emit_asr_style_training_copy": False,
     }
 }
-
-# =========================
-# Configuration Helper Functions (Self-Contained)
-# =========================
-def _recursive_update(base: Dict, update: Dict) -> Dict:
-    """
-    Recursively updates a dictionary.
-
-    Args:
-        base: The dictionary to be updated.
-        update: The dictionary containing new values.
-
-    Returns:
-        The updated 'base' dictionary.
-    """
-    for k, v in update.items():
-        if isinstance(v, dict) and k in base and isinstance(base[k], dict):
-            base[k] = _recursive_update(base[k], v)
-        else:
-            base[k] = v
-    return base
-
-def _resolve_paths(config: Dict, context: Dict) -> Dict:
-    """
-    Resolves placeholder variables in configuration paths.
-
-    Args:
-        config: The configuration dictionary with unresolved path strings.
-        context: A dictionary mapping placeholder keys to their values.
-
-    Returns:
-        The configuration dictionary with path placeholders resolved.
-    """
-    for k, v in config.items():
-        if isinstance(v, str) and "{" in v and "}" in v:
-            try:
-                config[k] = v.format(**context)
-            except KeyError:
-                pass
-        elif isinstance(v, dict):
-            config[k] = _resolve_paths(v, context)
-    return config
 
 # =========================
 # Utilities
@@ -964,19 +923,19 @@ def main():
     parser.add_argument("--output-basename", type=str, help="Override the output base filename.")
     args = parser.parse_args()
 
-    config = DEFAULT_SETTINGS.copy()
-    if args.config_file and args.config_file.exists():
-        with open(args.config_file, "r", encoding="utf-8") as f:
-            yaml_config = yaml.safe_load(f)
-        if yaml_config: config = _recursive_update(config, yaml_config)
-    
-    path_context = {k: v for k, v in config.items() if isinstance(v, str)}
-    config = _resolve_paths(config, path_context)
+    config = load_pipeline_config(
+        DEFAULT_SETTINGS, yaml_path=str(args.config_file) if args.config_file else "pipeline_config.yaml"
+    )
     SETTINGS = config.get("build_pair", {})
+    pipeline_root = Path(config.get("pipeline_root", "."))
 
     paths = {
-        "out_training_dir": args.out_training_dir or Path(SETTINGS["out_training_dir"]),
-        "out_inference_dir": args.out_inference_dir or Path(SETTINGS["out_inference_dir"]),
+        "out_training_dir": args.out_training_dir or Path(
+            SETTINGS.get("out_training_dir", pipeline_root / "_intermediate" / "_training")
+        ),
+        "out_inference_dir": args.out_inference_dir or Path(
+            SETTINGS.get("out_inference_dir", pipeline_root / "_intermediate" / "_inference_input")
+        ),
     }
     ensure_dirs(paths["out_training_dir"]); ensure_dirs(paths["out_inference_dir"])
 
