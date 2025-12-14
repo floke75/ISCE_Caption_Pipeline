@@ -292,7 +292,7 @@
       },
       "notes": "If the output schema differs, standardize it to a single canonical top-level key (recommended: `words`). If you change schema, also update stage3 loader accordingly.",
       "relevance_review": "Relevant and safe: build_training_pair_standalone.py already guards spaCy imports and exposes the listed flags via orchestrators; confirming spaCy-disabled paths and schema consistency aligns with current usage and avoids extra dependencies.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S08",
@@ -323,7 +323,7 @@
       },
       "notes": "",
       "relevance_review": "Relevant: training generation remains part of README and scripts/train_model.py flow; fixtures are small so producing labels from SRT+ASR is safe and keeps training path exercised.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S09",
