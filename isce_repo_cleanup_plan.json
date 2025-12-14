@@ -423,7 +423,7 @@
       },
       "notes": "If additional lightweight dependencies are required for imports (e.g., numpy), add them to the install list and document in requirements-dev.",
       "relevance_review": "Relevant and aligned: main.py consumes enriched tokens produced in S07; validating deterministic SRT output on fixtures is consistent with existing beam search tests and is safe with tiny configs.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S12",
