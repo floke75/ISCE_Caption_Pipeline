@@ -86,6 +86,8 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - Record the baseline commands for running the frontend locally (dev mode) and for building static assets.
 - Outline the standard screenshot capture process (naming, resolution, where to store) and note any tool limitations in this environment.
 
+**Code/doc pointers:** `FRONTEND.md` (dev/build commands), `ui/frontend/README.md` (component overview if present), `scripts/install.py` (optional npm install helper), top-level `README.md` (UI run instructions).
+
 **Deliverables:**
 - `docs/notes/frontend_readiness.md` summarizing available tooling, commands, and any constraints.
 - Directories `docs/screenshots/S00/` and `docs/notes/` present in the repo.
@@ -121,6 +123,8 @@ grep -q "frontend dev" docs/notes/frontend_readiness.md
 - Capture screenshots of primary views (home/landing, training form, inference form, job board/monitor, config editor if present). Save to `docs/screenshots/S01/` with descriptive filenames (e.g., `training-form.png`).
 - Note any console errors, missing assets, or navigation dead ends encountered during browsing.
 - Record the versions of frontend dependencies if easily accessible (package.json lock info or dev server banner).
+
+**Code/doc pointers:** `ui/frontend/src/App.tsx` (routing/tabs), `ui/frontend/src/components/NavigationTabs.tsx` (if present), `ui/frontend/src/components` directory for page-level views, `ui/frontend/package.json` and `ui/frontend/package-lock.json` for dependency versions.
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S01/` covering the primary views.
@@ -192,6 +196,8 @@ find docs/screenshots/S02 -maxdepth 1 -type f | head -n 1
 - Capture any build errors, warnings, or known flaky tests with remediation notes.
 - Note Node/npm versions used for reproducibility.
 
+**Code/doc pointers:** `ui/frontend/package.json` (scripts), `ui/frontend/package-lock.json` (locked deps), `FRONTEND.md` (expected commands), `scripts/install.py` (npm bootstrap step).
+
 **Deliverables:**
 - `docs/notes/frontend_reliability.md` capturing commands run, outcomes, and any issues.
 - Confirmed command list for future steps (build, lint, tests) with observed durations and caveats.
@@ -228,6 +234,8 @@ cd ui/frontend && npm run lint
 - Note friction points: unclear placeholders, missing validation, confusing error messages, or non-intuitive parameter labels for training inputs.
 - Propose concrete UX improvements for training (tooltips, helper text, presets) in the notes.
 
+**Code/doc pointers:** `ui/frontend/src/components/TrainingPairForm.tsx` and `ModelTrainingForm.tsx` (training UI), `ui/frontend/src/components/FilePathPicker.tsx` (path validation UX), `ui/backend/pipelines.py` (training submission API), `ui/backend/api/routes/files.py` (allowlisted paths), `FRONTEND.md` (training instructions).
+
 **Deliverables:**
 - Screenshots under `docs/screenshots/S04/` covering the training interaction flow.
 - `docs/notes/training_flow.md` summarizing observations and recommended UX adjustments for training.
@@ -263,6 +271,8 @@ find docs/screenshots/S04 -maxdepth 1 -type f | head -n 1
 - Assess the clarity and defaults of inference parameters (e.g., diarization toggles, slider presets) and note where presets or explanations would help.
 - Propose UX improvements tailored to inference (tooltips, presets, warnings for unsafe combinations).
 
+**Code/doc pointers:** `ui/frontend/src/components/InferenceForm.tsx` (inference UI), `ui/frontend/src/components/FilePathPicker.tsx` (path validation), `ui/backend/pipelines.py` (inference submission API), `ui/backend/config_service.py` (config overrides), `FRONTEND.md` (inference usage notes).
+
 **Deliverables:**
 - Screenshots under `docs/screenshots/S05/` covering the inference interaction flow.
 - `docs/notes/inference_flow.md` summarizing observations and recommended UX adjustments for inference.
@@ -297,6 +307,8 @@ find docs/screenshots/S05 -maxdepth 1 -type f | head -n 1
 - Capture screenshots of validation errors, toasts/banners, and retry/recovery affordances. Save under `docs/screenshots/S06/`.
 - Map which fields lack inline validation or have unclear error text, and propose concrete fixes.
 - Note whether submissions indicate backend processing status clearly (e.g., spinner vs. silent fail).
+
+**Code/doc pointers:** `ui/frontend/src/components/JobBoard.tsx` (submission feedback and job status), `ui/frontend/src/components/common` (toast/alert components, if present), `ui/backend/pipelines.py` (error surfaces from job creation), `ui/backend/app.py` (FastAPI error handling), `ui/backend/api/routes/files.py` (validation responses).
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S06/` illustrating validation and error handling states.
@@ -336,6 +348,8 @@ find docs/screenshots/S06 -maxdepth 1 -type f | head -n 1
 - Note any confusing labels, missing timestamps, or pagination/filter gaps.
 - Propose improvements for distinguishing job types and surfacing progress.
 
+**Code/doc pointers:** `ui/frontend/src/components/JobBoard.tsx` (job list/detail UI), `ui/backend/pipelines.py` (job status payloads), `ui/backend/config_service.py` (override status merging), `ui_data/jobs/<id>/` (job workspace layout), `README.md` (UI job flow overview).
+
 **Deliverables:**
 - Screenshots under `docs/screenshots/S07/` covering job list and detail navigation.
 - `docs/notes/job_monitoring.md` summarizing navigation flow, status clarity, and proposed UX adjustments.
@@ -373,6 +387,8 @@ find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
 - Capture screenshots of current artifact presentation (or absence) under `docs/screenshots/S08/`.
 - Identify missing preview widgets (cue tables, waveform snippets, alignment diffs) and map them to available data sources.
 - Propose a prioritized list of preview components to implement, with data availability notes.
+
+**Code/doc pointers:** `ui/frontend/src/components/JobBoard.tsx` (artifact display), `ui_data/jobs/<id>/artifacts/` (artifact layout), `ui/backend/pipelines.py` (job result payload), `README.md` (artifact descriptions), `align_make.py` / `build_training_pair_standalone.py` (artifact generation paths).
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S08/` showcasing artifact visibility.
@@ -412,6 +428,8 @@ find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
 - Identify interaction affordances (scrub/playback hooks if audio is available, filtering by cue, toggling diarization/speaker labels).
 - Capture wireframe or mock screenshot(s) illustrating the proposed training alignment view and save under `docs/screenshots/S09/`.
 - Document data-loading strategy (which endpoint or artifact path) and performance considerations for large files.
+
+**Code/doc pointers:** `build_training_pair_standalone.py` (Needleman–Wunsch alignment and training artifacts), `ui/backend/pipelines.py` (artifact copy into `ui_data/jobs/<id>`), `ui/frontend/src/components/JobBoard.tsx` (job details hook), `docs/build_training_pair_comparison.md` (Stage 2 rationale), `README.md` (artifact descriptions).
 
 **Deliverables:**
 - Screenshots or mockups under `docs/screenshots/S09/` showing the proposed training alignment visualization.
@@ -453,6 +471,8 @@ find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
 - Capture wireframe or mock screenshot(s) of the proposed inference alignment view and save under `docs/screenshots/S10/`.
 - Note any shared components with the training alignment view to maximize reuse and ensure consistent UX.
 
+**Code/doc pointers:** `align_make.py` (ASR output), `build_training_pair_standalone.py` (inference alignment logic and enriched JSON fields), `ui/backend/pipelines.py` (job artifact handling), `ui/frontend/src/components/JobBoard.tsx` and planned preview widgets (artifact consumption), `docs/beam_search_walkthrough.md` (timing context), `README.md` (inference flow overview).
+
 **Deliverables:**
 - Screenshots or mockups under `docs/screenshots/S10/` for the inference alignment visualization.
 - `docs/notes/inference_alignment_design.md` detailing layout, interactions, data sources, and reuse strategy relative to training.
@@ -492,6 +512,8 @@ find docs/screenshots/S10 -maxdepth 1 -type f | head -n 1
 - Inspect available backend endpoints/log surfaces (FastAPI) that could provide health data and note gaps.
 - Propose specific observability hooks (heartbeat endpoint checks, queue depth indicators, error surfacing) to add.
 
+**Code/doc pointers:** `ui/frontend/src/components/JobBoard.tsx` (job status rendering), `ui/backend/app.py` (FastAPI setup), `ui/backend/pipelines.py` (job lifecycle statuses), `ui/backend/api/routes/files.py` (file validation errors), `README.md` (operations notes).
+
 **Deliverables:**
 - Screenshots under `docs/screenshots/S11/` covering current health signals.
 - `docs/notes/system_health.md` detailing observed signals, gaps, and recommended observability hooks.
@@ -529,6 +551,8 @@ find docs/screenshots/S11 -maxdepth 1 -type f | head -n 1
 - Identify sample data or fixtures needed to exercise previews (SRT, enriched JSON, alignment outputs) and where to store them.
 - Outline commands to be used later (frontend unit tests, backend API tests, screenshot-based visual checks) and how to record evidence.
 - Capture a summary screenshot (e.g., checklist or doc snippet) under `docs/screenshots/S12/` showing the planned test matrix or harness layout.
+
+**Code/doc pointers:** `tests/` (existing Python tests), `ui/frontend/package.json` (test scripts), `ui/frontend/src` (components targeted for unit tests), `ui/backend/pipelines.py` and `ui/backend/config_service.py` (API contract surfaces), `docs/ENTRYPOINTS.md` (CLI references for fixtures).
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S12/` illustrating the planned test matrix or harness notes.
@@ -605,6 +629,8 @@ find docs/screenshots/S13 -maxdepth 1 -type f | head -n 1
 - Define thresholds and highlighting rules for common problems (overlong cues, dense speaker changes, large alignment gaps) and how to present remediation tips inline.
 - Outline data retrieval strategy (which endpoints/artifact files) and performance considerations for large jobs.
 
+**Code/doc pointers:** `build_training_pair_standalone.py` (pause_ms, speaker_change features), `isce/scorer.py` (structural heuristics), `ui/backend/pipelines.py` (artifact delivery), `ui/frontend/src/components/JobBoard.tsx` and planned dashboard components (data consumption), `docs/beam_search_walkthrough.md` (scoring context), `README.md` (artifact descriptions).
+
 **Deliverables:**
 - Screenshots or mockups under `docs/screenshots/S14/` showing the proposed data quality dashboard and cue diagnostics views.
 - `docs/notes/data_quality_dashboard.md` detailing metrics, thresholds, visualization types, and data loading approach.
@@ -642,6 +668,8 @@ find docs/screenshots/S14 -maxdepth 1 -type f | head -n 1
 - Design entry points for help (e.g., persistent “Help” button, contextual “?” icons) and guided tour steps; capture mockups under `docs/screenshots/S15/`.
 - Map help content to existing docs (README, FRONTEND.md) and propose inline anchors or embedded markdown rendering.
 - Specify how tours will be triggered/dismissed, saved per user/session, and localized if needed.
+
+**Code/doc pointers:** `FRONTEND.md` and `README.md` (user-facing docs for inline linking), `ui/frontend/src/App.tsx` / `Navigation` components (insertion points for help/tours), `ui/frontend/src/components` (modal/overlay primitives if present), `ui/frontend/src/hooks` (state management hooks, if available) for storing tour state.
 
 **Deliverables:**
 - Screenshots or mockups under `docs/screenshots/S15/` showing the help center, glossary, and guided tour overlays.
