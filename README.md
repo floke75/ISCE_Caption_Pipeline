@@ -263,6 +263,14 @@ Then, run the test suite from the root of the repository:
 pytest
 ```
 
+Targeted integrity checks are available for the training data pipeline:
+
+```bash
+pytest tests/test_training_data_integrity.py
+```
+
+The fixture-backed test ensures SRT newline intent (including `is_llm_structural_break` hints) survives alignment and that the optional simulated ASR training copy mirrors timestamps, speakers, and break labels.
+
 
 ## Intermediate Artifacts & Data Contracts
 

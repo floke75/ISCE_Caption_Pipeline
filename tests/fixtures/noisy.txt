@@ -1,0 +1,12 @@
+This is a test with some English text.
+Här är lite svenska, med konstiga tecken: åäö.
+
+Y ahora un poco de español para variar.
+A line with markup <p>like this</p> and {styles}.
+
+"Vad händer nu?" frågade han.
+Another line with numbers 12345 and symbols !@#$%^&*().
+
+This line is followed by an empty line.
+
+This is the last line.
