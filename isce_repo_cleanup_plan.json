@@ -1,0 +1,633 @@
+{
+  "plan_id": "isce_caption_pipeline_repo_cleanup_v1",
+  "repo": "floke75/ISCE_Caption_Pipeline",
+  "created_utc": "2025-12-13T06:40:30Z",
+  "agent_operating_rules": [
+    "Work on a new git branch. Do not commit directly to main.",
+    "Execute steps strictly in order. Do not set any step.passed=true until that step's test passes exactly as written.",
+    "After each step passes, commit with the step id in the commit message (e.g., 'S03: ...').",
+    "If a step fails, do not proceed. Fix the failure within the same step until the test passes.",
+    "Prefer deleting nothing until the final 'Delete confirmed dead code' step; move to legacy/ or experiments/ first."
+  ],
+  "assumptions": {
+    "shell": "bash or equivalent",
+    "python": "python >= 3.10 available as `python`",
+    "git": "available as `git`",
+    "ffmpeg": "optional; required only for real audio runs, not for smoke tests",
+    "gpu": "not required for tests; tests must not require WhisperX model downloads"
+  },
+  "conventions": {
+    "new_directories": [
+      "tests",
+      "tests/fixtures",
+      "scripts",
+      "docs",
+      "legacy",
+      "experiments"
+    ],
+    "smoke_artifacts_dir": "tests/_artifacts",
+    "fixture_names": {
+      "asr_reference": "tests/fixtures/demo.asr.visual.words.diar.json",
+      "transcript_txt": "tests/fixtures/demo.txt",
+      "gold_srt": "tests/fixtures/demo.srt",
+      "pipeline_cfg": "tests/fixtures/pipeline_config.test.yaml",
+      "segmentation_cfg": "tests/fixtures/config.test.yaml",
+      "constraints": "tests/fixtures/constraints.test.json",
+      "weights": "tests/fixtures/model_weights.test.json"
+    }
+  },
+  "steps": [
+    {
+      "id": "S00",
+      "title": "Create clean working branch and baseline snapshot",
+      "objective": "Ensure a reproducible starting point and capture a baseline inventory before changes.",
+      "actions": [
+        "Create a new branch named `repo-cleanup` from the current default branch.",
+        "Ensure the working tree is clean (no uncommitted changes).",
+        "Create `docs/BASELINE.md` containing: current commit hash, python version, OS info, and a top-level file tree (depth 2).",
+        "Add a `docs/BASELINE.md` section titled 'Baseline command outputs' and paste outputs of: `git rev-parse HEAD`, `python --version`, `pip --version`, `git status`."
+      ],
+      "deliverables": [
+        "docs/BASELINE.md (new)",
+        "git branch `repo-cleanup` (local)"
+      ],
+      "test": {
+        "name": "Baseline snapshot exists and working tree is clean",
+        "commands": [
+          "git status --porcelain",
+          "test -f docs/BASELINE.md",
+          "grep -q \"Baseline command outputs\" docs/BASELINE.md"
+        ],
+        "expected": [
+          "`git status --porcelain` outputs nothing",
+          "`docs/BASELINE.md` exists",
+          "`docs/BASELINE.md` contains the string 'Baseline command outputs'"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S01",
+      "title": "Remove committed secrets and introduce safe config template",
+      "objective": "Ensure no Hugging Face (or other) tokens are committed and configs are safe-by-default.",
+      "actions": [
+        "Edit `pipeline_config.yaml` so that any secret fields are empty placeholders (e.g., set `hf_token` to an empty string).",
+        "Add `pipeline_config.local.yaml` to `.gitignore` for developer-specific overrides and secrets.",
+        "Create `pipeline_config.example.yaml` as a safe template suitable for committing. It must not contain real tokens or user-specific absolute paths.",
+        "Update README or docs to instruct: copy `pipeline_config.example.yaml` to `pipeline_config.local.yaml` and set secrets via environment variables or local file.",
+        "Search the repo for token-like strings and remove/replace them with placeholders."
+      ],
+      "deliverables": [
+        "pipeline_config.example.yaml (new, committed)",
+        "pipeline_config.yaml (sanitized OR replaced by example + documented usage)",
+        ".gitignore updated to include `pipeline_config.local.yaml`",
+        "docs/SECURITY_NOTES.md (new) describing how secrets are provided"
+      ],
+      "test": {
+        "name": "No tokens committed; configs are safe",
+        "commands": [
+          "git grep -n \"hf_token\" -- \"*.yaml\" || true",
+          "git grep -n \"hf_\" -- \"*.yaml\" || true",
+          "python - << 'PY'\nimport yaml, pathlib\np=pathlib.Path('pipeline_config.example.yaml')\nassert p.exists(), 'missing pipeline_config.example.yaml'\nobj=yaml.safe_load(p.read_text(encoding='utf-8')) or {}\n# Accept either top-level hf_token or nested align_make.hf_token\nvals=[]\nif isinstance(obj, dict):\n    if 'hf_token' in obj: vals.append(obj.get('hf_token'))\n    am=obj.get('align_make', {}) if isinstance(obj.get('align_make', {}), dict) else {}\n    vals.append(am.get('hf_token'))\nfor v in vals:\n    if v is None: continue\n    assert str(v).strip() in ('', 'YOUR_HF_TOKEN_HERE'), f'hf token not placeholder: {v!r}'\nprint('ok')\nPY"
+        ],
+        "expected": [
+          "Search results do not show an actual token value committed in YAML files",
+          "pipeline_config.example.yaml parses and contains only placeholders for hf_token",
+          "Python check prints 'ok'"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "If a token was previously committed, rotate it immediately. Optional but recommended: rewrite git history to purge the secret.",
+      "passed": false
+    },
+    {
+      "id": "S02",
+      "title": "Make pipeline_config defaults portable across machines",
+      "objective": "Eliminate hard-coded machine-specific paths and ensure configs resolve relative paths predictably.",
+      "actions": [
+        "Replace any absolute Windows-specific `project_root` or `pipeline_root` defaults in committed YAML templates with relative, portable defaults.",
+        "Use placeholders consistently: `{project_root}`, `{pipeline_root}` and resolve them via the shared loader.",
+        "Ensure `project_root` can default to the repo root if not explicitly provided (document this)."
+      ],
+      "deliverables": [
+        "pipeline_config.example.yaml updated with portable paths",
+        "docs/CONFIGURATION.md (new) describing which config file(s) are used by: UI, hot-folder mode, and CLI scripts"
+      ],
+      "test": {
+        "name": "Config template has no machine-specific absolute paths",
+        "commands": [
+          "python - << 'PY'\nimport pathlib, re\ntext=pathlib.Path('pipeline_config.example.yaml').read_text(encoding='utf-8')\n# Heuristic checks for common absolute path patterns\nassert not re.search(r\"\\b[A-Za-z]:\\\\\\\\\", text), 'windows absolute path found'\nassert '/Users/' not in text and '/home/' not in text, 'unix home absolute path found'\nprint('ok')\nPY"
+        ],
+        "expected": [
+          "No Windows drive paths (e.g., C:\\\\...) in pipeline_config.example.yaml",
+          "No hard-coded /Users/... or /home/... paths in pipeline_config.example.yaml",
+          "Python check prints 'ok'"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S03",
+      "title": "Standardize config loading across stage scripts",
+      "objective": "Remove duplicate config merge/path-resolution code and make all stage scripts use `pipeline_config.load_pipeline_config`.",
+      "actions": [
+        "In `align_make.py` and `build_training_pair_standalone.py`, remove or deprecate the local `_recursive_update` / `_resolve_paths` helpers.",
+        "Import and use `load_pipeline_config(DEFAULT_SETTINGS, yaml_path=args.config_file)` from `pipeline_config.py` instead.",
+        "Make the CLI flags consistent across scripts: keep existing flags used by orchestrators (`--config-file`, etc.) but ensure they are implemented and documented.",
+        "Ensure the resolved config dictionary is used for all file paths and settings."
+      ],
+      "deliverables": [
+        "align_make.py updated to use pipeline_config.load_pipeline_config",
+        "build_training_pair_standalone.py updated to use pipeline_config.load_pipeline_config",
+        "Any removed helper functions are deleted or left only if still used elsewhere with justification in comments"
+      ],
+      "test": {
+        "name": "Stage scripts compile and reference the shared loader",
+        "commands": [
+          "python -m compileall align_make.py build_training_pair_standalone.py pipeline_config.py",
+          "python - << 'PY'\nimport pathlib\nfor f in ['align_make.py','build_training_pair_standalone.py']:\n    t=pathlib.Path(f).read_text(encoding='utf-8')\n    assert 'load_pipeline_config' in t, f'{f} does not reference load_pipeline_config'\nprint('ok')\nPY"
+        ],
+        "expected": [
+          "`python -m compileall ...` exits 0",
+          "Both scripts contain the string `load_pipeline_config`",
+          "Python check prints 'ok'"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S04",
+      "title": "Make heavy dependencies import-lazy with clear error messages",
+      "objective": "Allow the repo to be installed/inspected without WhisperX/Torch/GPU dependencies, while failing gracefully when those features are invoked.",
+      "actions": [
+        "Refactor `align_make.py` so importing the module does not require `whisperx` or `torch` to be installed.",
+        "Move `import whisperx` and `import torch` inside the function(s) that actually use them (or wrap imports in try/except with a clear RuntimeError when missing).",
+        "Ensure the existing guidance message is surfaced when resources are missing (do not silently ignore)."
+      ],
+      "deliverables": [
+        "align_make.py no longer imports whisperx/torch at module import time",
+        "Clear error message on missing dependencies when ASR is invoked"
+      ],
+      "test": {
+        "name": "Module import works without WhisperX/Torch installed",
+        "commands": [
+          "python - << 'PY'\n# This test assumes whisperx may NOT be installed in the dev env.\n# It must succeed regardless.\nimport importlib\nm=importlib.import_module('align_make')\nprint('import_ok')\nPY"
+        ],
+        "expected": [
+          "The script prints 'import_ok' and exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "If your dev environment already has whisperx installed, this still passes; the key is that import must not crash when it is absent.",
+      "passed": false
+    },
+    {
+      "id": "S05",
+      "title": "Add deterministic mock-output mode to align_make for tests",
+      "objective": "Enable end-to-end smoke tests without downloading models or processing audio.",
+      "actions": [
+        "Add CLI flag to `align_make.py`: `--mock-asr-json <path>`.",
+        "When `--mock-asr-json` is provided: skip audio extraction/ASR entirely and instead write the expected output JSON file(s) using the contents of the provided mock JSON.",
+        "The output path must match orchestrator expectations: `<out_root>/_align/<base>.asr.visual.words.diar.json` where `<base>` is derived from `--input-file` stem.",
+        "Keep normal behavior unchanged when the flag is not provided."
+      ],
+      "deliverables": [
+        "align_make.py supports --mock-asr-json",
+        "docs/TESTING.md updated to explain mock mode"
+      ],
+      "test": {
+        "name": "Mock mode creates expected ASR reference file",
+        "commands": [
+          "rm -rf tests/_artifacts && mkdir -p tests/_artifacts",
+          "python align_make.py --input-file tests/fixtures/demo.mp4 --out-root tests/_artifacts --config-file tests/fixtures/pipeline_config.test.yaml --mock-asr-json tests/fixtures/demo.asr.visual.words.diar.json",
+          "test -f tests/_artifacts/_align/demo.asr.visual.words.diar.json"
+        ],
+        "expected": [
+          "Command exits 0",
+          "File `tests/_artifacts/_align/demo.asr.visual.words.diar.json` exists"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "You must create `tests/fixtures/demo.mp4` as a tiny placeholder file (can be empty); mock mode must not read it.",
+      "passed": false
+    },
+    {
+      "id": "S06",
+      "title": "Create minimal deterministic test fixtures",
+      "objective": "Provide tiny fixture files that allow stage 2 and 3 to run in a CPU-only environment.",
+      "actions": [
+        "Create `tests/fixtures/demo.asr.visual.words.diar.json` containing a small list of word entries with `w`, `start`, `end`, and optional `speaker`.",
+        "Create `tests/fixtures/demo.txt` with a short edited transcript matching the word list closely.",
+        "Create `tests/fixtures/demo.srt` with 2-4 cues that correspond to the transcript.",
+        "Create `tests/fixtures/pipeline_config.test.yaml` that disables heavy optional features (e.g., set spaCy enable to false if supported) and uses `pipeline_root` under `tests/_artifacts`.",
+        "Create `tests/fixtures/config.test.yaml` (the segmentation config used by `main.py`) that references `constraints.test.json` and `model_weights.test.json` by relative paths.",
+        "Create minimal `tests/fixtures/constraints.test.json` and `tests/fixtures/model_weights.test.json` consistent with what `isce.scorer.Scorer` expects."
+      ],
+      "deliverables": [
+        "tests/fixtures/demo.asr.visual.words.diar.json",
+        "tests/fixtures/demo.txt",
+        "tests/fixtures/demo.srt",
+        "tests/fixtures/pipeline_config.test.yaml",
+        "tests/fixtures/config.test.yaml",
+        "tests/fixtures/constraints.test.json",
+        "tests/fixtures/model_weights.test.json",
+        "tests/fixtures/demo.mp4 (placeholder file; can be empty)"
+      ],
+      "test": {
+        "name": "Fixtures exist and are valid JSON/YAML/SRT",
+        "commands": [
+          "python - << 'PY'\nimport json, yaml, pathlib\nfx=pathlib.Path('tests/fixtures')\nassert (fx/'demo.asr.visual.words.diar.json').exists()\njson.load(open(fx/'demo.asr.visual.words.diar.json','r',encoding='utf-8'))\nyaml.safe_load(open(fx/'pipeline_config.test.yaml','r',encoding='utf-8'))\nyaml.safe_load(open(fx/'config.test.yaml','r',encoding='utf-8'))\njson.load(open(fx/'constraints.test.json','r',encoding='utf-8'))\njson.load(open(fx/'model_weights.test.json','r',encoding='utf-8'))\n# SRT: basic sanity - must contain at least one cue index line\nsrt=(fx/'demo.srt').read_text(encoding='utf-8')\nassert '1' in srt and '-->' in srt\nprint('ok')\nPY"
+        ],
+        "expected": [
+          "Python check prints 'ok' and exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S07",
+      "title": "Make build_training_pair_standalone runnable without spaCy",
+      "objective": "Ensure stage 2 can run in a minimal environment and produce enriched tokens deterministically.",
+      "actions": [
+        "Verify `build_training_pair_standalone.py` supports disabling spaCy via config or CLI (it already guards `import spacy`).",
+        "Ensure that when spaCy is disabled or missing, the script still produces enriched output with required fields (at least: w, start, end).",
+        "Ensure the CLI flags used by orchestrators are supported: `--primary-input`, `--asr-reference`, `--out-inference-dir`, `--config-file`, `--output-basename`, and `--asr-only-mode`."
+      ],
+      "deliverables": [
+        "build_training_pair_standalone.py works when spacy is not installed (or spacy_enable=false)",
+        "tests/_artifacts/_inference_input/demo.enriched.json can be produced from fixtures"
+      ],
+      "test": {
+        "name": "Stage2 produces enriched JSON from TXT + ASR reference",
+        "commands": [
+          "rm -rf tests/_artifacts && mkdir -p tests/_artifacts",
+          "mkdir -p tests/_artifacts/_align && cp tests/fixtures/demo.asr.visual.words.diar.json tests/_artifacts/_align/demo.asr.visual.words.diar.json",
+          "python build_training_pair_standalone.py --primary-input tests/fixtures/demo.txt --asr-reference tests/_artifacts/_align/demo.asr.visual.words.diar.json --out-inference-dir tests/_artifacts/_inference_input --config-file tests/fixtures/pipeline_config.test.yaml --output-basename demo",
+          "test -f tests/_artifacts/_inference_input/demo.enriched.json",
+          "python - << 'PY'\nimport json\nobj=json.load(open('tests/_artifacts/_inference_input/demo.enriched.json','r',encoding='utf-8'))\nassert isinstance(obj, dict)\nwords=obj.get('words') or obj.get('tokens') or obj.get('data')\nassert isinstance(words, list) and len(words) > 0\nfor k in ('w','start','end'):\n    assert k in words[0], f'missing key {k} in first token'\nprint('ok')\nPY"
+        ],
+        "expected": [
+          "Enriched JSON file exists",
+          "Enriched JSON contains a non-empty list under `words` or `tokens` or `data`",
+          "First token contains keys w/start/end",
+          "Python check prints 'ok'"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "If the output schema differs, standardize it to a single canonical top-level key (recommended: `words`). If you change schema, also update stage3 loader accordingly.",
+      "passed": false
+    },
+    {
+      "id": "S08",
+      "title": "Validate training-pair generation mode",
+      "objective": "Ensure stage 2 can produce labeled training data from SRT + ASR reference.",
+      "actions": [
+        "Ensure CLI supports `--out-training-dir` and produces `<basename>.train.words.json`.",
+        "Ensure labels are present (at least one of SB/LB/O) in output tokens."
+      ],
+      "deliverables": [
+        "tests/_artifacts/_training/demo.train.words.json produced from fixtures"
+      ],
+      "test": {
+        "name": "Stage2 produces train.words.json from SRT + ASR reference",
+        "commands": [
+          "rm -rf tests/_artifacts && mkdir -p tests/_artifacts/_align",
+          "cp tests/fixtures/demo.asr.visual.words.diar.json tests/_artifacts/_align/demo.asr.visual.words.diar.json",
+          "python build_training_pair_standalone.py --primary-input tests/fixtures/demo.srt --asr-reference tests/_artifacts/_align/demo.asr.visual.words.diar.json --out-training-dir tests/_artifacts/_training --config-file tests/fixtures/pipeline_config.test.yaml",
+          "test -f tests/_artifacts/_training/demo.train.words.json",
+          "python - << 'PY'\nimport json\nobj=json.load(open('tests/_artifacts/_training/demo.train.words.json','r',encoding='utf-8'))\nwords=obj.get('words') or obj.get('tokens') or obj.get('data')\nassert isinstance(words, list) and len(words) > 0\nlabels=set()\nfor w in words:\n    for k in ('label','y','break','tag'):\n        if k in w and w[k] is not None:\n            labels.add(str(w[k]))\nassert labels, 'no label-like fields found'\nprint('ok')\nPY"
+        ],
+        "expected": [
+          "Training JSON file exists",
+          "At least one label-like field is present among tokens",
+          "Python check prints 'ok'"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S09",
+      "title": "Make Stage3 deterministic on fixtures and produce valid SRT",
+      "objective": "Ensure `main.py` can run on the enriched fixture output using a tiny model config.",
+      "actions": [
+        "Ensure `tests/fixtures/config.test.yaml` can be loaded by `isce.config.load_config` (called by `main.py`).",
+        "Ensure `constraints.test.json` and `model_weights.test.json` are compatible with `isce.scorer.Scorer`.",
+        "Run `main.py` on the enriched fixture and validate output SRT format."
+      ],
+      "deliverables": [
+        "tests/_artifacts/demo.srt produced by main.py",
+        "Optional: tests/_artifacts/demo.json if `--save-labeled-json` is used"
+      ],
+      "test": {
+        "name": "Stage3 produces a non-empty SRT with monotonic timestamps",
+        "commands": [
+          "rm -rf tests/_artifacts && mkdir -p tests/_artifacts",
+          "mkdir -p tests/_artifacts/_inference_input",
+          "cp tests/fixtures/demo.enriched.json tests/_artifacts/_inference_input/demo.enriched.json 2>/dev/null || true",
+          "# If demo.enriched.json is not committed as a fixture, generate it via S07 first.",
+          "test -f tests/_artifacts/_inference_input/demo.enriched.json",
+          "python main.py --input tests/_artifacts/_inference_input/demo.enriched.json --output tests/_artifacts/demo.srt --config tests/fixtures/config.test.yaml",
+          "test -s tests/_artifacts/demo.srt",
+          "python - << 'PY'\nimport re\ntext=open('tests/_artifacts/demo.srt','r',encoding='utf-8').read().strip()\nassert '-->' in text\n# Parse timestamps and ensure non-decreasing starts\npat=re.compile(r\"(\\d\\d):(\\d\\d):(\\d\\d),(\\d\\d\\d)\\s*-->\\s*(\\d\\d):(\\d\\d):(\\d\\d),(\\d\\d\\d)\")\nprev_start=0\nfor m in pat.finditer(text):\n    h,mi,s,ms,eh,emi,es,ems=map(int,m.groups())\n    start=((h*3600+mi*60+s)*1000+ms)\n    end=((eh*3600+emi*60+es)*1000+ems)\n    assert end>=start\n    assert start>=prev_start\n    prev_start=start\nprint('ok')\nPY"
+        ],
+        "expected": [
+          "SRT file exists and is non-empty",
+          "SRT contains at least one timestamp line",
+          "All cue end times are >= start times and starts are non-decreasing",
+          "Python check prints 'ok'"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "If you do not want to commit `demo.enriched.json`, add a small helper in tests to generate it on the fly before running main.py.",
+      "passed": false
+    },
+    {
+      "id": "S10",
+      "title": "Add end-to-end smoke test script and CI-friendly command",
+      "objective": "Provide a single command that exercises the full pipeline (without WhisperX) using mock ASR output.",
+      "actions": [
+        "Create `scripts/smoke_e2e.py` that runs: align_make (mock mode) -> build_training_pair_standalone (TXT mode) -> main.py.",
+        "The script must write outputs under `tests/_artifacts` (or a specified --workdir).",
+        "Ensure the script exits non-zero on any missing expected artifact."
+      ],
+      "deliverables": [
+        "scripts/smoke_e2e.py (new)",
+        "docs/TESTING.md updated with `python scripts/smoke_e2e.py`"
+      ],
+      "test": {
+        "name": "Smoke script runs end-to-end and produces SRT",
+        "commands": [
+          "rm -rf tests/_artifacts && mkdir -p tests/_artifacts",
+          "python scripts/smoke_e2e.py --workdir tests/_artifacts --media tests/fixtures/demo.mp4 --transcript tests/fixtures/demo.txt --mock-asr tests/fixtures/demo.asr.visual.words.diar.json --pipeline-config tests/fixtures/pipeline_config.test.yaml --segmentation-config tests/fixtures/config.test.yaml",
+          "test -s tests/_artifacts/output/demo.srt || test -s tests/_artifacts/demo.srt"
+        ],
+        "expected": [
+          "Smoke script exits 0",
+          "An SRT file for 'demo' exists and is non-empty"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S11",
+      "title": "Introduce pytest test suite for core behaviors",
+      "objective": "Make tests runnable with a single `pytest` command; codify smoke checks as tests.",
+      "actions": [
+        "Add `tests/test_config_loader.py` to validate placeholder resolution and YAML override behavior in `pipeline_config.load_pipeline_config`.",
+        "Add `tests/test_stage2_smoke.py` and `tests/test_stage3_smoke.py` that call the scripts via subprocess using fixtures.",
+        "Add `tests/test_e2e_smoke.py` that runs `scripts/smoke_e2e.py` and validates the SRT output.",
+        "Add a `pytest.ini` (or pyproject config) to ignore heavy/integration-only paths and to keep output readable."
+      ],
+      "deliverables": [
+        "tests/test_config_loader.py",
+        "tests/test_stage2_smoke.py",
+        "tests/test_stage3_smoke.py",
+        "tests/test_e2e_smoke.py",
+        "pytest.ini (or equivalent)"
+      ],
+      "test": {
+        "name": "pytest suite passes",
+        "commands": [
+          "python -m pip install -U pip",
+          "python -m pip install pytest pyyaml rapidfuzz pysrt ffmpeg-python",
+          "pytest -q"
+        ],
+        "expected": [
+          "pytest exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "If additional lightweight dependencies are required for imports (e.g., numpy), add them to the install list and document in requirements-dev.",
+      "passed": false
+    },
+    {
+      "id": "S12",
+      "title": "Write canonical entrypoint documentation",
+      "objective": "Make it obvious what runs in production and what is legacy/experimental.",
+      "actions": [
+        "Create `docs/ENTRYPOINTS.md` that explicitly states the canonical pipeline chain used by the UI job runner: `align_make.py -> build_training_pair_standalone.py -> main.py`.",
+        "Document the exact CLI flags used by orchestrators (from `ui/backend/pipelines.py` and `run_pipeline.py`).",
+        "Update `AGENTS.md` to link to `docs/ENTRYPOINTS.md` and to describe which scripts are primary vs legacy."
+      ],
+      "deliverables": [
+        "docs/ENTRYPOINTS.md",
+        "AGENTS.md updated"
+      ],
+      "test": {
+        "name": "Docs mention the canonical chain and flags",
+        "commands": [
+          "test -f docs/ENTRYPOINTS.md",
+          "grep -q \"align_make.py\" docs/ENTRYPOINTS.md",
+          "grep -q \"build_training_pair_standalone.py\" docs/ENTRYPOINTS.md",
+          "grep -q \"main.py\" docs/ENTRYPOINTS.md",
+          "grep -q \"--primary-input\" docs/ENTRYPOINTS.md"
+        ],
+        "expected": [
+          "ENTRYPOINTS.md exists and contains script names and at least one key flag"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S13",
+      "title": "Quarantine experimental and alternative implementations",
+      "objective": "Reduce cognitive load by moving non-canonical code out of the root path while keeping it for reference.",
+      "actions": [
+        "Create `experiments/` and `legacy/` directories (if not already present).",
+        "Move experimental alt scripts (e.g., docs/alt_build_training_pair_standalone.py) into `experiments/` and update references in docs.",
+        "Move superseded orchestration approaches (if the UI is canonical) into `legacy/` with a README explaining why."
+      ],
+      "deliverables": [
+        "experiments/ directory with moved experimental code",
+        "legacy/ directory with moved legacy orchestrators or scripts",
+        "docs updated to point to new locations"
+      ],
+      "test": {
+        "name": "Imports and tests still pass after moves",
+        "commands": [
+          "pytest -q"
+        ],
+        "expected": [
+          "pytest exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S14",
+      "title": "Reconcile configuration naming and remove misleading comments",
+      "objective": "Eliminate confusion between 'pipeline_config.py' (module) and 'pipeline_config.yaml' (user config).",
+      "actions": [
+        "Update comments/docstrings in `run_pipeline.py` (and anywhere else) to correctly describe how config overrides work (YAML overrides loaded by `pipeline_config.py`).",
+        "Ensure all scripts accept `--config-file` pointing to YAML (as used by orchestrators).",
+        "Update `docs/CONFIGURATION.md` accordingly."
+      ],
+      "deliverables": [
+        "run_pipeline.py docstring corrected",
+        "docs/CONFIGURATION.md updated"
+      ],
+      "test": {
+        "name": "Docs/strings no longer claim YAML override by a separate pipeline_config.py file",
+        "commands": [
+          "python - << 'PY'\nimport pathlib\ntext=pathlib.Path('run_pipeline.py').read_text(encoding='utf-8')\n# Must not claim that a separate override file named pipeline_config.py is required.\nassert 'overridden by a `pipeline_config.py` file' not in text\nprint('ok')\nPY",
+          "pytest -q"
+        ],
+        "expected": [
+          "Python check prints 'ok'",
+          "pytest exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "It is still fine for the module to be named pipeline_config.py; the fix is to clarify the YAML mechanism.",
+      "passed": false
+    },
+    {
+      "id": "S15",
+      "title": "Normalize DEFAULT_SETTINGS across scripts",
+      "objective": "Remove stale absolute path defaults and keep defaults minimal and consistent.",
+      "actions": [
+        "In `align_make.py`, `build_training_pair_standalone.py`, and `run_pipeline.py`, replace DEFAULT_SETTINGS absolute paths with placeholders and/or relative defaults.",
+        "Ensure all default roots can be overridden by YAML and that placeholder resolution works.",
+        "Add a unit test that loads DEFAULT_SETTINGS + test YAML and asserts resolved paths are under the test workdir."
+      ],
+      "deliverables": [
+        "DEFAULT_SETTINGS updated in each script to be portable",
+        "New pytest test asserting path resolution sanity"
+      ],
+      "test": {
+        "name": "DEFAULT_SETTINGS portability test passes",
+        "commands": [
+          "pytest -q"
+        ],
+        "expected": [
+          "pytest exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S16",
+      "title": "Add lightweight linting and style guardrails",
+      "objective": "Prevent the repo from regressing into chaos and keep PRs reviewable.",
+      "actions": [
+        "Add `ruff` configuration (pyproject.toml or ruff.toml) with a minimal ruleset (E,F,I) and reasonable ignores for legacy files.",
+        "Add `scripts/lint.sh` that runs ruff on the canonical code paths.",
+        "Optionally add `python -m compileall` to CI/lint script."
+      ],
+      "deliverables": [
+        "ruff config file",
+        "scripts/lint.sh (new)"
+      ],
+      "test": {
+        "name": "Lint script runs successfully",
+        "commands": [
+          "python -m pip install ruff",
+          "bash scripts/lint.sh"
+        ],
+        "expected": [
+          "Lint script exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "If you prefer not to add ruff, substitute with flake8; keep the test command explicit.",
+      "passed": false
+    },
+    {
+      "id": "S17",
+      "title": "Add a minimal unit test around UI job runner argument construction",
+      "objective": "Ensure UI orchestration stays aligned with CLI script interfaces.",
+      "actions": [
+        "Add a unit test that imports `ui/backend/pipelines.py` and asserts that the argument lists built for stage scripts include the required flags (without executing WhisperX).",
+        "Mock `ctx.stream_command` to capture invoked commands and verify their shapes."
+      ],
+      "deliverables": [
+        "tests/test_ui_job_runner_args.py (new)"
+      ],
+      "test": {
+        "name": "UI runner argument construction test passes",
+        "commands": [
+          "pytest -q"
+        ],
+        "expected": [
+          "pytest exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S18",
+      "title": "Decide the canonical orchestrator and reduce duplication",
+      "objective": "Pick one officially supported execution path and make the other explicitly secondary.",
+      "actions": [
+        "If the Web UI is canonical: add a clear banner comment at the top of `run_pipeline.py` stating it is legacy/hot-folder mode and link to UI instructions.",
+        "If hot-folder mode is canonical: add a clear banner comment in UI docs stating UI calls the same backbone scripts and is primarily a convenience wrapper.",
+        "Ensure README points to the canonical path first.",
+        "Do not break either path in this step; this is documentation + positioning."
+      ],
+      "deliverables": [
+        "README updated to point to canonical orchestrator",
+        "Banner comment added to the non-canonical orchestrator"
+      ],
+      "test": {
+        "name": "Docs updated and tests still pass",
+        "commands": [
+          "pytest -q",
+          "git grep -n \"CANONICAL\" README* docs/* || true"
+        ],
+        "expected": [
+          "pytest exits 0",
+          "At least one doc contains a clear canonical-path statement"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "",
+      "passed": false
+    },
+    {
+      "id": "S19",
+      "title": "Delete code confirmed unused by tests and dependency scans",
+      "objective": "Remove truly dead leftovers to reduce maintenance surface area.",
+      "actions": [
+        "Run a dependency scan (e.g., `python -m pip install vulture` and `vulture .`) and/or static grep to identify unused modules.",
+        "Only delete files that are not referenced by: UI runner, hot-folder runner (if still supported), scripts/smoke_e2e.py, or tests.",
+        "For each deleted file, add a note in `docs/DELETIONS.md` explaining why it is safe and what replaced it."
+      ],
+      "deliverables": [
+        "Deleted unused files (as determined by scans + human review)",
+        "docs/DELETIONS.md (new)"
+      ],
+      "test": {
+        "name": "Full test suite passes after deletions",
+        "commands": [
+          "pytest -q"
+        ],
+        "expected": [
+          "pytest exits 0"
+        ],
+        "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
+      },
+      "notes": "If any doubt remains about a file, move it to legacy/ instead of deleting.",
+      "passed": false
+    }
+  ]
+}
