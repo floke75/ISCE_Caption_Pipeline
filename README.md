@@ -74,6 +74,8 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 3.  **Update `config.yaml`:**
     *   Ensure the `paths` section points to the correct location of your trained model files within the `models/` directory.
+    *   Set `enable_reflow: true` to run an additional post-processing pass that reflows short or imbalanced cues after the
+        beam search.
 
 ### 4. Running the Pipeline
 
