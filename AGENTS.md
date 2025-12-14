@@ -12,6 +12,15 @@ Transform a **media file** plus an **edited transcript** into a **broadcast-read
 
 ---
 
+---
+
+## 0.5) Environment Setup (Agent)
+
+For agents operating in a persistent containerized environment (like `/app`), a setup script is provided to install system and python dependencies.
+
+- **Setup script:** `setup.sh` (installs `ffmpeg`, `pip` dependencies, `spacy` model).
+- **Execution:** `./setup.sh` (may require `sudo` for system packages, which is handled inside the script if available).
+
 ## 1) Quick orientation for an agent
 
 See `docs/ENTRYPOINTS.md` for the canonical entrypoints and exact CLI flags. The FastAPI job runner (`ui/backend/pipelines.py`) is the primary orchestrator; `run_pipeline.py` remains as the legacy hot-folder path.
@@ -157,4 +166,3 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 - `docs/build_training_pair_comparison.md` – rationale for Stage 2 implementation.
 - `experiments/alt_build_training_pair_standalone.py` – tutorial version of Stage 2.
 - `tests/test_beam_search.py` – executable examples of beam search behavior.【F:tests/test_beam_search.py†L1-L188】
-
