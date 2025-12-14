@@ -74,7 +74,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 
 - [S00 — Establish current frontend state and data collection protocol](#s00-establish-current-frontend-state-and-data-collection-protocol) — ✅ Passed
 - [S01 — Baseline UI capture and navigation audit](#s01-baseline-ui-capture-and-navigation-audit) — ✅ Passed
-- [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ⬜ Not started
+- [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ✅ Passed
 - [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ⬜ Not started
 - [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ⬜ Not started
 - [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ⬜ Not started
@@ -196,7 +196,7 @@ find docs/screenshots/S01 -maxdepth 1 -type f | head -n 1
 
 ## S02 — Document existing user guidance and gaps
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Inventory the current inline help, placeholders, and documentation touchpoints in the UI to identify where non-experts may struggle.
 
@@ -225,7 +225,10 @@ find docs/screenshots/S02 -maxdepth 1 -type f | head -n 1
 - **Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
 
 **Notes:**
-- Highlight any areas where screenshots could not be captured due to environment limitations; propose alternatives if needed.
+- Screenshots captured: `inference_guidance.png`, `training_pair_guidance.png`, `model_training_guidance.png`, `config_panel_guidance.png`.
+- `docs/notes/ui_guidance_gaps.md` created listing prioritized gaps.
+- Playwright script `capture_guidance.py` used for capture and removed.
+- Verification passed: 4 screenshots found and gap analysis document exists.
 
 ---
 
