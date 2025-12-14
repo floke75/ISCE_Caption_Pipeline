@@ -92,6 +92,8 @@ This section provides a step-by-step guide to get the ISCE pipeline up and runni
 
 1.  **Create your local config:** Copy `pipeline_config.example.yaml` to `pipeline_config.local.yaml` and adjust paths or diarization settings for your machine. The local file is ignored by git.
 
+    * Both `pipeline_config.yaml` and `pipeline_config.example.yaml` live in the repository root and ship with portable defaults: `project_root` stays at the checkout root (`.`) and `pipeline_root` points to `{project_root}/pipeline_data` so all hot folders and intermediates stay beside the code on any platform.
+
 2.  **Update `pipeline_config.yaml`:** Keep `hf_token` as a placeholder (`HF_TOKEN` or empty) and ensure defaults remain safe for teammates. Runtime will merge `pipeline_config.yaml` with any values in `pipeline_config.local.yaml` or the `HF_TOKEN` environment variable. See `docs/SECURITY_NOTES.md` for guidance on keeping secrets out of git.
 
 3.  **Update `config.yaml`:** Also in the repository root. Confirm the `paths` section references the trained model files in `models/`, and adjust the beam search `sliders` or `constraints` if you need to tune segmentation behavior.

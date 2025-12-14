@@ -12,6 +12,13 @@ The key features of this loader are:
     defaults, allowing users to override only specific nested values.
 -   **Path Resolution**: Automatically resolves path placeholders (like
     `{project_root}` or `{pipeline_root}`) to create absolute, portable paths.
+
+Recommended defaults keep `project_root` at the repository root (".") and set
+`pipeline_root` to a sibling like `{project_root}/pipeline_data` so hot folders
+and intermediate artifacts stay under the checkout without hard-coded machine
+paths. Users can override these values in `pipeline_config.yaml` or
+`pipeline_config.local.yaml`, but the placeholder pattern remains the same
+across platforms.
 """
 from __future__ import annotations
 import yaml

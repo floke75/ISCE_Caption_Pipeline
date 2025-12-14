@@ -27,12 +27,15 @@ import shutil
 from pathlib import Path
 from typing import Dict, Any
 
+REPO_ROOT = Path(__file__).resolve().parent
+DEFAULT_PIPELINE_ROOT = REPO_ROOT / "pipeline_data"
+
 # =========================
 # DEFAULT SETTINGS (Self-Contained)
 # =========================
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "project_root": r"C:\dev\Captions_Formatter\Formatter_machine",
-    "pipeline_root": r"T:\AI-Subtitles\Pipeline",
+    "project_root": str(REPO_ROOT),
+    "pipeline_root": str(DEFAULT_PIPELINE_ROOT),
     
     "drop_folder_inference": "{pipeline_root}/1_DROP_FOLDER_INFERENCE",
     "drop_folder_training":  "{pipeline_root}/2_DROP_FOLDER_TRAINING",

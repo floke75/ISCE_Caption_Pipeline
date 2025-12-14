@@ -32,7 +32,7 @@ from typing import Any, Dict
 import argparse
 import ffmpeg
 import warnings
-import yaml
+from pipeline_config import load_pipeline_config
 
 # =========================
 # Dependency guards
@@ -44,8 +44,8 @@ import torch
 # DEFAULT SETTINGS (Self-Contained)
 # =========================
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "project_root": r"C:\dev\Captions_Formatter\Formatter_machine",
-    "pipeline_root": r"T:\AI-Subtitles\Pipeline",
+    "project_root": ".",
+    "pipeline_root": "{project_root}/pipeline_data",
     "align_make": {
         "out_root":     "{pipeline_root}/_intermediate",
         "cache_dir":    "{project_root}/cache",
@@ -65,57 +65,6 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 # --- QUIET noisy 3rd-party warnings ---
 warnings.filterwarnings("ignore", message=r".*TorchCodec.*", category=UserWarning)
 warnings.filterwarnings("ignore", message=r".*torchaudio._backend.list_audio_backends has been deprecated.*", category=UserWarning)
-
-# =========================
-# Configuration Helper Functions (Self-Contained)
-# =========================
-def _recursive_update(base: Dict, update: Dict) -> Dict:
-    """
-    Recursively updates a dictionary.
-
-    Merges the 'update' dictionary into the 'base' dictionary. If a key
-    exists in both dictionaries and its value is a dictionary in both,
-    it recursively merges the nested dictionaries. Otherwise, the value
-    from 'update' overwrites the value in 'base'.
-
-    Args:
-        base: The dictionary to be updated.
-        update: The dictionary containing new values.
-
-    Returns:
-        The updated 'base' dictionary.
-    """
-    for k, v in update.items():
-        if isinstance(v, dict) and k in base and isinstance(base[k], dict):
-            base[k] = _recursive_update(base[k], v)
-        else:
-            base[k] = v
-    return base
-
-def _resolve_paths(config: Dict, context: Dict) -> Dict:
-    """
-    Resolves placeholder variables in configuration paths.
-
-    Recursively iterates through a configuration dictionary and formats any
-    string values that contain `{placeholder}` style variables using the
-    provided context dictionary.
-
-    Args:
-        config: The configuration dictionary with unresolved path strings.
-        context: A dictionary mapping placeholder keys to their values.
-
-    Returns:
-        The configuration dictionary with path placeholders resolved.
-    """
-    for k, v in config.items():
-        if isinstance(v, str) and "{" in v and "}" in v:
-            try:
-                config[k] = v.format(**context)
-            except KeyError:
-                pass
-        elif isinstance(v, dict):
-            config[k] = _resolve_paths(v, context)
-    return config
 
 # =========================
 # Utilities
@@ -373,19 +322,17 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Run ASR, diarization, and alignment on an audio/video file.")
     parser.add_argument("--input-file", required=True, type=Path, help="Path to the audio/video file to process.")
-    parser.add_argument("--out-root", required=True, type=Path, help="Root directory for output artifacts.")
+    parser.add_argument("--out-root", type=Path, help="Root directory for output artifacts.")
     parser.add_argument("--config-file", type=Path, help="Path to the pipeline_config.yaml file.")
     args = parser.parse_args()
 
-    config = DEFAULT_SETTINGS.copy()
-    if args.config_file and args.config_file.exists():
-        with open(args.config_file, "r", encoding="utf-8") as f:
-            yaml_config = yaml.safe_load(f)
-        if yaml_config: config = _recursive_update(config, yaml_config)
-
-    path_context = {k: v for k, v in config.items() if isinstance(v, str)}
-    config = _resolve_paths(config, path_context)
+    config = load_pipeline_config(
+        DEFAULT_SETTINGS, yaml_path=str(args.config_file) if args.config_file else "pipeline_config.yaml"
+    )
     script_settings = config.get("align_make", {})
+    out_root = Path(args.out_root) if args.out_root else Path(
+        script_settings.get("out_root", Path(config.get("pipeline_root", ".")) / "_intermediate")
+    )
 
     set_env_tokens(script_settings.get("hf_token"))
     device = pick_device()
@@ -394,13 +341,13 @@ def main():
         raise FileNotFoundError(f"Input file not found: {args.input_file}")
 
     paths = {
-        "asr_dir": args.out_root / "_asr",
-        "align_dir": args.out_root / "_align",
+        "asr_dir": out_root / "_asr",
+        "align_dir": out_root / "_align",
     }
     ensure_dirs(paths["asr_dir"]); ensure_dirs(paths["align_dir"])
 
     print(f"[INFO] Processing single specified file: {args.input_file.name}")
-    print(f"[INFO] Outputting artifacts to: {args.out_root}")
+    print(f"[INFO] Outputting artifacts to: {out_root}")
 
     try:
         process_file(args.input_file, device, paths, script_settings)
