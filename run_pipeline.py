@@ -14,7 +14,8 @@ to ensure that processed files are archived and failed jobs are isolated.
 It operates based on a configuration that can be defined in this file
 (DEFAULT_SETTINGS) and overridden by a YAML file (e.g.,
 `pipeline_config.yaml`) that is loaded and merged by
-`pipeline_config.load_pipeline_config`.
+`pipeline_config.load_pipeline_config`. When run manually, provide
+``--config-file`` to point at an alternative YAML.
 
 Attributes:
     DEFAULT_SETTINGS (Dict[str, Any]): A dictionary containing the default
@@ -22,12 +23,15 @@ Attributes:
         and orchestrator settings. These defaults are merged with any YAML
         overrides provided to ``load_pipeline_config``.
 """
-import time
-import sys
-import subprocess
+import argparse
 import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Dict, Any
+
+from pipeline_config import load_pipeline_config
 
 # =========================
 # DEFAULT SETTINGS (Self-Contained)
@@ -84,6 +88,26 @@ def setup_directories(cfg: Dict[str, Any]):
     (Path(cfg["processed_dir"]) / "training").mkdir(exist_ok=True)
     (Path(cfg["processed_dir"]) / "srt").mkdir(exist_ok=True)
     (Path(cfg["processed_dir"]) / "txt").mkdir(exist_ok=True)
+
+
+def load_configuration(config_file: Path | None) -> Dict[str, Any]:
+    """Load configuration defaults merged with optional YAML overrides."""
+
+    yaml_path = str(config_file) if config_file else "pipeline_config.yaml"
+    return load_pipeline_config(DEFAULT_SETTINGS, yaml_path=yaml_path)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse command-line arguments for overriding config paths."""
+
+    parser = argparse.ArgumentParser(description="Run the ISCE hot-folder orchestrator")
+    parser.add_argument(
+        "--config-file",
+        type=Path,
+        default=Path("pipeline_config.yaml"),
+        help="Path to the pipeline_config YAML file used to override DEFAULT_SETTINGS.",
+    )
+    return parser.parse_args(argv)
 
 def get_project_path(cfg: Dict[str, Any], script_name: str) -> Path:
     """Constructs the absolute path to a script within the project directory.
@@ -412,16 +436,13 @@ def main_loop(cfg: Dict[str, Any]):
             print("Restarting poll in 30 seconds...")
             time.sleep(30)
 
-if __name__ == "__main__":
-    # The entry point of the script. It loads configuration defaults from this
-    # file and merges any YAML overrides (e.g., pipeline_config.yaml) via the
-    # shared loader in ``pipeline_config.py``.
-    try:
-        from pipeline_config import load_pipeline_config
-    except ImportError:
-        print("[FATAL ERROR] pipeline_config.py not found. The application cannot start.")
-        sys.exit(1)
+def main(argv: list[str] | None = None) -> None:
+    """Entry point that loads configuration and starts the orchestrator loop."""
 
-    # Load configuration and start the main processing loop.
-    CONFIG = load_pipeline_config(DEFAULT_SETTINGS)
-    main_loop(CONFIG)
+    args = parse_args(argv)
+    config = load_configuration(args.config_file)
+    main_loop(config)
+
+
+if __name__ == "__main__":
+    main()

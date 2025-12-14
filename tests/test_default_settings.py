@@ -58,3 +58,14 @@ def test_default_settings_resolve_to_supplied_project_root(tmp_path):
 
     for name, cfg in configs.items():
         _assert_paths_under_root(cfg, project_root, TEST_KEYS[name])
+
+
+def test_run_pipeline_load_configuration_honors_cli_override(tmp_path):
+    config_file = tmp_path / "pipeline_config.yaml"
+    project_root = tmp_path / "custom_root"
+    config_file.write_text(f"project_root: '{project_root}'\n", encoding="utf-8")
+
+    config = run_pipeline.load_configuration(config_file)
+
+    assert Path(config["project_root"]) == project_root
+    assert Path(config["pipeline_root"]) == project_root / "pipeline_data"
