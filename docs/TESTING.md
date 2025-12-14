@@ -30,3 +30,19 @@ python align_make.py \
 ```
 
 The command writes `tests/_artifacts/_align/demo.asr.visual.words.diar.json` without reading the media file or downloading any models. This makes it safe to chain with later stages in offline environments.
+
+## End-to-end smoke command
+
+For a single-command integration check that links all three stages together without WhisperX, use the smoke runner:
+
+```bash
+python scripts/smoke_e2e.py \
+  --workdir tests/_artifacts \
+  --media tests/fixtures/demo.mp4 \
+  --transcript tests/fixtures/demo.txt \
+  --mock-asr tests/fixtures/demo.asr.visual.words.diar.json \
+  --pipeline-config tests/fixtures/pipeline_config.test.yaml \
+  --segmentation-config tests/fixtures/config.test.yaml
+```
+
+The script writes intermediate artifacts under `tests/_artifacts/_align` and `tests/_artifacts/_inference_input`, then emits an SRT to `tests/_artifacts/output/demo.srt`. It exits non-zero if any expected file is missing.
