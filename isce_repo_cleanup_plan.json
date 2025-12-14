@@ -66,6 +66,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Already completed and still relevant as historical context: baseline snapshot in docs/BASELINE.md with command outputs helps anchor subsequent cleanup; no further action needed beyond retaining the record.",
       "passed": true
     },
     {
@@ -102,6 +103,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If a token was previously committed, rotate it immediately. Optional but recommended: rewrite git history to purge the secret.",
+      "relevance_review": "Completed but important to keep: configs remain sanitized with placeholders and local override guidance in README/pipeline_config.example.yaml; keeping this state avoids accidental secret reintroduction.",
       "passed": true
     },
     {
@@ -130,6 +132,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Completed and still applicable: portable defaults in pipeline_config.yaml/example keep paths repository-relative, matching current pipeline_config.py resolution and README guidance.",
       "passed": true
     },
     {
@@ -161,6 +164,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Completed and aligned: scripts now rely on pipeline_config.load_pipeline_config, removing duplicate loaders; documenting this keeps stage scripts consistent with orchestrators.",
       "passed": true
     },
     {
@@ -187,6 +191,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If your dev environment already has whisperx installed, this still passes; the key is that import must not crash when it is absent.",
+      "relevance_review": "Completed and still relevant: import-lazy refactor prevents whisperx/torch from blocking basic imports, matching current align_make.py behavior and keeping installs lightweight.",
       "passed": true
     },
     {
@@ -217,6 +222,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "You must create `tests/fixtures/demo.mp4` as a tiny placeholder file (can be empty); mock mode must not read it.",
+      "relevance_review": "Relevant and already implemented: mock ASR flag supports deterministic outputs for tests without heavy deps; keep fixture-based path intact for smoke coverage.",
       "passed": true
     },
     {
@@ -285,6 +291,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If the output schema differs, standardize it to a single canonical top-level key (recommended: `words`). If you change schema, also update stage3 loader accordingly.",
+      "relevance_review": "Relevant and safe: build_training_pair_standalone.py already guards spaCy imports and exposes the listed flags via orchestrators; confirming spaCy-disabled paths and schema consistency aligns with current usage and avoids extra dependencies.",
       "passed": false
     },
     {
@@ -315,6 +322,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant: training generation remains part of README and scripts/train_model.py flow; fixtures are small so producing labels from SRT+ASR is safe and keeps training path exercised.",
       "passed": false
     },
     {
@@ -351,6 +359,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If you do not want to commit `demo.enriched.json`, add a small helper in tests to generate it on the fly before running main.py.",
+      "relevance_review": "Relevant and consistent with beam search focus: validating deterministic Stage 3 output on fixtures keeps segmentation reproducible with current tiny configs; safe to run offline.",
       "passed": false
     },
     {
@@ -380,6 +389,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant integration guardrail: end-to-end smoke command using mock ASR ties stages together without WhisperX, matching orchestrator expectations and safe for CI.",
       "passed": false
     },
     {
@@ -412,6 +422,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If additional lightweight dependencies are required for imports (e.g., numpy), add them to the install list and document in requirements-dev.",
+      "relevance_review": "Relevant and aligned: main.py consumes enriched tokens produced in S07; validating deterministic SRT output on fixtures is consistent with existing beam search tests and is safe with tiny configs.",
       "passed": false
     },
     {
@@ -442,6 +453,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant documentation gap: AGENTS.md already summarizes the canonical chain; a dedicated ENTRYPOINTS.md plus AGENTS.md link keeps production path explicit and low-risk.",
       "passed": false
     },
     {
@@ -469,6 +481,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant with caution: alt tutorial scripts exist under docs/; moving non-canonical code into experiments/ or legacy/ reduces clutter but must preserve import paths used in docs and avoid breaking tests.",
       "passed": false
     },
     {
@@ -497,6 +510,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "It is still fine for the module to be named pipeline_config.py; the fix is to clarify the YAML mechanism.",
+      "relevance_review": "Relevant: run_pipeline.py and docs still mention YAML overrides; clarifying terminology avoids confusion between module vs config file and is safe documentation-only work plus any small string updates.",
       "passed": false
     },
     {
@@ -523,6 +537,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant and low risk: DEFAULT_SETTINGS still contain placeholders/paths that should stay portable across align_make.py, build_training_pair_standalone.py, and run_pipeline.py; adding a small pytest to assert resolution under test dirs matches current config loader behaviour.",
       "passed": false
     },
     {
@@ -550,6 +565,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If you prefer not to add ruff, substitute with flake8; keep the test command explicit.",
+      "relevance_review": "Already implemented: ruff.toml exists with E/F/I rules and scripts/lint.sh runs ruff on core paths. Step is redundant; mark as satisfied without new work unless scope changes.",
       "passed": false
     },
     {
@@ -574,6 +590,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant and safe: ui/backend/pipelines.py builds command lists for stage scripts; a mock-based pytest that inspects ctx.stream_command arguments can validate flag coverage without hitting WhisperX or external downloads.",
       "passed": false
     },
     {
@@ -603,6 +620,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "",
+      "relevance_review": "Relevant documentation alignment: README currently presents both hot-folder and UI paths; adding a clear canonical recommendation plus banner comment is low-risk and keeps users aligned.",
       "passed": false
     },
     {
@@ -629,6 +647,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If any doubt remains about a file, move it to legacy/ instead of deleting.",
+      "relevance_review": "Relevant but requires caution: run vulture/static analysis with excludes for orchestrators and UI to avoid false positives; prefer moving uncertain files into legacy/ and document removals in docs/DELETIONS.md.",
       "passed": false
     }
   ]
