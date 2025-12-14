@@ -75,7 +75,7 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 - **UI job workspaces** – Each backend job copies inputs into `ui_data/jobs/<id>/inputs`, stages artifacts under `ui_data/jobs/<id>/artifacts`, and streams logs via `JobContext`.【F:ui/backend/pipelines.py†L72-L189】
 
 ### Documentation / tests
-- `docs/beam_search_walkthrough.md`, `docs/spacy_feature_impact.md`, `docs/build_training_pair_comparison.md`, `docs/alt_build_training_pair_standalone.py`.
+- `docs/beam_search_walkthrough.md`, `docs/spacy_feature_impact.md`, `docs/build_training_pair_comparison.md`, `experiments/alt_build_training_pair_standalone.py`.
 - `tests/test_beam_search.py` – literate tests for the segmenter and reconciliation helpers.【F:tests/test_beam_search.py†L1-L188】
 
 ---
@@ -155,6 +155,6 @@ It **does not** replace ASR (WhisperX provides timestamps) or claim a single “
 - `docs/beam_search_walkthrough.md` – lookahead, reconciliation, refinement payloads.
 - `docs/spacy_feature_impact.md` – dependency feature rationale.
 - `docs/build_training_pair_comparison.md` – rationale for Stage 2 implementation.
-- `docs/alt_build_training_pair_standalone.py` – tutorial version of Stage 2.
+- `experiments/alt_build_training_pair_standalone.py` – tutorial version of Stage 2.
 - `tests/test_beam_search.py` – executable examples of beam search behavior.【F:tests/test_beam_search.py†L1-L188】
 
