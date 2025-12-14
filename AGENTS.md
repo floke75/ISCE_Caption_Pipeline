@@ -8,6 +8,8 @@ This is the **fact-checked field guide** for the ISCE Caption Pipeline. It is wr
 
 Transform a **media file** plus an **edited transcript** into a **broadcast-ready `.srt`**, using an interpretable hybrid of **statistical scoring** and **explicit guardrail rules** instead of a black-box, LLM-only formatter.
 
+> Baseline snapshot for this cleanup lives at `docs/BASELINE.md`.
+
 ---
 
 ## 1) Quick orientation for an agent

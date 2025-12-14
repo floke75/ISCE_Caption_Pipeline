@@ -14,5 +14,8 @@ _processed/
 .idea/
 *.DS_Store
 
+# Local secrets/config overrides
+pipeline_config.local.yaml
+
 # Node
 ui/frontend/node_modules

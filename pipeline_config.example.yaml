@@ -1,8 +1,8 @@
 # ====================================================================
-# ==         ISCE Pipeline - Central Configuration File             ==
+# ==        ISCE Pipeline - Example Configuration Template          ==
 # ====================================================================
-# This is the single source of truth for all paths and settings.
-# This version is synchronized with the refactored pipeline scripts.
+# Copy this file to `pipeline_config.local.yaml` and adjust values
+# for your machine. Secrets should stay out of version control.
 
 # --- Core Paths ---
 project_root: "/abs/path/to/isce_caption_pipeline"
@@ -43,7 +43,7 @@ build_pair:
   # Paths used by the Text-to-Enrichment engine (build_training_pair_standalone.py)
   out_training_dir: "{intermediate_dir}/_training"
   out_inference_dir: "{intermediate_dir}/_inference_input"
-  
+
   # Feature engineering settings
   language: "sv"
   time_tolerance_s: 0.15
@@ -53,7 +53,7 @@ build_pair:
   spacy_add_dependencies: true
   # Generate simulated .train.raw.words.json copies alongside edited training data (off by default)
   emit_asr_style_training_copy: false
-  
+
   # Text-to-ASR alignment settings (moved here from align_make)
   txt_match_close: 0.82
   txt_match_weak:  0.65
