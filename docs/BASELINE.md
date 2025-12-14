@@ -1,23 +1,26 @@
 # ISCE Caption Pipeline Baseline Snapshot
 
 - **Branch:** work
-- **Commit:** 8820021c4d9465f66c279f2aacfc255ae5c87048
+- **Commit:** 2992f0da54b2029ebc8ebd762b7cb7e13e9a97d9
+- **OS:** Linux 4187e600a408 6.12.13 #1 SMP Thu Mar 13 11:34:50 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
 - **Python:** 3.12.12
-- **OS:** Linux 4309c66b3daa 6.12.13 #1 SMP Thu Mar 13 11:34:50 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
-- **Top-level inventory (depth ≤ 2):**
-  - Root scripts/configs: `align_make.py`, `build_training_pair_standalone.py`, `main.py`, `run_pipeline.py`, `pipeline_config.py`, `pipeline_config.yaml`, `config.yaml`, `pipeline_config.example.yaml`, `requirements.txt`, `README.md`, `FRONTEND.md`.
-  - Docs: `docs/beam_search_walkthrough.md`, `docs/build_training_pair_comparison.md`, `docs/spacy_feature_impact.md`, `docs/alt_build_training_pair_standalone.py`.
-  - Python package: `isce/` (beam search, scorer, postprocess, srt writer, model builder, data validation).
-  - Tests and fixtures: `tests/test_beam_search.py`, `tests/fixtures/`.
-  - Scripts: `scripts/install.py`, `scripts/train_model.py`.
-  - UI backend/frontend: `ui/backend/` (FastAPI app, pipelines, config service, API routes), `ui/frontend/` (React SPA assets).
-  - Data/work dirs: `_intermediate/`, `_output/`, `ui_data/` (job inputs/artifacts folders referenced by UI).
+- **Pip:** pip 25.2 from /root/.pyenv/versions/3.12.12/lib/python3.12/site-packages/pip (python 3.12)
+
+## Top-level file inventory (depth ≤ 2)
+- Root files: `AGENTS.md`, `FRONTEND.md`, `README.md`, `align_make.py`, `build_training_pair_standalone.py`, `config.yaml`, `isce_repo_cleanup_plan.json`, `main.py`, `pipeline_config.py`, `pipeline_config.yaml`, `pipeline_config.example.yaml`, `requirements.txt`, `run_pipeline.py`.
+- Docs: `docs/BASELINE.md`, `docs/SECURITY_NOTES.md`, `docs/beam_search_walkthrough.md`, `docs/build_training_pair_comparison.md`, `docs/spacy_feature_impact.md`, `docs/alt_build_training_pair_standalone.py`.
+- Python package (`isce/`): `beam_search.py`, `config.py`, `data_validation.py`, `io_utils.py`, `model_builder.py`, `postprocess.py`, `scorer.py`, `srt_writer.py`, `token_normalization.py`, `types.py`, `__init__.py`.
+- Scripts: `scripts/dev_console.sh`, `scripts/evaluate_model.py`, `scripts/install.py`, `scripts/train_model.py`, `scripts/__init__.py`.
+- Tests: `tests/conftest.py`, all Stage 1–3 coverage like `test_beam_search.py`, `test_build_training_pair.py`, `test_config.py`, `test_data_validation.py`, `test_enrichment_features.py`, `test_io_utils.py`, `test_main.py`, `test_model_builder_constraints.py`, `test_model_builder_features.py`, `test_postprocess.py`, `test_scorer.py`, `test_segment.py`, `test_srt_writer.py`, `test_token_normalization.py`, `test_train_model.py`, `test_training_data_integrity.py`, and fixtures under `tests/fixtures/`.
+- UI/backend: `ui/backend/app.py`, `ui/backend/pipelines.py`, `ui/backend/config_service.py`, and API routes in `ui/backend/api/`.
+- UI/frontend: Vite/React app under `ui/frontend/` with `package.json`, `tsconfig.json`, and `src/`.
+- Data/workspace folders: `ui_data/` (job inputs/artifacts for UI flows).
 
 ## Baseline command outputs
 
 ```bash
 git rev-parse HEAD
-8820021c4d9465f66c279f2aacfc255ae5c87048
+2992f0da54b2029ebc8ebd762b7cb7e13e9a97d9
 
 python --version
 Python 3.12.12

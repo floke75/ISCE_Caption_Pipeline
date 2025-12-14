@@ -102,7 +102,7 @@
         "pass_criteria": "All commands exit with code 0 AND all expected conditions are satisfied."
       },
       "notes": "If a token was previously committed, rotate it immediately. Optional but recommended: rewrite git history to purge the secret.",
-        "passed": false
+        "passed": true
     },
     {
       "id": "S02",
