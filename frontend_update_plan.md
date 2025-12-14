@@ -187,7 +187,10 @@ find docs/screenshots/S01 -maxdepth 1 -type f | head -n 1
 - **Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
 
 **Notes:**
-- Include links or paths to captured screenshots in the notes.
+- Screenshots captured: `inference-form.png`, `training-pair-form.png`, `model-training-form.png`, `config-panel.png` in `docs/screenshots/S01/`.
+- `docs/notes/ui_baseline.md` created with navigation details.
+- Environment: Node v20.19.5, Vite v5.4.21, Backend running on port 8000.
+- Playwright script `capture_baseline.py` used for capture and then removed.
 
 ---
 
