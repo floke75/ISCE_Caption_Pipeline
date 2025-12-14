@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 0/16 passed, 0 failed, 0 in progress (initial draft)
+**Step status summary:** 1/16 passed, 0 failed, 0 in progress
 
 ---
 
@@ -72,7 +72,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 
 ### Index
 
-- [S00 — Establish current frontend state and data collection protocol](#s00-establish-current-frontend-state-and-data-collection-protocol) — ⬜ Not started
+- [S00 — Establish current frontend state and data collection protocol](#s00-establish-current-frontend-state-and-data-collection-protocol) — ✅ Passed
 - [S01 — Baseline UI capture and navigation audit](#s01-baseline-ui-capture-and-navigation-audit) — ⬜ Not started
 - [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ⬜ Not started
 - [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ⬜ Not started
@@ -93,22 +93,22 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 
 | Step | Approx. lines | Status |
 | --- | --- | --- |
-| S00 | ~L117–154 | ⬜ |
-| S01 | ~L155–191 | ⬜ |
-| S02 | ~L192–226 | ⬜ |
-| S03 | ~L227–266 | ⬜ |
-| S04 | ~L267–304 | ⬜ |
-| S05 | ~L305–342 | ⬜ |
-| S06 | ~L343–383 | ⬜ |
-| S07 | ~L384–423 | ⬜ |
-| S08 | ~L424–464 | ⬜ |
-| S09 | ~L465–506 | ⬜ |
-| S10 | ~L507–548 | ⬜ |
-| S11 | ~L549–588 | ⬜ |
-| S12 | ~L589–628 | ⬜ |
-| S13 | ~L629–665 | ⬜ |
-| S14 | ~L666–705 | ⬜ |
-| S15 | ~L706–742 | ⬜ |
+| S00 | ~L117–156 | ✅ |
+| S01 | ~L157–193 | ⬜ |
+| S02 | ~L194–228 | ⬜ |
+| S03 | ~L229–268 | ⬜ |
+| S04 | ~L269–306 | ⬜ |
+| S05 | ~L307–344 | ⬜ |
+| S06 | ~L345–385 | ⬜ |
+| S07 | ~L386–425 | ⬜ |
+| S08 | ~L426–466 | ⬜ |
+| S09 | ~L467–508 | ⬜ |
+| S10 | ~L509–550 | ⬜ |
+| S11 | ~L551–590 | ⬜ |
+| S12 | ~L591–630 | ⬜ |
+| S13 | ~L631–667 | ⬜ |
+| S14 | ~L668–707 | ⬜ |
+| S15 | ~L708–742 | ⬜ |
 
 *Pointers are hints—update after any content change to keep navigation reliable.*
 
@@ -116,7 +116,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 
 ## S00 — Establish current frontend state and data collection protocol
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Confirm environment readiness for frontend review and define how screenshots and artifacts will be captured and stored throughout the plan.
 
@@ -149,6 +149,8 @@ grep -q "frontend dev" docs/notes/frontend_readiness.md
 
 **Notes:**
 - No UI screenshots required for this setup step.
+- Environment commands executed: `node -v` → `v20.19.5`; `npm -v` → `11.4.2` (with warning about unknown env config `http-proxy`).
+- Directories `docs/notes/` and `docs/screenshots/S00/` created for plan artifacts.
 
 ---
 
