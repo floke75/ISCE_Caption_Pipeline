@@ -621,7 +621,7 @@
       },
       "notes": "",
       "relevance_review": "Relevant documentation alignment: README currently presents both hot-folder and UI paths; adding a clear canonical recommendation plus banner comment is low-risk and keeps users aligned.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "S19",

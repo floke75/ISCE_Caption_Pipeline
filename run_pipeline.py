@@ -2,6 +2,12 @@
 # -*- coding: utf-8 -*-
 """Master orchestration script for the ISCE Pipeline.
 
+# === Legacy hot-folder orchestrator ===
+# The canonical path for running ISCE is the Web Control Center
+# (FastAPI backend + React frontend). This script remains supported for
+# batch/air-gapped workflows but is considered secondary. See README for
+# guidance.
+
 This script monitors a set of "hot folders" for new media files and triggers
 the appropriate processing pipeline (either inference or training data
 preparation). It orchestrates the execution of several worker scripts in
