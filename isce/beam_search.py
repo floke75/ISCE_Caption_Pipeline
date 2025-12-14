@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, replace
-from typing import List
+from typing import Dict, List, Optional
 from heapq import nlargest
 from tqdm import tqdm
 
@@ -11,6 +11,145 @@ from .scorer import Scorer
 from .config import Config
 
 FALLBACK_SB_PENALTY = 25.0
+DISAGREEMENT_MARGIN = 5.0
+
+
+def _token_to_row_dict(token: Token, *, reverse: bool = False) -> dict:
+    """Create a dictionary suitable for scorer consumption.
+
+    When ``reverse`` is true the pause and positional metadata are flipped so the
+    scorer sees an equivalent view while iterating from the end of the token
+    sequence toward the start.
+    """
+
+    data = dict(token.__dict__)
+    if reverse:
+        pause_after = data.get("pause_after_ms", 0)
+        pause_before = data.get("pause_before_ms", 0)
+        data["pause_after_ms"] = pause_before
+        data["pause_before_ms"] = pause_after
+
+        if "pause_z" in data:
+            data["pause_z"] = -data["pause_z"]
+
+        if "is_sentence_initial" in data or "is_sentence_final" in data:
+            data["is_sentence_initial"], data["is_sentence_final"] = (
+                data.get("is_sentence_final", False),
+                data.get("is_sentence_initial", False),
+            )
+
+        if "relative_position" in data and data["relative_position"] is not None:
+            data["relative_position"] = 1.0 - data["relative_position"]
+
+    return data
+
+
+def _compute_transition_scores(tokens: List[Token], scorer: Scorer, *, reverse: bool = False) -> List[Dict[str, float]]:
+    """Return transition scores for each boundary in the requested direction.
+
+    Forward scoring walks the token list from left to right, producing a row for
+    every token/boundary pair. When ``reverse`` is true we request the same
+    scores while iterating from the end of the sequence so the caller can blend
+    forward and backward evidence. The backward pass mirrors the order of the
+    forward pass, so the returned list indexes continue to map directly to the
+    original token boundaries.
+    """
+
+    if not tokens:
+        return []
+
+    if not reverse:
+        rows: List[Dict[str, float]] = []
+        for idx, token in enumerate(tokens):
+            nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
+            row = TokenRow(
+                token=_token_to_row_dict(token),
+                nxt=_token_to_row_dict(nxt) if nxt else None,
+                feats=None,
+            )
+            rows.append(scorer.score_transition(row))
+        return rows
+
+    reversed_tokens = list(reversed(tokens))
+    scores: List[Optional[Dict[str, float]]] = [None] * len(tokens)
+
+    # Walk the reversed list, mapping each pair back to the corresponding
+    # forward boundary index so callers can blend the two lists by position.
+    for ridx in range(len(reversed_tokens) - 1):
+        token = reversed_tokens[ridx]
+        nxt = reversed_tokens[ridx + 1]
+        row = TokenRow(
+            token=_token_to_row_dict(token, reverse=True),
+            nxt=_token_to_row_dict(nxt, reverse=True),
+            feats=None,
+        )
+        forward_idx = len(tokens) - 2 - ridx
+        scores[forward_idx] = scorer.score_transition(row)
+
+    # Provide a terminal score so the last boundary can still participate in blending.
+    terminal_row = TokenRow(
+        # Use the original final token to keep the backward terminal row aligned
+        # with the last boundary instead of the first token from the reversed
+        # sequence. ``reverse=True`` ensures pause metadata is mirrored.
+        token=_token_to_row_dict(tokens[-1], reverse=True),
+        nxt=None,
+        feats=None,
+    )
+    scores[-1] = scorer.score_transition(terminal_row)
+
+    # Replace any gaps (possible when len(tokens) == 1) with forward scores.
+    for idx, sc in enumerate(scores):
+        if sc is None:
+            token = tokens[idx]
+            nxt = tokens[idx + 1] if idx + 1 < len(tokens) else None
+            row = TokenRow(
+                token=_token_to_row_dict(token),
+                nxt=_token_to_row_dict(nxt) if nxt else None,
+                feats=None,
+            )
+            scores[idx] = scorer.score_transition(row)
+
+    return [dict(sc) for sc in scores]  # type: ignore[arg-type]
+
+
+def _best_choice_and_margin(scores: Dict[str, float]) -> tuple[str, float]:
+    ordered = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    if not ordered:
+        return "O", 0.0
+    best_score = ordered[0][1]
+    runner_up = ordered[1][1] if len(ordered) > 1 else best_score
+    return ordered[0][0], best_score - runner_up
+
+
+def _blend_transition_scores(
+    forward: List[Dict[str, float]],
+    backward: List[Dict[str, float]],
+) -> List[Dict[str, float]]:
+    blended: List[Dict[str, float]] = []
+    for fwd, bwd in zip(forward, backward):
+        forward_choice, forward_margin = _best_choice_and_margin(fwd)
+        backward_choice, backward_margin = _best_choice_and_margin(bwd)
+
+        if (
+            forward_choice != backward_choice
+            and forward_margin >= DISAGREEMENT_MARGIN
+            and backward_margin >= DISAGREEMENT_MARGIN
+        ):
+            blended.append(dict(fwd))
+            continue
+
+        merged = {outcome: (fwd[outcome] + bwd[outcome]) / 2.0 for outcome in fwd.keys()}
+        blended.append(merged)
+
+    # In case the backward list was shorter, append the remaining forward scores.
+    if len(forward) > len(backward):
+        for idx in range(len(backward), len(forward)):
+            blended.append(dict(forward[idx]))
+    elif len(backward) > len(forward):
+        for idx in range(len(forward), len(backward)):
+            blended.append(dict(backward[idx]))
+
+    return blended
 
 @dataclass(frozen=True)
 class PathState:
@@ -75,7 +214,7 @@ class Segmenter:
                 return False
         return True
 
-    def run(self) -> List[BreakType]:
+    def run(self, transition_overrides: Optional[List[Dict[str, float]]] = None) -> List[BreakType]:
         """
         Executes the main beam search algorithm.
 
@@ -95,21 +234,27 @@ class Segmenter:
         initial_state = PathState(score=0.0, line_num=1, line_len=len(self.tokens[0].w), block_start_idx=0, breaks=())
         self.beam = [initial_state]
 
+        if transition_overrides is not None and len(transition_overrides) != len(self.tokens):
+            raise ValueError("transition_overrides must match the number of tokens")
+
         for i, token in tqdm(enumerate(self.tokens), total=len(self.tokens), desc="Segmenting", unit="token"):
             candidates: List[PathState] = []
             is_last_token = (i == len(self.tokens) - 1)
             nxt = self.tokens[i + 1] if not is_last_token else None
 
-            token_dict = dict(token.__dict__)
-            nxt_dict = dict(nxt.__dict__) if nxt else None
+            if transition_overrides is not None and transition_overrides[i] is not None:
+                transition_scores = transition_overrides[i]
+            else:
+                token_dict = _token_to_row_dict(token)
+                nxt_dict = _token_to_row_dict(nxt) if nxt else None
 
-            # Create the dictionary-based TokenRow required by the refactored scorer
-            scorer_row = TokenRow(
-                token=token_dict,
-                nxt=nxt_dict,
-                feats=None # feats object is no longer used by the scorer
-            )
-            transition_scores = self.scorer.score_transition(scorer_row)
+                # Create the dictionary-based TokenRow required by the refactored scorer
+                scorer_row = TokenRow(
+                    token=token_dict,
+                    nxt=nxt_dict,
+                    feats=None # feats object is no longer used by the scorer
+                )
+                transition_scores = self.scorer.score_transition(scorer_row)
 
             for state in self.beam:
                 # Candidate: 'O' (No Break)
@@ -174,7 +319,7 @@ class Segmenter:
         
         return final_breaks
 
-def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
+def segment(tokens: List[Token], scorer: Scorer, cfg: Config, *, bidirectional: bool = False) -> List[Token]:
     """
     High-level wrapper to perform beam search segmentation.
 
@@ -185,6 +330,8 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
         tokens: The list of `Token` objects to segment.
         scorer: The `Scorer` instance to use for evaluating breaks.
         cfg: The main configuration object.
+        bidirectional: When True, blend forward/backward transition scores before
+            running the beam search.
 
     Returns:
         A new list of `Token` objects with the `break_type` attribute set
@@ -194,6 +341,13 @@ def segment(tokens: List[Token], scorer: Scorer, cfg: Config) -> List[Token]:
         return []
     
     segmenter = Segmenter(tokens, scorer, cfg)
-    final_breaks = segmenter.run()
+
+    if bidirectional and len(tokens) > 1:
+        forward_scores = _compute_transition_scores(tokens, scorer)
+        backward_scores = _compute_transition_scores(tokens, scorer, reverse=True)
+        blended_scores = _blend_transition_scores(forward_scores, backward_scores)
+        final_breaks = segmenter.run(transition_overrides=blended_scores)
+    else:
+        final_breaks = segmenter.run()
 
     return [replace(token, break_type=final_breaks[i]) for i, token in enumerate(tokens)]
