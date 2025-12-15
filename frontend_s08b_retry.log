@@ -1,0 +1,12 @@
+
+> isce-ui@0.1.0 dev
+> vite
+
+
+  VITE v5.4.21  ready in 250 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.0.2:5173/
+2:43:04 PM [vite] hmr update /src/App.tsx
+2:45:19 PM [vite] hmr update /src/App.tsx
+2:45:30 PM [vite] hmr update /src/components/ArtifactViewer.tsx

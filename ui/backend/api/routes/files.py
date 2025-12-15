@@ -15,17 +15,20 @@ The main components are:
     -   Listing the contents of a directory (`/list`).
     -   Validating a given path (`/validate`), checking for existence, type
         (file/directory), and whether it is within an allowed root.
+    -   **New**: Serving file content (`/content`) and downloads (`/download`).
 
-These endpoints are crucial for the UI's file picker components, allowing users
-to select input and output paths for pipeline jobs without exposing the entire
-file system.
+These endpoints are crucial for the UI's file picker components and artifact
+viewers, allowing users to select input/output paths and inspect results
+safely.
 """
 from __future__ import annotations
+import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 
@@ -72,6 +75,14 @@ class FileValidationModel(BaseModel):
     allowed: bool
     root: Optional[FileRootModel] = None
     detail: Optional[str] = None
+
+
+class FileContentModel(BaseModel):
+    path: str
+    content: str
+    size: int
+    mime_type: Optional[str] = Field(None, alias="mimeType")
+    truncated: bool = False
 
 
 class FileBrowser:
@@ -213,6 +224,38 @@ class FileBrowser:
             detail=detail,
         )
 
+    def get_file_path_secure(self, path: str) -> Path:
+        """Validates that a path is safe, exists, and is a file."""
+        root, resolved = self._ensure_allowed(path)
+        if root is None:
+            raise HTTPException(status_code=403, detail="Path is outside the allowlisted directories")
+        if not resolved.exists():
+            raise HTTPException(status_code=404, detail="File does not exist")
+        if not resolved.is_file():
+            raise HTTPException(status_code=400, detail="Path is not a file")
+        return resolved
+
+    def read_text_content(self, path: str, limit: int = 500_000) -> FileContentModel:
+        """Reads the text content of a file, respecting a byte limit."""
+        resolved = self.get_file_path_secure(path)
+        size = resolved.stat().st_size
+        mime, _ = mimetypes.guess_type(resolved)
+
+        try:
+            with resolved.open("r", encoding="utf-8", errors="replace") as fh:
+                content = fh.read(limit)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to read file: {exc}") from exc
+
+        truncated = size > len(content.encode("utf-8"))
+        return FileContentModel(
+            path=str(resolved),
+            content=content,
+            size=size,
+            mimeType=mime or "text/plain",
+            truncated=truncated,
+        )
+
 
 def create_file_router(browser: FileBrowser) -> APIRouter:
     """Create a router exposing filesystem helpers."""
@@ -233,6 +276,20 @@ def create_file_router(browser: FileBrowser) -> APIRouter:
     @router.get("/validate", response_model=FileValidationModel)
     def validate_path(path: str = Query(..., description="Absolute path to validate")) -> FileValidationModel:
         return browser.validate_path(path)
+
+    @router.get("/content", response_model=FileContentModel)
+    def get_file_content(
+        path: str = Query(..., description="Absolute path to the file"),
+        limit: int = Query(500_000, description="Max bytes to read"),
+    ) -> FileContentModel:
+        """Reads the content of a file as text (max 500KB by default)."""
+        return browser.read_text_content(path, limit=limit)
+
+    @router.get("/download")
+    def download_file(path: str = Query(..., description="Absolute path to download")) -> FileResponse:
+        """Downloads a file as an attachment."""
+        resolved = browser.get_file_path_secure(path)
+        return FileResponse(resolved, media_type="application/octet-stream", filename=resolved.name)
 
     return router
 

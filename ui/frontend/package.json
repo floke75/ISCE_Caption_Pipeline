@@ -12,11 +12,17 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.39.1",
+    "@types/react-router-dom": "^5.3.3",
+    "@types/react-virtualized-auto-sizer": "^1.0.4",
+    "@types/react-window": "^1.8.8",
     "axios": "^1.6.8",
     "clsx": "^2.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.4.1",
+    "react-router-dom": "^7.10.1",
+    "react-virtualized-auto-sizer": "^1.0.26",
+    "react-window": "^2.2.3",
     "yaml": "^2.4.2"
   },
   "devDependencies": {
