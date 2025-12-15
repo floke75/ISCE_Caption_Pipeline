@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 7/26 passed, 0 failed, 0 in progress
+**Step status summary:** 9/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -379,7 +379,7 @@ find docs/screenshots/S05b -maxdepth 1 -type f | head -n 1
 
 ## S06 — Submission feedback analysis and design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Assess how the UI communicates submission success/failure and validation issues, ensuring users can recover quickly.
 
@@ -404,11 +404,16 @@ test -f docs/notes/submission_feedback.md
 find docs/screenshots/S06 -maxdepth 1 -type f | head -n 1
 ```
 
+**Notes:**
+- Execution: Ran `scripts/verify_s06_submission.py` to capture behavior using Playwright network interception.
+- Findings: `InferenceForm` relies on click-to-validate (toast), while `TrainingPairForm` disables the submit button until valid. Design document proposes unifying on the "Disabled Button" pattern.
+- Screenshots captured in `docs/screenshots/S06/`: `inference_invalid_toast.png`, `training_invalid_disabled.png`, `inference_backend_error.png`, `training_backend_error.png`.
+
 ---
 
 ## S06b — Implement submission feedback improvements
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement the recommended improvements for submission feedback, including better error messages, visual cues for invalid fields, and retry affordances.
 
@@ -430,6 +435,13 @@ find docs/screenshots/S06 -maxdepth 1 -type f | head -n 1
 test -d docs/screenshots/S06b
 find docs/screenshots/S06b -maxdepth 1 -type f | head -n 1
 ```
+
+**Notes:**
+- Implemented "Disabled Button" pattern in `InferenceForm.tsx` to match other forms.
+- Verified that `InferenceForm` now disables the submit button when valid and enables it when inputs are valid (mocked).
+- Confirmed that `FilePathPicker` styling for `.invalid` uses distinct red color (`#f87171`).
+- Captured screenshots in `docs/screenshots/S06b/`.
+- `JobBoard` already supports displaying error details from the backend.
 
 ---
 
