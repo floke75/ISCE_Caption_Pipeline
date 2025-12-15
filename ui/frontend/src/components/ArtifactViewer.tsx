@@ -30,7 +30,7 @@ export function ArtifactViewer() {
 
   if (!path) return <div className="p-4">No file path specified.</div>;
   if (isLoading) return <div className="p-4">Loading file content...</div>;
-  if (error) return <div className="p-4 text-red-400">Error loading file: {(error as any).message}</div>;
+  if (error) return <div className="p-4 text-red-400">Error loading file: {(error instanceof Error ? error.message : String(error))}</div>;
 
   const handleDownload = () => {
     const url = `${client.defaults.baseURL}/files/download?path=${encodeURIComponent(path)}`;

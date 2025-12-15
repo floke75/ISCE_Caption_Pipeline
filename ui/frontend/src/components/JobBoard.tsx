@@ -496,7 +496,7 @@ export function JobBoard() {
         <div className="job-filters">
            <select
              value={statusFilter}
-             onChange={(e) => setStatusFilter(e.target.value as any)}
+             onChange={(e) => setStatusFilter(e.target.value as JobStatus | 'all')}
              className="status-select"
              style={{
                background: 'rgba(15, 23, 42, 0.5)',
