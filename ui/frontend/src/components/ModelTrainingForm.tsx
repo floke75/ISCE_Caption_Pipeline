@@ -101,9 +101,11 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
             min={1}
             value={iterations}
             onChange={(event) => setIterations(event.target.value ? Number(event.target.value) : '')}
-            placeholder="Default: 10"
+            placeholder="3"
           />
-          <span className="field-help">Number of reweighting rounds (defaults to 10 if empty)</span>
+          <span className="field-help">
+            Rounds of Expectation-Maximization reweighting to refine the model on hard examples.
+          </span>
         </label>
         <label className="field">
           <span>Error boost factor</span>
@@ -112,14 +114,16 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
             step="0.1"
             value={errorBoost}
             onChange={(event) => setErrorBoost(event.target.value ? Number(event.target.value) : '')}
-            placeholder="Default: 1.0"
+            placeholder="1.0"
           />
-          <span className="field-help">Multiplier for error penalties (defaults to 1.0)</span>
+          <span className="field-help">
+            Weight multiplier added to misclassified samples in each iteration (standard range 0.5–2.0).
+          </span>
         </label>
       </div>
       <label className="field">
         <span>Operator notes</span>
-        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" />
+        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional metadata stored in the job history for reproducibility." />
       </label>
       <OverrideEditor onChange={handleOverrideChange} />
       <button

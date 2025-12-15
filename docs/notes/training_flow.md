@@ -35,8 +35,11 @@
 ## Implemented Improvements
 1.  **Disable Submit Button:** The submit button is now explicitly disabled until all required fields (paths and overrides) are valid. A `title` tooltip explains the reason (e.g., "Please provide valid paths to continue").
 2.  **Specific Error Toasts:** Updated `handleSubmit` to check validity before mutation and show specific error messages (e.g., "Invalid media file path selected") instead of a generic catch-all.
-3.  **Inline Help:** Added explicit help text for `Iterations` (default 10) and `Error boost factor` (default 1.0) in the Model Training form to clarify expected values.
-4.  **Placeholders:** Added default value placeholders to numeric inputs.
+3.  **Inline Help:** Added precise technical explanations for hyperparameters:
+    - **Iterations:** "Rounds of Expectation-Maximization reweighting to refine the model on hard examples."
+    - **Error boost factor:** "Weight multiplier added to misclassified samples in each iteration (standard range 0.5–2.0)."
+4.  **Placeholders:** Updated placeholders to reflect realistic defaults found in `train_model.py` (3 iterations, 1.0 boost) rather than arbitrary guesses.
+5.  **Notes Clarity:** Updated "Operator notes" placeholder to explain its purpose: "Optional metadata stored in the job history for reproducibility."
 
 ## Screenshots (Improved State)
 - `docs/screenshots/S04/training_pair_improved_initial.png` - Training form with disabled button.

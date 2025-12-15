@@ -108,7 +108,7 @@ export function TrainingPairForm({ onJobCreated }: Props) {
       </div>
       <label className="field">
         <span>Operator notes</span>
-        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Context for this corpus artifact" />
+        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional metadata stored in the job history for reproducibility." />
       </label>
       <OverrideEditor onChange={handleOverrideChange} />
       <button

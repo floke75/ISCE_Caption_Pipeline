@@ -76,7 +76,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S01 — Baseline UI capture and navigation audit](#s01-baseline-ui-capture-and-navigation-audit) — ✅ Passed
 - [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ✅ Passed
 - [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ✅ Passed
-- [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — 🔄 In progress
+- [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ✅ Passed
 - [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ⬜ Not started
 - [S06 — Submission feedback, validation errors, and recovery](#s06-submission-feedback-validation-errors-and-recovery) — ⬜ Not started
 - [S07 — Job monitoring baseline and navigation](#s07-job-monitoring-baseline-and-navigation) — ⬜ Not started
@@ -97,7 +97,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 | S01 | ~L157–193 | ✅ |
 | S02 | ~L194–228 | ⬜ |
 | S03 | ~L229–268 | ✅ |
-| S04 | ~L269–306 | 🔄 |
+| S04 | ~L269–306 | ✅ |
 | S05 | ~L307–344 | ⬜ |
 | S06 | ~L345–385 | ⬜ |
 | S07 | ~L386–425 | ⬜ |
@@ -278,21 +278,20 @@ cd ui/frontend && npm test -- --runInBand || npm run test:unit
 
 ## S04 — Training flow input clarity and validation
 
-**Status:** 🔄 In progress
+**Status:** ✅ Passed
 
-**Objective:** Improve usability of the training flow by implementing clearer validation feedback, specific error messages, and better inline guidance.
+**Objective:** Finalize the help text and placeholders in the training forms to be fully accurate and relevant, removing any generic or placeholder content.
 
 **Actions to perform:**
-- Modify `TrainingPairForm.tsx`:
-  - Disable submit button when paths are invalid.
-  - Improve error toast to specify which field is missing/invalid.
-  - Add specific placeholder/helper text.
-- Modify `ModelTrainingForm.tsx`:
-  - Disable submit button when corpus is invalid.
-  - Add helper text/tooltips for "Iterations" and "Error boost factor".
-- Update `scripts/verify_s04.py` to verify the "Disabled" state of the button and capture new screenshots.
-- Execute verification script.
-- Update `docs/notes/training_flow.md` with implementation details.
+- Research the actual meaning/impact of `Iterations` and `Error boost factor` in the codebase.
+- Research the purpose of "Operator notes".
+- Update `ModelTrainingForm.tsx`:
+  - Replace generic help text with precise technical explanations (e.g., explaining EM-style reweighting or penalty multipliers).
+  - Ensure placeholders reflect realistic defaults.
+- Update `TrainingPairForm.tsx`:
+  - Clarify "Operator notes" usage.
+- Verify changes with `scripts/verify_s04_improved.py` (capture new screenshots).
+- Update `docs/notes/training_flow.md` with the final text used.
 
 **Code/doc pointers:** `ui/frontend/src/components/TrainingPairForm.tsx` and `ModelTrainingForm.tsx` (training UI), `ui/frontend/src/components/FilePathPicker.tsx` (path validation UX), `ui/backend/pipelines.py` (training submission API), `ui/backend/api/routes/files.py` (allowlisted paths), `FRONTEND.md` (training instructions).
 
