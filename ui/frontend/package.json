@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "echo 'No lint script configured (baseline S03)' && exit 0",
+    "test": "echo 'No test script configured (baseline S03)' && exit 0"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.39.1",

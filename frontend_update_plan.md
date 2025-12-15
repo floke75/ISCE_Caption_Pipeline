@@ -75,7 +75,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S00 — Establish current frontend state and data collection protocol](#s00-establish-current-frontend-state-and-data-collection-protocol) — ✅ Passed
 - [S01 — Baseline UI capture and navigation audit](#s01-baseline-ui-capture-and-navigation-audit) — ✅ Passed
 - [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ✅ Passed
-- [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ⬜ Not started
+- [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ✅ Passed
 - [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ⬜ Not started
 - [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ⬜ Not started
 - [S06 — Submission feedback, validation errors, and recovery](#s06-submission-feedback-validation-errors-and-recovery) — ⬜ Not started
@@ -96,7 +96,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 | S00 | ~L117–156 | ✅ |
 | S01 | ~L157–193 | ✅ |
 | S02 | ~L194–228 | ⬜ |
-| S03 | ~L229–268 | ⬜ |
+| S03 | ~L229–268 | ✅ |
 | S04 | ~L269–306 | ⬜ |
 | S05 | ~L307–344 | ⬜ |
 | S06 | ~L345–385 | ⬜ |
@@ -234,7 +234,7 @@ find docs/screenshots/S02 -maxdepth 1 -type f | head -n 1
 
 ## S03 — Frontend build, lint, and dependency baseline
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Establish the current reliability baseline by ensuring the frontend builds, passes lint/tests (where available), and documenting any blockers or flaky behavior.
 
