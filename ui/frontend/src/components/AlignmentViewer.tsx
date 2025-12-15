@@ -91,7 +91,7 @@ export function AlignmentViewer() {
   const { data: trainData, isLoading: trainLoading, error: trainError } = useFileContent<TrainWordsJson>(trainPath);
   const { data: asrData, isLoading: asrLoading, error: asrError } = useFileContent<AsrVisualWordsJson>(asrPath);
 
-  const [zoom] = useState(PIXELS_PER_SECOND);
+  const [zoom, setZoom] = useState(PIXELS_PER_SECOND);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const cueGroups = useMemo(() => {
@@ -181,6 +181,24 @@ export function AlignmentViewer() {
           <p className="subtext">
             Comparing <strong>Edited Subtitles</strong> (Left) vs. <strong>Raw ASR</strong> (Right)
           </p>
+        </div>
+        <div className="alignment-controls" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+           <label className="zoom-control" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#94a3b8' }}>
+              <span>Zoom</span>
+              <input
+                type="range"
+                min="20"
+                max="200"
+                step="10"
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                style={{ width: '120px' }}
+              />
+              <span style={{ minWidth: '3ch' }}>{zoom}</span>
+           </label>
+           <button type="button" className="action-button" onClick={() => navigate(-1)} style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}>
+             Exit
+           </button>
         </div>
       </header>
 

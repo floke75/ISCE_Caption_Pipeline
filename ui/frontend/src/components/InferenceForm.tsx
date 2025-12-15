@@ -27,7 +27,7 @@ export function InferenceForm({ onJobCreated }: Props) {
 
   // Controlled Overrides State
   const [edits, setEdits] = useState<OverrideEdits>(
-    () => ({ pipeline: {}, segmentation: {} })
+    () => ({ pipeline: {}, segmentation: { 'beam_width': 5 } })
   );
 
   // Helper state for submission payload (computed by OverrideEditor)
@@ -109,13 +109,16 @@ export function InferenceForm({ onJobCreated }: Props) {
         const next = { ...prev, pipeline: { ...prev.pipeline }, segmentation: { ...prev.segmentation } };
 
         if (newPreset === 'standard') {
-             delete next.segmentation['beam_search.width'];
+             next.segmentation['beam_width'] = 5;
+             delete next.segmentation['enable_refinement_pass'];
              setBeamWidth(5);
         } else if (newPreset === 'high_precision') {
-             next.segmentation['beam_search.width'] = 10;
+             next.segmentation['beam_width'] = 10;
+             next.segmentation['enable_refinement_pass'] = true;
              setBeamWidth(10);
         } else if (newPreset === 'fast_draft') {
-             next.segmentation['beam_search.width'] = 2;
+             next.segmentation['beam_width'] = 2;
+             delete next.segmentation['enable_refinement_pass'];
              setBeamWidth(2);
         }
         return next;
@@ -134,7 +137,7 @@ export function InferenceForm({ onJobCreated }: Props) {
       setBeamWidth(value);
       setEdits(prev => ({
           ...prev,
-          segmentation: { ...prev.segmentation, 'beam_search.width': value }
+          segmentation: { ...prev.segmentation, 'beam_width': value }
       }));
   };
 
@@ -147,11 +150,11 @@ export function InferenceForm({ onJobCreated }: Props) {
           setDiarization(true);
       }
 
-      if ('beam_search.width' in newEdits.segmentation) {
-          const w = Number(newEdits.segmentation['beam_search.width']);
+      if ('beam_width' in newEdits.segmentation) {
+          const w = Number(newEdits.segmentation['beam_width']);
           if (!isNaN(w)) setBeamWidth(w);
       } else {
-          setBeamWidth(5);
+          setBeamWidth(14); // Fallback to config.yaml default if override is cleared
       }
   }, []);
 

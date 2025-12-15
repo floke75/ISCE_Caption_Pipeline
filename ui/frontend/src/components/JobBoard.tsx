@@ -29,7 +29,7 @@ const PATH_KEY_HINTS = new Set([
   'model_config_path',
 ]);
 
-const VIEWABLE_EXTENSIONS = new Set(['.json', '.srt', '.txt', '.log']);
+const VIEWABLE_EXTENSIONS = new Set(['.json', '.srt', '.txt', '.log', '.yaml', '.yml', '.csv', '.md']);
 
 type DetailRow = {
   key: string;
@@ -639,7 +639,7 @@ export function JobBoard() {
                   <div className="detail-card-header">
                     <h3>Results</h3>
                     <div className="detail-header-actions">
-                      {selectedJob.jobType === 'training_pair' && selectedJob.result['training_json'] && selectedJob.result['asr_reference'] && (
+                      {selectedJob.jobType === 'training_pair' && !!selectedJob.result['training_json'] && !!selectedJob.result['asr_reference'] && (
                         <Link
                           to={`/jobs/alignment?train=${encodeURIComponent(selectedJob.result['training_json'] as string)}&asr=${encodeURIComponent(selectedJob.result['asr_reference'] as string)}`}
                           className="action-button primary"

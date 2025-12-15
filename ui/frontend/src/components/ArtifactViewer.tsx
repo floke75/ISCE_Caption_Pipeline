@@ -1,7 +1,7 @@
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import client from '../api/client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 type FileContent = {
   path: string;
@@ -27,6 +27,20 @@ export function ArtifactViewer() {
     enabled: Boolean(path),
     retry: false
   });
+
+  const displayContent = useMemo(() => {
+    if (!data?.content) return '';
+    const isJson = data.path.toLowerCase().endsWith('.json') || data.mimeType?.includes('json');
+    if (isJson) {
+      try {
+        const parsed = JSON.parse(data.content);
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return data.content;
+      }
+    }
+    return data.content;
+  }, [data]);
 
   if (!path) return <div className="p-4">No file path specified.</div>;
   if (isLoading) return <div className="p-4">Loading file content...</div>;
@@ -68,7 +82,7 @@ export function ArtifactViewer() {
 
       <div className="flex-1 overflow-auto p-4">
         <pre className={`font-mono text-sm ${lineWrap ? 'whitespace-pre-wrap' : 'whitespace-pre'}`}>
-          {data?.content}
+          {displayContent}
         </pre>
       </div>
 
