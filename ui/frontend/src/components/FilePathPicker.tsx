@@ -1,4 +1,4 @@
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState, useId } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import client from '../api/client';
 import { FileListing, FileRoot, FileValidation } from '../types';
@@ -68,6 +68,7 @@ export function FilePathPicker({
   const lastValidationValue = useRef<string>('');
   const lastListingPath = useRef<string>('');
   const parentPath = listing?.parent ?? null;
+  const id = useId();
 
   const { data: roots = [], isLoading: rootsLoading } = useQuery<FileRoot[]>({
     queryKey: ['file-roots'],
@@ -213,7 +214,9 @@ export function FilePathPicker({
     };
   }, [value, required, type, onValidityChange]);
 
-  const toggleBrowser = () => {
+  const toggleBrowser = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
     if (!isBrowserOpen && selectedRoot && !browserPath) {
       setBrowserPath(selectedRoot.path);
     }
@@ -221,11 +224,11 @@ export function FilePathPicker({
   };
 
   return (
-    <label className="field file-picker">
-      <span>
+    <div className="field file-picker">
+      <label htmlFor={id}>
         {label}
         {required ? ' *' : ''}
-      </span>
+      </label>
       <div className="file-picker-controls">
         {roots.length > 1 && (
           <select value={selectedRootId} onChange={handleRootChange} disabled={rootsLoading}>
@@ -236,10 +239,12 @@ export function FilePathPicker({
             ))}
           </select>
         )}
-        <input type="text" value={value} onChange={handleInputChange} placeholder={placeholder} />
-        <button type="button" className="ghost" onClick={toggleBrowser}>
-          {isBrowserOpen ? 'Close' : 'Browse'}
-        </button>
+        <div className="file-input-group">
+          <input id={id} type="text" value={value} onChange={handleInputChange} placeholder={placeholder} />
+          <button type="button" className="ghost" onClick={toggleBrowser}>
+            {isBrowserOpen ? 'Close' : 'Browse'}
+          </button>
+        </div>
       </div>
       {helperText && <span className="field-help">{helperText}</span>}
       <span className={`file-picker-status ${validationState}`}>
@@ -293,6 +298,6 @@ export function FilePathPicker({
           )}
         </div>
       )}
-    </label>
+    </div>
   );
 }

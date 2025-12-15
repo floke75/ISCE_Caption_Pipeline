@@ -14,6 +14,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
   z-index: 10;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
@@ -28,6 +30,33 @@
   margin: 0.25rem 0 0;
   font-size: 0.85rem;
   color: #94a3b8;
+}
+
+.alignment-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.zoom-control input[type="range"] {
+  width: 120px;
+}
+
+.zoom-value {
+  min-width: 3ch;
+}
+
+.action-button.small {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8rem;
 }
 
 .alignment-body {

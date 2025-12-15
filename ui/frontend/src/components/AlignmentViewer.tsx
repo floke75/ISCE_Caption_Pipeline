@@ -91,7 +91,7 @@ export function AlignmentViewer() {
   const { data: trainData, isLoading: trainLoading, error: trainError } = useFileContent<TrainWordsJson>(trainPath);
   const { data: asrData, isLoading: asrLoading, error: asrError } = useFileContent<AsrVisualWordsJson>(asrPath);
 
-  const [zoom] = useState(PIXELS_PER_SECOND);
+  const [zoom, setZoom] = useState(PIXELS_PER_SECOND);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const cueGroups = useMemo(() => {
@@ -181,6 +181,23 @@ export function AlignmentViewer() {
           <p className="subtext">
             Comparing <strong>Edited Subtitles</strong> (Left) vs. <strong>Raw ASR</strong> (Right)
           </p>
+        </div>
+        <div className="alignment-controls">
+           <label className="zoom-control">
+              <span>Zoom</span>
+              <input
+                type="range"
+                min="20"
+                max="200"
+                step="10"
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+              />
+              <span className="zoom-value">{zoom}</span>
+           </label>
+           <button type="button" className="action-button small" onClick={() => navigate(-1)}>
+             Exit
+           </button>
         </div>
       </header>
 
