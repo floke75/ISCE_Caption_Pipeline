@@ -638,9 +638,20 @@ export function JobBoard() {
                 <div className="detail-card">
                   <div className="detail-card-header">
                     <h3>Results</h3>
-                    <button type="button" className="copy-button" onClick={() => copyJson(selectedJob.result, 'Result payload')}>
-                      Copy all
-                    </button>
+                    <div className="detail-header-actions">
+                      {selectedJob.jobType === 'training_pair' && selectedJob.result['training_json'] && selectedJob.result['asr_reference'] && (
+                        <Link
+                          to={`/jobs/alignment?train=${encodeURIComponent(selectedJob.result['training_json'] as string)}&asr=${encodeURIComponent(selectedJob.result['asr_reference'] as string)}`}
+                          className="action-button primary"
+                          style={{ fontSize: '0.8rem', padding: '0.2rem 0.6rem', textDecoration: 'none' }}
+                        >
+                          Visualise Alignment
+                        </Link>
+                      )}
+                      <button type="button" className="copy-button" onClick={() => copyJson(selectedJob.result, 'Result payload')}>
+                        Copy all
+                      </button>
+                    </div>
                   </div>
                   <DetailList rows={resultRows} emptyMessage="No result payload" onCopy={copyText} />
                 </div>
