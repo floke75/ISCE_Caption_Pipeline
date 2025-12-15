@@ -1,4 +1,4 @@
-# Training Alignment Visualization Design (S09 - REVISED)
+# Training Alignment Visualization Design (S09 - REVISED v2)
 
 ## Purpose
 The alignment visualization builds trust in the pipeline by allowing operators to "watch" the training process. It verifies that the automated alignment (Needleman-Wunsch) has correctly matched the high-quality edited subtitle cues to the raw, timestamped ASR words.
@@ -9,17 +9,17 @@ The alignment visualization builds trust in the pipeline by allowing operators t
 The user should be able to verify that the **Edited Text** (Ground Truth) is in sync with the **Audio/ASR** (Time Reference). A split-screen, continuous scrolling view allows this by placing both streams on a shared vertical time axis.
 
 ### 2. Layout (Two-Column Teleprompter)
-See `docs/screenshots/S09/teleprompter_alignment_mockup.png`.
+See `docs/screenshots/S09/teleprompter_alignment_mockup_v2.png`.
 
 -   **Shared Vertical Time Axis:** The central spine of the UI represents time, moving downwards.
 -   **Left Column (Edited Cues):**
     -   Displays the final, human-edited subtitle blocks.
     -   Vertical position and height are determined by the cue's *start* and *end* times.
-    -   Visual Style: Clean, formatted blocks (like teleprompter cards).
+    -   Visual Style: Clean, formatted blocks (like teleprompter cards) aligned to the right edge of the column.
 -   **Right Column (Raw ASR Words):**
     -   Displays the individual words recognized by WhisperX.
     -   Vertical position corresponds exactly to each word's timestamp.
-    -   Visual Style: Small "chips" or a continuous stream of text that flows down the timeline.
+    -   Visual Style: Small "chips" or a continuous stream of text that flows down the timeline, aligned to the left edge of the column.
 -   **Interaction:**
     -   **Synchronized Scrolling:** The user scrolls the timeline, and both columns move together.
     -   **Playback:** A "Play" button auto-scrolls the view (teleprompter mode), keeping the current timestamp centered.
@@ -32,10 +32,10 @@ See `docs/screenshots/S09/teleprompter_alignment_mockup.png`.
 1.  **Component:** `AlignmentViewer.tsx`.
 2.  **Virtualization:** Use a virtual list library (or simple CSS absolute positioning inside a scrolling container) to handle long audio files efficiently.
     -   *Approach:* Map 1 second of audio to `X` pixels (e.g., 60px/sec). Calculate `top` position for every element: `top = timestamp * 60`.
+    -   *Layout:* Use `display: flex` container with `flex: 1` columns to ensure strict 50/50 split regardless of screen size.
 3.  **Playback:** Use a standard HTML5 `<audio>` element (hidden or minimal). Update the scroll position on `timeupdate` events.
 4.  **Sync Logic:**
     -   No complex "diffing" algorithm is needed for the view itself; the *visual alignment* on the time axis reveals the diffs naturally.
-    -   If ASR words appear significantly higher or lower than the corresponding Edited Text, the user instantly sees the drift.
 
 ## Visual Cues for Errors
 -   **Drift:** If the ASR words are consistently "ahead" (higher) or "behind" (lower) than the Edited Cues, there is an offset issue.

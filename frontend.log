@@ -3,10 +3,31 @@
 > vite --port 5173
 
 
-  VITE v5.4.21  ready in 939 ms
+  VITE v5.4.21  ready in 426 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: http://192.168.0.2:5173/
-6:15:34 PM [vite] hmr update /src/App.tsx
-6:16:02 PM [vite] hmr update /src/components/TeleprompterDesignMockup.tsx
-6:16:09 PM [vite] hmr update /src/App.tsx
+6:27:02 PM [vite] hmr update /src/App.tsx
+6:27:11 PM [vite] Pre-transform error: Failed to resolve import "./components/TeleprompterDesignMockup" from "src/App.tsx". Does the file exist?
+6:27:11 PM [vite] Internal server error: Failed to resolve import "./components/TeleprompterDesignMockup" from "src/App.tsx". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /app/ui/frontend/src/App.tsx:10:41
+  25 |  import { JobBoard } from "./components/JobBoard";
+  26 |  import { ArtifactViewer } from "./components/ArtifactViewer";
+  27 |  import { TeleprompterDesignMockup } from "./components/TeleprompterDesignMockup";
+     |                                            ^
+  28 |  import "./styles/app.css";
+  29 |  const TABS = [
+      at TransformPluginContext._formatError (file:///app/ui/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41)
+      at TransformPluginContext.error (file:///app/ui/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16)
+      at normalizeUrl (file:///app/ui/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23)
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async file:///app/ui/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+      at async Promise.all (index 12)
+      at async TransformPluginContext.transform (file:///app/ui/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7)
+      at async PluginContainer.transform (file:///app/ui/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18)
+      at async loadAndTransform (file:///app/ui/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27)
+      at async viteTransformMiddleware (file:///app/ui/frontend/node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:62106:24)
+6:28:07 PM [vite] page reload src/components/TeleprompterDesignMockup.tsx
+6:28:34 PM [vite] hmr update /src/components/TeleprompterDesignMockup.tsx
+6:28:45 PM [vite] hmr update /src/App.tsx
