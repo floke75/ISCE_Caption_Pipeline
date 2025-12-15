@@ -88,6 +88,8 @@ class FileContentModel(BaseModel):
 class FileBrowser:
     """Performs safe filesystem operations within an allowlisted set of roots."""
 
+    MAX_PREVIEW_BYTES = 5_000_000
+
     def __init__(self, roots: Iterable[Tuple[str, str, Path]]) -> None:
         normalized: Dict[str, FileRoot] = {}
         for identifier, label, path in roots:
@@ -237,6 +239,13 @@ class FileBrowser:
 
     def read_text_content(self, path: str, limit: int = 500_000) -> FileContentModel:
         """Reads the text content of a file, respecting a byte limit."""
+        if limit < 1:
+            raise HTTPException(status_code=400, detail="Limit must be positive")
+        if limit > self.MAX_PREVIEW_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Preview limit exceeds maximum of {self.MAX_PREVIEW_BYTES} bytes",
+            )
         resolved = self.get_file_path_secure(path)
         size = resolved.stat().st_size
         mime, _ = mimetypes.guess_type(resolved)
@@ -280,7 +289,12 @@ def create_file_router(browser: FileBrowser) -> APIRouter:
     @router.get("/content", response_model=FileContentModel)
     def get_file_content(
         path: str = Query(..., description="Absolute path to the file"),
-        limit: int = Query(500_000, description="Max bytes to read"),
+        limit: int = Query(
+            500_000,
+            description="Max bytes to read (1-5MB)",
+            ge=1,
+            le=FileBrowser.MAX_PREVIEW_BYTES,
+        ),
     ) -> FileContentModel:
         """Reads the content of a file as text (max 500KB by default)."""
         return browser.read_text_content(path, limit=limit)

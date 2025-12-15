@@ -205,6 +205,39 @@
   margin-bottom: 1rem;
 }
 
+/* Action helpers */
+.alignment-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.action-button {
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  font-weight: 600;
+}
+
+.action-button:hover {
+  background: rgba(148, 163, 184, 0.2);
+  border-color: rgba(148, 163, 184, 0.55);
+}
+
+.action-button.primary {
+  background: linear-gradient(135deg, #38bdf8, #22d3ee);
+  color: #0f172a;
+  border-color: transparent;
+}
+
+.action-button.primary:hover {
+  filter: brightness(1.05);
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
