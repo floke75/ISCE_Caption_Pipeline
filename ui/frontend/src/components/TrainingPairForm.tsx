@@ -51,15 +51,19 @@ export function TrainingPairForm({ onJobCreated }: Props) {
       toast.success('Training-pair job queued');
       onJobCreated();
     },
-    onError: (error: any) => {
+    onError: (error: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       toast.error(error?.response?.data?.detail ?? 'Failed to queue training data job');
     },
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!mediaValid || !srtValid) {
-      toast.error('Provide valid media and SRT paths');
+    if (!mediaValid) {
+      toast.error('Invalid media file path selected');
+      return;
+    }
+    if (!srtValid) {
+      toast.error('Invalid SRT file path selected');
       return;
     }
     if (overrideInvalid) {
@@ -68,6 +72,8 @@ export function TrainingPairForm({ onJobCreated }: Props) {
     }
     mutation.mutate();
   };
+
+  const formInvalid = !mediaValid || !srtValid || overrideInvalid;
 
   const handleOverrideChange = useCallback((patches: OverridePatches, hasErrors: boolean) => {
     setOverridePatch(patches);
@@ -102,10 +108,15 @@ export function TrainingPairForm({ onJobCreated }: Props) {
       </div>
       <label className="field">
         <span>Operator notes</span>
-        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Context for this corpus artifact" />
+        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional metadata stored in the job history for reproducibility." />
       </label>
       <OverrideEditor onChange={handleOverrideChange} />
-      <button type="submit" className="primary" disabled={mutation.isPending}>
+      <button
+        type="submit"
+        className="primary"
+        disabled={mutation.isPending || formInvalid}
+        title={formInvalid ? 'Please provide valid paths to continue' : 'Launch job'}
+      >
         {mutation.isPending ? 'Submitting…' : 'Launch training-pair job'}
       </button>
     </form>

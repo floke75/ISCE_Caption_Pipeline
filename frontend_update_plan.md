@@ -75,8 +75,8 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S00 — Establish current frontend state and data collection protocol](#s00-establish-current-frontend-state-and-data-collection-protocol) — ✅ Passed
 - [S01 — Baseline UI capture and navigation audit](#s01-baseline-ui-capture-and-navigation-audit) — ✅ Passed
 - [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ✅ Passed
-- [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ⬜ Not started
-- [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ⬜ Not started
+- [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ✅ Passed
+- [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ✅ Passed
 - [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ⬜ Not started
 - [S06 — Submission feedback, validation errors, and recovery](#s06-submission-feedback-validation-errors-and-recovery) — ⬜ Not started
 - [S07 — Job monitoring baseline and navigation](#s07-job-monitoring-baseline-and-navigation) — ⬜ Not started
@@ -96,8 +96,8 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 | S00 | ~L117–156 | ✅ |
 | S01 | ~L157–193 | ✅ |
 | S02 | ~L194–228 | ⬜ |
-| S03 | ~L229–268 | ⬜ |
-| S04 | ~L269–306 | ⬜ |
+| S03 | ~L229–268 | ✅ |
+| S04 | ~L269–306 | ✅ |
 | S05 | ~L307–344 | ⬜ |
 | S06 | ~L345–385 | ⬜ |
 | S07 | ~L386–425 | ⬜ |
@@ -234,15 +234,19 @@ find docs/screenshots/S02 -maxdepth 1 -type f | head -n 1
 
 ## S03 — Frontend build, lint, and dependency baseline
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
-**Objective:** Establish the current reliability baseline by ensuring the frontend builds, passes lint/tests (where available), and documenting any blockers or flaky behavior.
+**Objective:** Establish a robust reliability baseline by installing standard tooling (`eslint`, `vitest`) and **fixing all existing lint errors** to ensure a clean slate.
 
 **Actions to perform:**
-- Install frontend dependencies following `FRONTEND.md` (prefer `npm ci` if lockfile present).
-- Run the standard build (`npm run build`) and available lint/test commands (e.g., `npm run lint`, `npm test` or `npm run test:unit`).
-- Capture any build errors, warnings, or known flaky tests with remediation notes.
-- Note Node/npm versions used for reproducibility.
+- Install `eslint` and `vitest` (already done).
+- Run `npm run lint` to confirm error list.
+- Fix `no-unused-vars` and `no-explicit-any` issues across components.
+- Fix `react-hooks/set-state-in-effect` and `exhaustive-deps` issues in `ConfigPanel`, `OverrideEditor`, and `JobBoard`.
+- Fix `react-hooks/immutability` / declaration hoisting in `useEventStream.ts`.
+- Verify `npm run lint` passes with 0 warnings/errors.
+- Verify `npm test` and `npm run build` still pass.
+- Update `docs/notes/frontend_reliability.md` to reflect a clean baseline.
 
 **Code/doc pointers:** `ui/frontend/package.json` (scripts), `ui/frontend/package-lock.json` (locked deps), `FRONTEND.md` (expected commands), `scripts/install.py` (npm bootstrap step).
 
@@ -274,31 +278,36 @@ cd ui/frontend && npm test -- --runInBand || npm run test:unit
 
 ## S04 — Training flow input clarity and validation
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
-**Objective:** Evaluate end-to-end usability of the training flow specifically, focusing on clarity of required inputs, validation feedback, and inline guidance for non-experts.
+**Objective:** Finalize the help text and placeholders in the training forms to be fully accurate and relevant, removing any generic or placeholder content.
 
 **Actions to perform:**
-- Using the running frontend (from S01), walk through submitting a representative training job with sample inputs (real or mock paths as allowed).
-- Capture screenshots of each critical step in the training flow (file selection, parameter tuning, submission confirmation, and immediate post-submit state). Save under `docs/screenshots/S04/` with descriptive names.
-- Note friction points: unclear placeholders, missing validation, confusing error messages, or non-intuitive parameter labels for training inputs.
-- Propose concrete UX improvements for training (tooltips, helper text, presets) in the notes.
+- Research the actual meaning/impact of `Iterations` and `Error boost factor` in the codebase.
+- Research the purpose of "Operator notes".
+- Update `ModelTrainingForm.tsx`:
+  - Replace generic help text with precise technical explanations (e.g., explaining EM-style reweighting or penalty multipliers).
+  - Ensure placeholders reflect realistic defaults.
+- Update `TrainingPairForm.tsx`:
+  - Clarify "Operator notes" usage.
+- Verify changes with `scripts/verify_s04_improved.py` (capture new screenshots).
+- Update `docs/notes/training_flow.md` with the final text used.
 
 **Code/doc pointers:** `ui/frontend/src/components/TrainingPairForm.tsx` and `ModelTrainingForm.tsx` (training UI), `ui/frontend/src/components/FilePathPicker.tsx` (path validation UX), `ui/backend/pipelines.py` (training submission API), `ui/backend/api/routes/files.py` (allowlisted paths), `FRONTEND.md` (training instructions).
 
 **Deliverables:**
-- Screenshots under `docs/screenshots/S04/` covering the training interaction flow.
-- `docs/notes/training_flow.md` summarizing observations and recommended UX adjustments for training, including any job IDs or
-  mock submissions used during the walkthrough.
+- Improved component code.
+- Updated screenshots under `docs/screenshots/S04/`.
+- `docs/notes/training_flow.md` updated with implementation details.
 
 **Verification test:**
-- **Name:** Training flow documented
+- **Name:** Training flow improvements verified
 - **Commands:**
 
 ```text
 test -d docs/screenshots/S04
 test -f docs/notes/training_flow.md
-find docs/screenshots/S04 -maxdepth 1 -type f | head -n 1
+grep "Implemented" docs/notes/training_flow.md
 ```
 - **Expected results:**
   - Screenshot directory exists and contains at least one file

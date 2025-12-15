@@ -96,7 +96,7 @@ function coerceValue(node: ConfigNode, raw: unknown): CoerceResult {
         if (Array.isArray(parsed)) {
           return { value: parsed };
         }
-      } catch (error) {
+      } catch {
         // Fall through to custom parsing
       }
       const tokens = trimmed

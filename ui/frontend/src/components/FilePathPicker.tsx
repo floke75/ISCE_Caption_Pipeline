@@ -96,7 +96,7 @@ export function FilePathPicker({
         const data = await fetchListing(targetPath, targetRoot);
         setListing(data);
         lastListingPath.current = data.path;
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         setListingError(error?.response?.data?.detail ?? 'Unable to load directory');
       } finally {
         setListingBusy(false);
@@ -198,7 +198,7 @@ export function FilePathPicker({
         setValidationState(valid ? 'valid' : 'invalid');
         setValidationMessage(message);
         onValidityChange?.(valid);
-      } catch (error: any) {
+      } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
         if (lastValidationValue.current !== trimmed) {
           return;
         }

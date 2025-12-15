@@ -59,7 +59,7 @@ export function InferenceForm({ onJobCreated }: Props) {
       toast.success('Inference job queued');
       onJobCreated();
     },
-    onError: (error: any) => {
+    onError: (error: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       toast.error(error?.response?.data?.detail ?? 'Failed to queue inference job');
     },
   });

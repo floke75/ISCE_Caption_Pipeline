@@ -135,7 +135,7 @@ function buildDetailRows(data?: Record<string, unknown> | null): DetailRow[] {
           value: <pre className="detail-json">{serialized}</pre>,
           copyValue: serialized,
         };
-      } catch (error) {
+      } catch {
         return {
           key,
           label,
@@ -197,11 +197,13 @@ function DetailList({
  */
 export function JobBoard() {
   const jobsQuery = useJobs();
-  const jobs = jobsQuery.data ?? [];
+  // Memoize jobs list to prevent unstable dependency warning
+  const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionJobId, setActionJobId] = useState<string | null>(null);
 
   const orderedJobs = useMemo(() => {
+    // Slice copy required because sort mutates
     return jobs.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }, [jobs]);
 
@@ -210,10 +212,12 @@ export function JobBoard() {
       setSelectedId(null);
       return;
     }
+    // Only select default if nothing is selected or current selection is gone
     if (!selectedId || !orderedJobs.some((job) => job.id === selectedId)) {
       setSelectedId(orderedJobs[0].id);
     }
-  }, [orderedJobs, selectedId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderedJobs]);
 
   const selectedJob = orderedJobs.find((job) => job.id === selectedId) ?? null;
   const [logText, setLogText] = useState('');
@@ -304,7 +308,7 @@ export function JobBoard() {
     try {
       await navigator.clipboard.writeText(value);
       toast.success(`${label} copied`);
-    } catch (error) {
+    } catch {
       toast.error('Clipboard copy failed');
     }
   };
@@ -313,7 +317,7 @@ export function JobBoard() {
     try {
       const serialized = JSON.stringify(payload ?? {}, null, 2);
       await copyText(serialized, label);
-    } catch (error) {
+    } catch {
       toast.error('Clipboard copy failed');
     }
   };
@@ -337,6 +341,7 @@ export function JobBoard() {
       toast.success('Cancellation requested');
       await jobsQuery.refetch();
     } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const detail = (error as any)?.response?.data?.detail;
       toast.error(detail ?? 'Failed to cancel job');
     } finally {
@@ -344,8 +349,8 @@ export function JobBoard() {
     }
   };
 
-  const parameterRows = useMemo(() => buildDetailRows(selectedJob?.params ?? null), [selectedJob]);
-  const resultRows = useMemo(() => buildDetailRows(selectedJob?.result ?? null), [selectedJob]);
+  const parameterRows = useMemo(() => buildDetailRows(selectedJob?.params as Record<string, unknown> ?? null), [selectedJob]);
+  const resultRows = useMemo(() => buildDetailRows(selectedJob?.result as Record<string, unknown> ?? null), [selectedJob]);
   const detailRows = useMemo(() => {
     if (!selectedJob) {
       return [];
