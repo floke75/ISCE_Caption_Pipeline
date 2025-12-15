@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { usePipelineConfig, useSegmentationConfig } from '../hooks/useConfig';
 import { ConfigNode } from '../types';
+import { buildNested } from '../utils/overrides';
 import '../styles/forms.css';
 
 export type OverridePatches = {
@@ -25,22 +26,6 @@ type CoerceResult = {
   error?: string;
   unset?: boolean;
 };
-
-export function buildNested(edits: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [dotted, value] of Object.entries(edits)) {
-    const parts = dotted.split('.');
-    let cursor: Record<string, unknown> = result;
-    parts.slice(0, -1).forEach((part) => {
-      if (!(part in cursor) || typeof cursor[part] !== 'object' || cursor[part] === null) {
-        cursor[part] = {};
-      }
-      cursor = cursor[part] as Record<string, unknown>;
-    });
-    cursor[parts[parts.length - 1]] = value;
-  }
-  return result;
-}
 
 function valuesEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);

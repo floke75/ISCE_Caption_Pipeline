@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Routes, Route } from 'react-router-dom';
 import { InferenceForm } from './components/InferenceForm';
 import { TrainingPairForm } from './components/TrainingPairForm';
 import { ModelTrainingForm } from './components/ModelTrainingForm';
 import { ConfigPanel } from './components/ConfigPanel';
 import { JobBoard } from './components/JobBoard';
+import { ArtifactViewer } from './components/ArtifactViewer';
 import './styles/app.css';
 
 const TABS = [
@@ -16,16 +18,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
-/**
- * The main application component for the ISCE Pipeline UI.
- *
- * This component serves as the root of the application, managing the main layout
- * and the primary navigation between different functional tabs. It renders the
- * header, the tabbed workbench area, and the persistent `JobBoard` sidebar.
- *
- * @returns {JSX.Element} The rendered application shell.
- */
-export default function App() {
+function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabId>('inference');
   const queryClient = useQueryClient();
 
@@ -79,5 +72,14 @@ export default function App() {
         </aside>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/artifacts/view" element={<ArtifactViewer />} />
+    </Routes>
   );
 }

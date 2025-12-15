@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import client from '../api/client';
@@ -27,6 +28,8 @@ const PATH_KEY_HINTS = new Set([
   'output_dir',
   'model_config_path',
 ]);
+
+const VIEWABLE_EXTENSIONS = new Set(['.json', '.srt', '.txt', '.log']);
 
 type DetailRow = {
   key: string;
@@ -84,7 +87,12 @@ function isPathField(key: string, value: unknown): value is string {
   return value.includes('/') || value.includes('\\');
 }
 
-function buildDetailRows(data?: Record<string, unknown> | null): DetailRow[] {
+function isViewable(path: string): boolean {
+  const lower = path.toLowerCase();
+  return Array.from(VIEWABLE_EXTENSIONS).some(ext => lower.endsWith(ext));
+}
+
+function buildDetailRows(data?: Record<string, unknown> | null, jobId?: string): DetailRow[] {
   if (!data) {
     return [];
   }
@@ -103,10 +111,23 @@ function buildDetailRows(data?: Record<string, unknown> | null): DetailRow[] {
       }
 
       if (isPathField(key, value)) {
+        const canView = isViewable(value);
         return {
           key,
           label,
-          value: <code className="path-value">{value}</code>,
+          value: (
+            <div className="flex items-center gap-2">
+               <code className="path-value">{value}</code>
+               {canView && jobId && (
+                 <Link
+                   to={`/artifacts/view?path=${encodeURIComponent(value)}`}
+                   className="text-xs text-blue-400 hover:text-blue-300 underline ml-2"
+                 >
+                   View
+                 </Link>
+               )}
+            </div>
+          ),
           copyValue: value,
         };
       }
@@ -428,8 +449,8 @@ export function JobBoard() {
     }
   };
 
-  const parameterRows = useMemo(() => buildDetailRows(selectedJob?.params as Record<string, unknown> ?? null), [selectedJob]);
-  const resultRows = useMemo(() => buildDetailRows(selectedJob?.result as Record<string, unknown> ?? null), [selectedJob]);
+  const parameterRows = useMemo(() => buildDetailRows(selectedJob?.params as Record<string, unknown> ?? null, selectedJob?.id), [selectedJob]);
+  const resultRows = useMemo(() => buildDetailRows(selectedJob?.result as Record<string, unknown> ?? null, selectedJob?.id), [selectedJob]);
   const detailRows = useMemo(() => {
     if (!selectedJob) {
       return [];
@@ -475,7 +496,7 @@ export function JobBoard() {
         <div className="job-filters">
            <select
              value={statusFilter}
-             onChange={(e) => setStatusFilter(e.target.value as any)}
+             onChange={(e) => setStatusFilter(e.target.value as JobStatus | 'all')}
              className="status-select"
              style={{
                background: 'rgba(15, 23, 42, 0.5)',
