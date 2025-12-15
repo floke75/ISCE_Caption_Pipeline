@@ -5,7 +5,7 @@ import { InferenceForm } from './components/InferenceForm';
 import { TrainingPairForm } from './components/TrainingPairForm';
 import { ModelTrainingForm } from './components/ModelTrainingForm';
 import { ConfigPanel } from './components/ConfigPanel';
-import { JobBoard } from './components/JobBoard';
+import { AlignmentViewer } from './components/AlignmentViewer';
 import { ArtifactViewer } from './components/ArtifactViewer';
 import './styles/app.css';
 
@@ -80,6 +80,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Dashboard />} />
       <Route path="/artifacts/view" element={<ArtifactViewer />} />
+      <Route path="/jobs/alignment" element={<AlignmentViewer />} />
     </Routes>
   );
 }
