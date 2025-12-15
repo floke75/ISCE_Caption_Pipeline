@@ -1,44 +1,43 @@
-# Training Alignment Visualization Design (S09)
+# Training Alignment Visualization Design (S09 - REVISED)
 
 ## Purpose
-The alignment visualization aims to build trust in the automated pipeline by surfacing the relationship between the human-edited subtitle cues (the "Ground Truth" for breaks) and the raw ASR words (which provide the precise timestamps).
+The alignment visualization builds trust in the pipeline by allowing operators to "watch" the training process. It verifies that the automated alignment (Needleman-Wunsch) has correctly matched the high-quality edited subtitle cues to the raw, timestamped ASR words.
 
-It allows operators to verify that the alignment algorithm (Needleman-Wunsch) has correctly matched the text streams, ensuring that line breaks are learned from the correct audio segments.
+## Design Decisions: "Teleprompter Style"
 
-## Design Decisions
+### 1. Verification Goal
+The user should be able to verify that the **Edited Text** (Ground Truth) is in sync with the **Audio/ASR** (Time Reference). A split-screen, continuous scrolling view allows this by placing both streams on a shared vertical time axis.
 
-### 1. Verification vs. Debugging
-The visualization focuses on **verification**. It uses a time-bucket approach rather than explicitly visualizing the algorithm's traceback path (which would require deep backend changes).
-- **Left Column:** Edited text, grouped by Cue ID.
-- **Right Column:** ASR words, filtered to show only those falling within the Cue's start/end timestamps.
-- **Sync Line:** A visual connector (or "Sync" column) to show the relationship.
+### 2. Layout (Two-Column Teleprompter)
+See `docs/screenshots/S09/teleprompter_alignment_mockup.png`.
 
-### 2. Data Sources
-- **Edited Stream:** Loaded from `*.train.words.json` (specifically tokens grouped by `cue_id`).
-- **ASR Stream:** Loaded from `*.asr.visual.words.diar.json` (or similar raw ASR artifact).
-- **Audio:** "Best effort" playback using the existing `/api/files/download` endpoint.
+-   **Shared Vertical Time Axis:** The central spine of the UI represents time, moving downwards.
+-   **Left Column (Edited Cues):**
+    -   Displays the final, human-edited subtitle blocks.
+    -   Vertical position and height are determined by the cue's *start* and *end* times.
+    -   Visual Style: Clean, formatted blocks (like teleprompter cards).
+-   **Right Column (Raw ASR Words):**
+    -   Displays the individual words recognized by WhisperX.
+    -   Vertical position corresponds exactly to each word's timestamp.
+    -   Visual Style: Small "chips" or a continuous stream of text that flows down the timeline.
+-   **Interaction:**
+    -   **Synchronized Scrolling:** The user scrolls the timeline, and both columns move together.
+    -   **Playback:** A "Play" button auto-scrolls the view (teleprompter mode), keeping the current timestamp centered.
 
-### 3. Layout (Mockup Analysis)
-See `docs/screenshots/S09/training_alignment_mockup.png`.
-
-- **Row-based:** Each row corresponds to one Edited Cue.
-- **Time Axis:** Vertical.
-- **Visuals:**
-  - **Timestamps:** Clearly visible on the left.
-  - **Cue Text:** Highlighted in a distinct box (e.g., Blue) to represent the "Target".
-  - **ASR Words:** Displayed as "Chips" on the right. Gaps in ASR words (silence) or excessive ASR words (hallucinations) become immediately visible when compared to the fixed Cue duration.
+### 3. Data Sources
+-   **Edited Stream:** `*.train.words.json` (grouped by `cue_id`).
+-   **ASR Stream:** `*.asr.visual.words.diar.json`.
 
 ### 4. Implementation Plan (S09b)
-1. **Component:** Create `AlignmentViewer.tsx`.
-2. **Data Fetching:**
-   - Use `useQuery` to fetch the JSON content of the artifacts.
-   - Requires the backend `/api/files/content` endpoint (already exists).
-3. **Logic:**
-   - Parse `train.words.json` to extract Cues (group tokens by `cue_id`).
-   - Parse raw ASR JSON.
-   - Map ASR words to Cues based on `word.start >= cue.start` and `word.end <= cue.end`.
-   - Handle "orphaned" words (words that fall between cues) by displaying them in a separate "Gap" row or attached to the previous cue with a visual warning.
+1.  **Component:** `AlignmentViewer.tsx`.
+2.  **Virtualization:** Use a virtual list library (or simple CSS absolute positioning inside a scrolling container) to handle long audio files efficiently.
+    -   *Approach:* Map 1 second of audio to `X` pixels (e.g., 60px/sec). Calculate `top` position for every element: `top = timestamp * 60`.
+3.  **Playback:** Use a standard HTML5 `<audio>` element (hidden or minimal). Update the scroll position on `timeupdate` events.
+4.  **Sync Logic:**
+    -   No complex "diffing" algorithm is needed for the view itself; the *visual alignment* on the time axis reveals the diffs naturally.
+    -   If ASR words appear significantly higher or lower than the corresponding Edited Text, the user instantly sees the drift.
 
-## Future Improvements
-- **Media Player:** A dedicated `/media` endpoint with Range support would allow seeking to the exact timestamp of a clicked word.
-- **Diff View:** Highlight text differences (Edited vs. ASR) to show corrections made by the human editor.
+## Visual Cues for Errors
+-   **Drift:** If the ASR words are consistently "ahead" (higher) or "behind" (lower) than the Edited Cues, there is an offset issue.
+-   **Hallucinations:** A dense cluster of ASR words next to empty space in the Edited column indicates ASR hallucinations that were removed.
+-   **Missing Audio:** A gap in ASR words next to an Edited Cue indicates the editor added text not present in the audio.

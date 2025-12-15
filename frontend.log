@@ -3,9 +3,10 @@
 > vite --port 5173
 
 
-  VITE v5.4.21  ready in 348 ms
+  VITE v5.4.21  ready in 939 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: http://192.168.0.2:5173/
-6:05:30 PM [vite] hmr update /src/components/AlignmentDesignMockup.tsx
-6:05:34 PM [vite] hmr update /src/App.tsx
+6:15:34 PM [vite] hmr update /src/App.tsx
+6:16:02 PM [vite] hmr update /src/components/TeleprompterDesignMockup.tsx
+6:16:09 PM [vite] hmr update /src/App.tsx
