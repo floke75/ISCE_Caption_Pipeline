@@ -77,7 +77,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S02 — Document existing user guidance and gaps](#s02-document-existing-user-guidance-and-gaps) — ✅ Passed
 - [S03 — Frontend build, lint, and dependency baseline](#s03-frontend-build-lint-and-dependency-baseline) — ✅ Passed
 - [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ✅ Passed
-- [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ⬜ Not started
+- [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ✅ Passed
 - [S06 — Submission feedback, validation errors, and recovery](#s06-submission-feedback-validation-errors-and-recovery) — ⬜ Not started
 - [S07 — Job monitoring baseline and navigation](#s07-job-monitoring-baseline-and-navigation) — ⬜ Not started
 - [S08 — Artifact visibility and preview widgets](#s08-artifact-visibility-and-preview-widgets) — ⬜ Not started
@@ -321,7 +321,7 @@ grep "Implemented" docs/notes/training_flow.md
 
 ## S05 — Inference flow guidance and presets
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Evaluate the inference flow for clarity of required inputs, preset usefulness, and non-expert guidance.
 
@@ -353,7 +353,9 @@ find docs/screenshots/S05 -maxdepth 1 -type f | head -n 1
 - **Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
 
 **Notes:**
-- Capture any console/network errors specific to inference submission and proposed mitigations.
+- Screenshots captured: `inference_empty.png`, `inference_filled.png`, `inference_submitted.png`.
+- `docs/notes/inference_flow.md` documents pain points (hidden overrides, lack of presets) and improvement plan.
+- Playwright script used network interception to mock job submission and file validation.
 
 ---
 
