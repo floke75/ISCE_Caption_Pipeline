@@ -8,10 +8,14 @@ export type OverridePatches = {
   segmentation: Record<string, unknown>;
 };
 
-type OverrideResource = 'pipeline' | 'segmentation';
+export type OverrideResource = 'pipeline' | 'segmentation';
 
-interface OverrideEditorProps {
+export type OverrideEdits = Record<OverrideResource, Record<string, unknown>>;
+
+export interface OverrideEditorProps {
   onChange: (patches: OverridePatches, hasErrors: boolean) => void;
+  edits?: OverrideEdits;
+  onEditsChange?: (edits: OverrideEdits) => void;
 }
 
 type OverrideErrors = Record<string, string>;
@@ -22,7 +26,7 @@ type CoerceResult = {
   unset?: boolean;
 };
 
-function buildNested(edits: Record<string, unknown>): Record<string, unknown> {
+export function buildNested(edits: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [dotted, value] of Object.entries(edits)) {
     const parts = dotted.split('.');
@@ -126,16 +130,6 @@ interface TreeItemProps {
   onClear: (node: ConfigNode) => void;
 }
 
-/**
- * A recursive component to render a single node in the configuration tree.
- *
- * This component can render either a branch (a collapsible section for a nested
- * object) or a leaf (an input control for a primitive value). It displays the
- * current and default values and allows the user to set an override.
- *
- * @param {TreeItemProps} props The props for the component.
- * @returns {JSX.Element | null} The rendered tree item, or null if it's a hidden advanced field.
- */
 function OverrideTreeItem({
   node,
   depth,
@@ -309,17 +303,6 @@ function OverrideTreeItem({
   );
 }
 
-/**
- * A tree-based editor for creating per-run configuration overrides.
- *
- * This component fetches the hierarchical configuration schema and renders an
- * interactive tree that allows users to override any configurable value for a
- * single job run. It performs type coercion and validation, and outputs a
- * nested "patch" object that can be sent to the backend.
- *
- * @param {OverrideEditorProps} props The props for the component.
- * @returns {JSX.Element} The rendered override editor.
- */
 const RESOURCE_LABEL: Record<OverrideResource, string> = {
   pipeline: 'Pipeline configuration',
   segmentation: 'Segmentation configuration',
@@ -332,14 +315,30 @@ const RESOURCE_SUMMARY: Record<OverrideResource, string> = {
 
 type ConfigQueryResult = ReturnType<typeof usePipelineConfig>;
 
-export function OverrideEditor({ onChange }: OverrideEditorProps) {
+export function OverrideEditor({ onChange, edits: controlledEdits, onEditsChange }: OverrideEditorProps) {
   const pipelineQuery = usePipelineConfig();
   const segmentationQuery = useSegmentationConfig();
 
-  const [activeTab, setActiveTab] = useState<OverrideResource>('pipeline');
-  const [edits, setEdits] = useState<Record<OverrideResource, Record<string, unknown>>>(
+  const isControlled = controlledEdits !== undefined;
+
+  const [internalEdits, setInternalEdits] = useState<OverrideEdits>(
     () => ({ pipeline: {}, segmentation: {} })
   );
+
+  const edits = isControlled ? controlledEdits! : internalEdits;
+
+  const updateEdits = useCallback((update: (prev: OverrideEdits) => OverrideEdits) => {
+    if (isControlled) {
+      if (onEditsChange) {
+         onEditsChange(update(edits));
+      }
+    } else {
+      setInternalEdits(update);
+    }
+  }, [isControlled, onEditsChange, edits]);
+
+  const [activeTab, setActiveTab] = useState<OverrideResource>('pipeline');
+
   const [errors, setErrors] = useState<Record<OverrideResource, OverrideErrors>>(
     () => ({ pipeline: {}, segmentation: {} })
   );
@@ -348,18 +347,18 @@ export function OverrideEditor({ onChange }: OverrideEditorProps) {
   );
 
   useEffect(() => {
-    if (pipelineQuery.data?.effective) {
-      setEdits((prev) => ({ ...prev, pipeline: {} }));
+    if (!isControlled && pipelineQuery.data?.effective) {
+      updateEdits((prev) => ({ ...prev, pipeline: {} }));
       setErrors((prev) => ({ ...prev, pipeline: {} }));
     }
-  }, [pipelineQuery.data?.effective]);
+  }, [pipelineQuery.data?.effective, updateEdits, isControlled]);
 
   useEffect(() => {
-    if (segmentationQuery.data?.effective) {
-      setEdits((prev) => ({ ...prev, segmentation: {} }));
+    if (!isControlled && segmentationQuery.data?.effective) {
+      updateEdits((prev) => ({ ...prev, segmentation: {} }));
       setErrors((prev) => ({ ...prev, segmentation: {} }));
     }
-  }, [segmentationQuery.data?.effective]);
+  }, [segmentationQuery.data?.effective, updateEdits, isControlled]);
 
   const pipelinePatch = useMemo(() => buildNested(edits.pipeline), [edits.pipeline]);
   const segmentationPatch = useMemo(() => buildNested(edits.segmentation), [edits.segmentation]);
@@ -387,7 +386,7 @@ export function OverrideEditor({ onChange }: OverrideEditorProps) {
     });
 
     if (result.unset) {
-      setEdits((prev) => {
+      updateEdits((prev) => {
         const group = prev[resource];
         if (!(dotted in group)) {
           return prev;
@@ -404,7 +403,7 @@ export function OverrideEditor({ onChange }: OverrideEditorProps) {
         ...prev,
         [resource]: { ...prev[resource], [dotted]: result.error! },
       }));
-      setEdits((prev) => {
+      updateEdits((prev) => {
         const group = prev[resource];
         if (!(dotted in group)) {
           return prev;
@@ -418,7 +417,7 @@ export function OverrideEditor({ onChange }: OverrideEditorProps) {
 
     const value = result.value;
     if (valuesEqual(value, node.current)) {
-      setEdits((prev) => {
+      updateEdits((prev) => {
         const group = prev[resource];
         if (!(dotted in group)) {
           return prev;
@@ -430,15 +429,15 @@ export function OverrideEditor({ onChange }: OverrideEditorProps) {
       return;
     }
 
-    setEdits((prev) => ({
+    updateEdits((prev) => ({
       ...prev,
       [resource]: { ...prev[resource], [dotted]: value },
     }));
-  }, []);
+  }, [updateEdits]);
 
   const handleClear = useCallback((resource: OverrideResource, node: ConfigNode) => {
     const dotted = node.path.join('.');
-    setEdits((prev) => {
+    updateEdits((prev) => {
       const group = prev[resource];
       if (!(dotted in group)) {
         return prev;
@@ -456,12 +455,12 @@ export function OverrideEditor({ onChange }: OverrideEditorProps) {
       delete nextGroup[dotted];
       return { ...prev, [resource]: nextGroup };
     });
-  }, []);
+  }, [updateEdits]);
 
   const handleClearAll = useCallback((resource: OverrideResource) => {
-    setEdits((prev) => ({ ...prev, [resource]: {} }));
+    updateEdits((prev) => ({ ...prev, [resource]: {} }));
     setErrors((prev) => ({ ...prev, [resource]: {} }));
-  }, []);
+  }, [updateEdits]);
 
   const queries: Record<OverrideResource, ConfigQueryResult> = {
     pipeline: pipelineQuery,
