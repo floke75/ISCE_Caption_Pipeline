@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 10/26 passed, 0 failed, 0 in progress
+**Step status summary:** 11/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -481,7 +481,7 @@ find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
 
 ## S07b — Implement job monitoring improvements
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement improvements to the job monitor, such as distinct icons for job types, relative timestamps, and status filters.
 
@@ -503,6 +503,13 @@ find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
 test -d docs/screenshots/S07b
 find docs/screenshots/S07b -maxdepth 1 -type f | head -n 1
 ```
+
+**Notes:**
+- Implemented `JobTypeIcon` (visual distinction for Inference vs Training) and `StatusIcon` (Check/X/Clock) in `JobBoard.tsx`.
+- Added a status filter dropdown (`All`, `Pending`, `Running`, `Succeeded`, `Failed`) to the header.
+- Added absolute timestamp tooltips to relative time displays using the `title` attribute.
+- Verified changes with `scripts/verify_s07b_improvements.py`, which mocked backend jobs to test filtering and icon rendering.
+- Screenshots captured in `docs/screenshots/S07b/`: `job_list_icons.png`, `job_list_filtered_failed.png`.
 
 ---
 
