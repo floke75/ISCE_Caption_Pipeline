@@ -73,14 +73,14 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ✅ Passed
 - [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ✅ Passed
 - [S05b — Implement inference flow improvements](#s05b-implement-inference-flow-improvements) — ✅ Passed
-- [S06 — Submission feedback analysis and design](#s06-submission-feedback-analysis-and-design) — ⬜ Not started
-- [S06b — Implement submission feedback improvements](#s06b-implement-submission-feedback-improvements) — ⬜ Not started
-- [S07 — Job monitoring analysis and design](#s07-job-monitoring-analysis-and-design) — ⬜ Not started
-- [S07b — Implement job monitoring improvements](#s07b-implement-job-monitoring-improvements) — ⬜ Not started
-- [S08 — Artifact visibility analysis and design](#s08-artifact-visibility-analysis-and-design) — ⬜ Not started
-- [S08b — Implement artifact visibility improvements](#s08b-implement-artifact-visibility-improvements) — ⬜ Not started
-- [S09 — Training alignment visualization design](#s09-training-alignment-visualization-design) — ⬜ Not started
-- [S09b — Implement training alignment visualization](#s09b-implement-training-alignment-visualization) — ⬜ Not started
+- [S06 — Submission feedback analysis and design](#s06-submission-feedback-analysis-and-design) — ✅ Not started
+- [S06b — Implement submission feedback improvements](#s06b-implement-submission-feedback-improvements) — ✅ Not started
+- [S07 — Job monitoring analysis and design](#s07-job-monitoring-analysis-and-design) — ✅ Not started
+- [S07b — Implement job monitoring improvements](#s07b-implement-job-monitoring-improvements) — ✅ Not started
+- [S08 — Artifact visibility analysis and design](#s08-artifact-visibility-analysis-and-design) — ✅ Not started
+- [S08b — Implement artifact visibility improvements](#s08b-implement-artifact-visibility-improvements) — ✅ Not started
+- [S09 — Training alignment visualization design](#s09-training-alignment-visualization-design) — ✅ Not started
+- [S09b — Implement training alignment visualization](#s09b-implement-training-alignment-visualization) — ✅ Not started
 - [S10 — Inference alignment visualization design](#s10-inference-alignment-visualization-design) — ⬜ Not started
 - [S10b — Implement inference alignment visualization](#s10b-implement-inference-alignment-visualization) — ⬜ Not started
 - [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ⬜ Not started
