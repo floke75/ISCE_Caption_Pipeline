@@ -1,0 +1,11 @@
+
+> isce-ui@0.1.0 dev
+> vite --port 5173
+
+
+  VITE v5.4.21  ready in 348 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.0.2:5173/
+6:05:30 PM [vite] hmr update /src/components/AlignmentDesignMockup.tsx
+6:05:34 PM [vite] hmr update /src/App.tsx

@@ -1,0 +1,5 @@
+
+> isce-ui@0.1.0 dev
+> vite --port 5173
+
+sh: 1: vite: not found
