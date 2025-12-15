@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 11/26 passed, 0 failed, 0 in progress
+**Step status summary:** 12/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -515,7 +515,7 @@ find docs/screenshots/S07b -maxdepth 1 -type f | head -n 1
 
 ## S08 — Artifact visibility analysis and design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Audit how artifacts (SRT, enriched JSON, logs, waveform cues) are exposed and previewed in the UI, and identify quick wins for visual validation.
 
@@ -538,6 +538,12 @@ test -d docs/screenshots/S08
 test -f docs/notes/artifact_visibility.md
 find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
 ```
+
+**Notes:**
+- Execution: Ran `scripts/verify_s08_artifacts.py` to capture "Job Details".
+- Findings: Paths are shown as text, not links. No backend endpoint for content serving exists yet.
+- Design: Proposed adding `/api/files/content` and UI viewers for SRT/JSON.
+- Screenshots captured: `job_details_artifacts.png`.
 
 ---
 

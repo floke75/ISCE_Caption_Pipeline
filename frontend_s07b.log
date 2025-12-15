@@ -92,3 +92,23 @@ AggregateError [ECONNREFUSED]:
 AggregateError [ECONNREFUSED]:
     at internalConnectMultiple (node:net:1134:18)
     at afterConnectMultiple (node:net:1715:7)
+1:54:09 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+1:54:09 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+1:54:09 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+1:54:09 PM [vite] http proxy error: /api/jobs/job-inf-completed/logs?tail=12000
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+1:54:09 PM [vite] http proxy error: /api/jobs/job-inf-completed/logs/stream
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
