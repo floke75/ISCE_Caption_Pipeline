@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 9/26 passed, 0 failed, 0 in progress
+**Step status summary:** 11/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -447,7 +447,7 @@ find docs/screenshots/S06b -maxdepth 1 -type f | head -n 1
 
 ## S07 — Job monitoring analysis and design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Review the job board/monitor for usability, navigation, and clarity of statuses across both training and inference jobs.
 
@@ -471,11 +471,17 @@ test -f docs/notes/job_monitoring.md
 find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
 ```
 
+**Notes:**
+- Execution: Ran `scripts/verify_s07_monitoring.py` to inject diverse mock jobs (Running, Failed, Success).
+- Findings: Job list is functional but lacks visual distinction between job types (text only). Timestamps lack absolute tooltips. Error display is good.
+- Design: Propose adding Type Icons (Film, Database, Brain) and Status Icons (Check, X, Clock) in S07b.
+- Screenshots captured in `docs/screenshots/S07/`.
+
 ---
 
 ## S07b — Implement job monitoring improvements
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement improvements to the job monitor, such as distinct icons for job types, relative timestamps, and status filters.
 
@@ -497,6 +503,13 @@ find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
 test -d docs/screenshots/S07b
 find docs/screenshots/S07b -maxdepth 1 -type f | head -n 1
 ```
+
+**Notes:**
+- Implemented `JobTypeIcon` (visual distinction for Inference vs Training) and `StatusIcon` (Check/X/Clock) in `JobBoard.tsx`.
+- Added a status filter dropdown (`All`, `Pending`, `Running`, `Succeeded`, `Failed`) to the header.
+- Added absolute timestamp tooltips to relative time displays using the `title` attribute.
+- Verified changes with `scripts/verify_s07b_improvements.py`, which mocked backend jobs to test filtering and icon rendering.
+- Screenshots captured in `docs/screenshots/S07b/`: `job_list_icons.png`, `job_list_filtered_failed.png`.
 
 ---
 
