@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 2/16 passed, 0 failed, 0 in progress
+**Step status summary:** 7/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -53,12 +53,6 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - **Fixture references (if needed):** reuse existing fixtures under `tests/fixtures` for smoke checks.
 - **Status markers:** ⬜ Not started | 🔄 In progress | ✅ Passed | ⚠️ Blocked | ❌ Failed
 
-### Navigation aids (line pointers)
-
-- **Purpose:** Reduce search churn in this long document by keeping approximate line ranges for each step alongside the index.
-- **Maintenance:** Line ranges must be refreshed whenever step content materially changes. Use `nl -ba frontend_update_plan.md | rg "^ *[0-9]+ +## S"` to locate headers and adjust the table below. Treat these as hints (not strict references) and update them as part of any edit touching a step section.
-- **Drift cautions:** Because line numbers shift with edits, stale pointers can mislead automation and reviewers. Refresh the table whenever you update a step or reorder content.
-
 ### Phase ordering (do not reorder)
 
 - **Baseline & readiness:** S00–S03 (must be green before altering UX components).
@@ -79,39 +73,25 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ✅ Passed
 - [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ✅ Passed
 - [S05b — Implement inference flow improvements](#s05b-implement-inference-flow-improvements) — ✅ Passed
-- [S06 — Submission feedback, validation errors, and recovery](#s06-submission-feedback-validation-errors-and-recovery) — ⬜ Not started
-- [S07 — Job monitoring baseline and navigation](#s07-job-monitoring-baseline-and-navigation) — ⬜ Not started
-- [S08 — Artifact visibility and preview widgets](#s08-artifact-visibility-and-preview-widgets) — ⬜ Not started
-- [S09 — Training alignment visualization design (SRT ↔ ASR/NW)](#s09-training-alignment-visualization-design-srt--asrnw) — ⬜ Not started
-- [S10 — Inference alignment visualization design (LLM ↔ ASR/NW)](#s10-inference-alignment-visualization-design-llm--asrnw) — ⬜ Not started
-- [S11 — System health signals and observability hooks](#s11-system-health-signals-and-observability-hooks) — ⬜ Not started
-- [S12 — Insight verification and test harness planning](#s12-insight-verification-and-test-harness-planning) — ⬜ Not started
-- [S13 — Guided job templates and presets](#s13-guided-job-templates-and-presets) — ⬜ Not started
-- [S14 — Data quality dashboard and cue diagnostics](#s14-data-quality-dashboard-and-cue-diagnostics) — ⬜ Not started
-- [S15 — Embedded help center and onboarding tours](#s15-embedded-help-center-and-onboarding-tours) — ⬜ Not started
-
-### Line pointers (refresh on edit)
-
-| Step | Approx. lines | Status |
-| --- | --- | --- |
-| S00 | ~L117–156 | ✅ |
-| S01 | ~L157–193 | ✅ |
-| S02 | ~L194–228 | ⬜ |
-| S03 | ~L229–268 | ✅ |
-| S04 | ~L269–306 | ✅ |
-| S05 | ~L307–344 | ⬜ |
-| S06 | ~L345–385 | ⬜ |
-| S07 | ~L386–425 | ⬜ |
-| S08 | ~L426–466 | ⬜ |
-| S09 | ~L467–508 | ⬜ |
-| S10 | ~L509–550 | ⬜ |
-| S11 | ~L551–590 | ⬜ |
-| S12 | ~L591–630 | ⬜ |
-| S13 | ~L631–667 | ⬜ |
-| S14 | ~L668–707 | ⬜ |
-| S15 | ~L708–742 | ⬜ |
-
-*Pointers are hints—update after any content change to keep navigation reliable.*
+- [S06 — Submission feedback analysis and design](#s06-submission-feedback-analysis-and-design) — ⬜ Not started
+- [S06b — Implement submission feedback improvements](#s06b-implement-submission-feedback-improvements) — ⬜ Not started
+- [S07 — Job monitoring analysis and design](#s07-job-monitoring-analysis-and-design) — ⬜ Not started
+- [S07b — Implement job monitoring improvements](#s07b-implement-job-monitoring-improvements) — ⬜ Not started
+- [S08 — Artifact visibility analysis and design](#s08-artifact-visibility-analysis-and-design) — ⬜ Not started
+- [S08b — Implement artifact visibility improvements](#s08b-implement-artifact-visibility-improvements) — ⬜ Not started
+- [S09 — Training alignment visualization design](#s09-training-alignment-visualization-design) — ⬜ Not started
+- [S09b — Implement training alignment visualization](#s09b-implement-training-alignment-visualization) — ⬜ Not started
+- [S10 — Inference alignment visualization design](#s10-inference-alignment-visualization-design) — ⬜ Not started
+- [S10b — Implement inference alignment visualization](#s10b-implement-inference-alignment-visualization) — ⬜ Not started
+- [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ⬜ Not started
+- [S11b — Implement system health signals](#s11b-implement-system-health-signals) — ⬜ Not started
+- [S12 — Insight verification infrastructure](#s12-insight-verification-infrastructure) — ⬜ Not started
+- [S13 — Guided job templates design](#s13-guided-job-templates-design) — ⬜ Not started
+- [S13b — Implement job templates](#s13b-implement-job-templates) — ⬜ Not started
+- [S14 — Data quality dashboard design](#s14-data-quality-dashboard-design) — ⬜ Not started
+- [S14b — Implement data quality dashboard](#s14b-implement-data-quality-dashboard) — ⬜ Not started
+- [S15 — Embedded help center design](#s15-embedded-help-center-design) — ⬜ Not started
+- [S15b — Implement help center](#s15b-implement-help-center) — ⬜ Not started
 
 ---
 
@@ -397,7 +377,7 @@ find docs/screenshots/S05b -maxdepth 1 -type f | head -n 1
 
 ---
 
-## S06 — Submission feedback, validation errors, and recovery
+## S06 — Submission feedback analysis and design
 
 **Status:** ⬜ Not started
 
@@ -409,8 +389,6 @@ find docs/screenshots/S05b -maxdepth 1 -type f | head -n 1
 - Map which fields lack inline validation or have unclear error text, and propose concrete fixes.
 - Note whether submissions indicate backend processing status clearly (e.g., spinner vs. silent fail).
 
-**Code/doc pointers:** `ui/frontend/src/components/JobBoard.tsx` (submission feedback and job status), `ui/frontend/src/components/common` (toast/alert components, if present), `ui/backend/pipelines.py` (error surfaces from job creation), `ui/backend/app.py` (FastAPI error handling), `ui/backend/api/routes/files.py` (validation responses).
-
 **Deliverables:**
 - Screenshots under `docs/screenshots/S06/` illustrating validation and error handling states.
 - `docs/notes/submission_feedback.md` documenting current feedback patterns, recommended improvements, and any job IDs or
@@ -418,8 +396,7 @@ find docs/screenshots/S05b -maxdepth 1 -type f | head -n 1
 
 **Verification test:**
 - **Name:** Submission feedback documented
-
-**Commands:**
+- **Commands:**
 
 ```text
 test -d docs/screenshots/S06
@@ -427,18 +404,36 @@ test -f docs/notes/submission_feedback.md
 find docs/screenshots/S06 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot directory exists and contains at least one file
-  - Submission feedback notes exist
+---
 
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
+## S06b — Implement submission feedback improvements
 
-**Notes:**
-- Highlight any missing retry paths or unhelpful error text and suggest concrete wording or UX patterns.
+**Status:** ⬜ Not started
+
+**Objective:** Implement the recommended improvements for submission feedback, including better error messages, visual cues for invalid fields, and retry affordances.
+
+**Actions to perform:**
+- Update `JobBoard` and form components to display structured error messages from the backend.
+- Enhance `FilePathPicker` and other inputs to show error states more clearly (e.g., red borders, inline text).
+- Implement loading spinners or progress bars during submission.
+- Ensure toast notifications provide actionable details on failure.
+
+**Deliverables:**
+- Updated components (`JobBoard`, forms, `FilePathPicker`).
+- Screenshots under `docs/screenshots/S06b/` showing improved error states and submission feedback.
+
+**Verification test:**
+- **Name:** Feedback improvements verified
+- **Commands:**
+
+```text
+test -d docs/screenshots/S06b
+find docs/screenshots/S06b -maxdepth 1 -type f | head -n 1
+```
 
 ---
 
-## S07 — Job monitoring baseline and navigation
+## S07 — Job monitoring analysis and design
 
 **Status:** ⬜ Not started
 
@@ -450,16 +445,13 @@ find docs/screenshots/S06 -maxdepth 1 -type f | head -n 1
 - Note any confusing labels, missing timestamps, or pagination/filter gaps.
 - Propose improvements for distinguishing job types and surfacing progress.
 
-**Code/doc pointers:** `ui/frontend/src/components/JobBoard.tsx` (job list/detail UI), `ui/backend/pipelines.py` (job status payloads), `ui/backend/config_service.py` (override status merging), `ui_data/jobs/<id>/` (job workspace layout), `README.md` (UI job flow overview).
-
 **Deliverables:**
 - Screenshots under `docs/screenshots/S07/` covering job list and detail navigation.
 - `docs/notes/job_monitoring.md` summarizing navigation flow, status clarity, and proposed UX adjustments.
 
 **Verification test:**
 - **Name:** Job monitoring documented
-
-**Commands:**
+- **Commands:**
 
 ```text
 test -d docs/screenshots/S07
@@ -467,18 +459,36 @@ test -f docs/notes/job_monitoring.md
 find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot directory exists and contains at least one file
-  - Job monitoring notes exist
+---
 
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
+## S07b — Implement job monitoring improvements
 
-**Notes:**
-- Record any missing differentiation between training vs. inference jobs and how filters/sorting could help.
+**Status:** ⬜ Not started
+
+**Objective:** Implement improvements to the job monitor, such as distinct icons for job types, relative timestamps, and status filters.
+
+**Actions to perform:**
+- Update `JobBoard` to show distinct icons/badges for Training vs Inference jobs.
+- Format timestamps (created/completed) to be relative (e.g., "5 mins ago") with absolute tooltip.
+- Add basic filtering by status (Pending, Running, Completed, Failed).
+- Improve status chip styling for better readability.
+
+**Deliverables:**
+- Updated `JobBoard` component.
+- Screenshots under `docs/screenshots/S07b/` showing the enhanced job list.
+
+**Verification test:**
+- **Name:** Job monitoring improvements verified
+- **Commands:**
+
+```text
+test -d docs/screenshots/S07b
+find docs/screenshots/S07b -maxdepth 1 -type f | head -n 1
+```
 
 ---
 
-## S08 — Artifact visibility and preview widgets
+## S08 — Artifact visibility analysis and design
 
 **Status:** ⬜ Not started
 
@@ -490,17 +500,13 @@ find docs/screenshots/S07 -maxdepth 1 -type f | head -n 1
 - Identify missing preview widgets (cue tables, waveform snippets, alignment diffs) and map them to available data sources.
 - Propose a prioritized list of preview components to implement, with data availability notes.
 
-**Code/doc pointers:** `ui/frontend/src/components/JobBoard.tsx` (artifact display), `ui_data/jobs/<id>/artifacts/` (artifact layout), `ui/backend/pipelines.py` (job result payload), `README.md` (artifact descriptions), `align_make.py` / `build_training_pair_standalone.py` (artifact generation paths).
-
 **Deliverables:**
 - Screenshots under `docs/screenshots/S08/` showcasing artifact visibility.
-- `docs/notes/artifact_visibility.md` detailing current coverage, gaps, and proposed preview widgets, including a per-job
-  inventory of artifacts observed (filenames and types).
+- `docs/notes/artifact_visibility.md` detailing current coverage, gaps, and proposed preview widgets.
 
 **Verification test:**
 - **Name:** Artifact visibility baseline captured
-
-**Commands:**
+- **Commands:**
 
 ```text
 test -d docs/screenshots/S08
@@ -508,31 +514,46 @@ test -f docs/notes/artifact_visibility.md
 find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot directory exists and contains at least one file
-  - Artifact visibility notes exist
-
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
-
-**Notes:**
-- Call out which artifacts already exist in `ui_data/jobs/<id>/artifacts` and how they could be previewed safely in-browser.
-
 ---
 
-## S09 — Training alignment visualization design (SRT ↔ ASR/NW)
+## S08b — Implement artifact visibility improvements
 
 **Status:** ⬜ Not started
 
-**Objective:** Define a synchronized, side-by-side visualization that compares the human-edited SRT cues to WhisperX ASR word-level timestamps aligned via Needleman–Wunsch during training, highlighting matches, insertions, and timing deltas.
+**Objective:** Implement links and basic previews for key artifacts (SRT, logs) directly in the job details view.
 
 **Actions to perform:**
-- Inventory available training artifacts for alignment: `.train.words.json`, `.asr.visual.words.diar.json`, and any intermediate alignment matrices produced during Stage 2.
-- Specify the UI layout for side-by-side cue vs. word-level timelines (e.g., dual columns with synchronized scrolling, match/gap coloring, hover tooltips for timestamps and diffs).
-- Identify interaction affordances (scrub/playback hooks if audio is available, filtering by cue, toggling diarization/speaker labels).
-- Capture wireframe or mock screenshot(s) illustrating the proposed training alignment view and save under `docs/screenshots/S09/`.
-- Document data-loading strategy (which endpoint or artifact path) and performance considerations for large files.
+- Update `JobBoard` detail view to list all generated artifacts with download links.
+- Add a text/code viewer component for `.srt` and `.json` files.
+- Ensure log streams are visible and auto-scroll correctly.
 
-**Code/doc pointers:** `build_training_pair_standalone.py` (Needleman–Wunsch alignment and training artifacts), `ui/backend/pipelines.py` (artifact copy into `ui_data/jobs/<id>`), `ui/frontend/src/components/JobBoard.tsx` (job details hook), `docs/build_training_pair_comparison.md` (Stage 2 rationale), `README.md` (artifact descriptions).
+**Deliverables:**
+- Updated `JobBoard` and new artifact viewer components.
+- Screenshots under `docs/screenshots/S08b/` showing artifact links and previews.
+
+**Verification test:**
+- **Name:** Artifact visibility improvements verified
+- **Commands:**
+
+```text
+test -d docs/screenshots/S08b
+find docs/screenshots/S08b -maxdepth 1 -type f | head -n 1
+```
+
+---
+
+## S09 — Training alignment visualization design
+
+**Status:** ⬜ Not started
+
+**Objective:** Define a synchronized, side-by-side visualization that compares the human-edited SRT cues to WhisperX ASR word-level timestamps aligned via Needleman–Wunsch during training.
+
+**Actions to perform:**
+- Inventory available training artifacts for alignment: `.train.words.json`, `.asr.visual.words.diar.json`.
+- Specify the UI layout for side-by-side cue vs. word-level timelines.
+- Identify interaction affordances (scrub/playback hooks if audio is available, filtering by cue).
+- Capture wireframe or mock screenshot(s) illustrating the proposed training alignment view.
+- Document data-loading strategy.
 
 **Deliverables:**
 - Screenshots or mockups under `docs/screenshots/S09/` showing the proposed training alignment visualization.
@@ -540,8 +561,7 @@ find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
 
 **Verification test:**
 - **Name:** Training alignment design recorded
-
-**Commands:**
+- **Commands:**
 
 ```text
 test -d docs/screenshots/S09
@@ -549,41 +569,55 @@ test -f docs/notes/training_alignment_design.md
 find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot/mockup directory exists and contains at least one file
-  - Training alignment design notes exist
-
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
-
-**Notes:**
-- Explicitly call out how Needleman–Wunsch alignment output (matches, insertions, deletions) will be visualized and kept synchronized with cue timing.
-- Prefer designs that reuse existing artifact formats to avoid new backend dependencies unless justified.
-
 ---
 
-## S10 — Inference alignment visualization design (LLM ↔ ASR/NW)
+## S09b — Implement training alignment visualization
 
 **Status:** ⬜ Not started
 
-**Objective:** Plan a synchronized visualization for inference that compares the LLM-edited/refined transcript to WhisperX ASR word-level timestamps after Needleman–Wunsch alignment, emphasizing timing quality and structural cues.
+**Objective:** Implement the training alignment visualization, rendering synchronized views of SRT cues and ASR words.
 
 **Actions to perform:**
-- Catalog inference-time artifacts that hold aligned word-level timestamps (e.g., enriched JSON with `is_llm_structural_break`, ASR reference files, alignment outputs) and note their locations per job.
-- Define the UI for side-by-side comparison (LLM text vs. ASR words) with synchronized scrolling, highlighting of alignment matches/mismatches, and visual indicators for timing gaps or uncertain alignments.
-- Specify how to surface cue-level timing deltas, confidence/score overlays if available, and toggles for showing LLM structural break hints.
-- Capture wireframe or mock screenshot(s) of the proposed inference alignment view and save under `docs/screenshots/S10/`.
-- Note any shared components with the training alignment view to maximize reuse and ensure consistent UX.
+- Create a new visualization component (e.g., `AlignmentViewer`).
+- Implement logic to load `.train.words.json` and `.asr.visual.words.diar.json`.
+- Render side-by-side columns with alignment connections or color-coding.
+- Integrate into the Job Details view for training jobs.
 
-**Code/doc pointers:** `align_make.py` (ASR output), `build_training_pair_standalone.py` (inference alignment logic and enriched JSON fields), `ui/backend/pipelines.py` (job artifact handling), `ui/frontend/src/components/JobBoard.tsx` and planned preview widgets (artifact consumption), `docs/beam_search_walkthrough.md` (timing context), `README.md` (inference flow overview).
+**Deliverables:**
+- `AlignmentViewer` component.
+- Screenshots under `docs/screenshots/S09b/` showing the visualization with sample data.
+
+**Verification test:**
+- **Name:** Training alignment visualization verified
+- **Commands:**
+
+```text
+test -d docs/screenshots/S09b
+find docs/screenshots/S09b -maxdepth 1 -type f | head -n 1
+```
+
+---
+
+## S10 — Inference alignment visualization design
+
+**Status:** ⬜ Not started
+
+**Objective:** Plan a synchronized visualization for inference that compares the LLM-edited/refined transcript to WhisperX ASR word-level timestamps after Needleman–Wunsch alignment.
+
+**Actions to perform:**
+- Catalog inference-time artifacts that hold aligned word-level timestamps (enriched JSON).
+- Define the UI for side-by-side comparison (LLM text vs. ASR words) with synchronized scrolling.
+- Specify how to surface cue-level timing deltas and structural hints.
+- Capture wireframe or mock screenshot(s).
+- Note any shared components with the training alignment view.
 
 **Deliverables:**
 - Screenshots or mockups under `docs/screenshots/S10/` for the inference alignment visualization.
-- `docs/notes/inference_alignment_design.md` detailing layout, interactions, data sources, and reuse strategy relative to training.
+- `docs/notes/inference_alignment_design.md` detailing layout, interactions, data sources, and reuse strategy.
 
 **Verification test:**
 - **Name:** Inference alignment design recorded
-
-**Commands:**
+- **Commands:**
 
 ```text
 test -d docs/screenshots/S10
@@ -591,31 +625,45 @@ test -f docs/notes/inference_alignment_design.md
 find docs/screenshots/S10 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot/mockup directory exists and contains at least one file
-  - Inference alignment design notes exist
-
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
-
-**Notes:**
-- Document how Needleman–Wunsch alignment results will be kept in sync across text panes and any fallback behavior if alignment data is incomplete.
-- Consider visual consistency with training alignment while accounting for LLM-specific metadata (e.g., `is_llm_structural_break`).
-
 ---
 
-## S11 — System health signals and observability hooks
+## S10b — Implement inference alignment visualization
 
 **Status:** ⬜ Not started
 
-**Objective:** Assess how the UI and backend expose operational health (statuses, backend errors, resource warnings) and define the signals needed for trustworthy usage.
+**Objective:** Implement the inference alignment visualization, adapting the `AlignmentViewer` to handle inference artifacts and metadata.
 
 **Actions to perform:**
-- Review UI components for health indicators (status chips, banners, spinners) and note when they appear or fail to appear.
-- Capture screenshots of health/alert states under `docs/screenshots/S11/`.
-- Inspect available backend endpoints/log surfaces (FastAPI) that could provide health data and note gaps.
-- Propose specific observability hooks (heartbeat endpoint checks, queue depth indicators, error surfacing) to add.
+- Update `AlignmentViewer` to support inference mode (consuming enriched JSON).
+- Visualize LLM structural breaks and confidence scores if available.
+- Integrate into the Job Details view for inference jobs.
 
-**Code/doc pointers:** `ui/frontend/src/components/JobBoard.tsx` (job status rendering), `ui/backend/app.py` (FastAPI setup), `ui/backend/pipelines.py` (job lifecycle statuses), `ui/backend/api/routes/files.py` (file validation errors), `README.md` (operations notes).
+**Deliverables:**
+- Updated `AlignmentViewer`.
+- Screenshots under `docs/screenshots/S10b/` showing the inference alignment view.
+
+**Verification test:**
+- **Name:** Inference alignment visualization verified
+- **Commands:**
+
+```text
+test -d docs/screenshots/S10b
+find docs/screenshots/S10b -maxdepth 1 -type f | head -n 1
+```
+
+---
+
+## S11 — System health analysis and design
+
+**Status:** ⬜ Not started
+
+**Objective:** Assess how the UI and backend expose operational health and define the signals needed for trustworthy usage.
+
+**Actions to perform:**
+- Review UI components for health indicators (status chips, banners, spinners).
+- Capture screenshots of health/alert states under `docs/screenshots/S11/`.
+- Inspect available backend endpoints/log surfaces.
+- Propose specific observability hooks (heartbeat endpoint checks, queue depth indicators).
 
 **Deliverables:**
 - Screenshots under `docs/screenshots/S11/` covering current health signals.
@@ -623,8 +671,7 @@ find docs/screenshots/S10 -maxdepth 1 -type f | head -n 1
 
 **Verification test:**
 - **Name:** System health baseline captured
-
-**Commands:**
+- **Commands:**
 
 ```text
 test -d docs/screenshots/S11
@@ -632,72 +679,76 @@ test -f docs/notes/system_health.md
 find docs/screenshots/S11 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot directory exists and has at least one file
-  - System health notes exist
-
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
-
-**Notes:**
-- Tie proposed hooks to concrete endpoints or UI surfaces for later implementation and testing.
-
 ---
 
-## S12 — Insight verification and test harness planning
+## S11b — Implement system health signals
 
 **Status:** ⬜ Not started
 
-**Objective:** Define the test strategy and harnesses needed to verify artifact previews and health signals once implemented.
+**Objective:** Implement backend health endpoints and UI indicators for system status.
 
 **Actions to perform:**
-- Enumerate automated and manual tests required for the planned preview widgets and health indicators (e.g., component tests, API contract checks, e2e smoke tests).
-- Identify sample data or fixtures needed to exercise previews (SRT, enriched JSON, alignment outputs) and where to store them.
-- Outline commands to be used later (frontend unit tests, backend API tests, screenshot-based visual checks) and how to record evidence.
-- Capture a summary screenshot (e.g., checklist or doc snippet) under `docs/screenshots/S12/` showing the planned test matrix or harness layout.
-
-**Code/doc pointers:** `tests/` (existing Python tests), `ui/frontend/package.json` (test scripts), `ui/frontend/src` (components targeted for unit tests), `ui/backend/pipelines.py` and `ui/backend/config_service.py` (API contract surfaces), `docs/ENTRYPOINTS.md` (CLI references for fixtures).
+- Add a `/health` endpoint to the backend (checking disk space, GPU availability, queue size).
+- Add a persistent status bar or indicator in the UI header showing backend connectivity and health.
+- Display global alerts for system-wide issues (e.g., "Disk full").
 
 **Deliverables:**
-- Screenshots under `docs/screenshots/S12/` illustrating the planned test matrix or harness notes.
-- `docs/notes/insight_verification_plan.md` describing test coverage, fixtures, and tooling to be used in later steps.
+- Updated backend API and UI header.
+- Screenshots under `docs/screenshots/S11b/` showing health indicators.
 
 **Verification test:**
-- **Name:** Insight verification plan documented
-
-**Commands:**
+- **Name:** System health signals verified
+- **Commands:**
 
 ```text
-test -d docs/screenshots/S12
-test -f docs/notes/insight_verification_plan.md
-find docs/screenshots/S12 -maxdepth 1 -type f | head -n 1
+test -d docs/screenshots/S11b
+find docs/screenshots/S11b -maxdepth 1 -type f | head -n 1
 ```
-
-**Expected results:**
-  - Screenshot directory exists and contains at least one file
-  - Insight verification plan notes exist
-
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot file is present.
-
-**Notes:**
-- Explicitly call out which tests are required versus optional, and how results will be captured for future steps.
 
 ---
 
-## S13 — Guided job templates and presets
+## S12 — Insight verification infrastructure
 
 **Status:** ⬜ Not started
 
-**Objective:** Define a template-driven flow that lets users pick common scenarios (e.g., short clip inference, long-form training refresh, alignment QA) and auto-populates safe defaults, with the ability to save/load custom presets.
+**Objective:** Implement the test harness and fixtures needed to verify complex visualizations and health signals.
 
 **Actions to perform:**
-- Review training and inference forms to identify fields suitable for templating (file pickers, diarization toggles, scoring overrides, reflow options) and map them to preset values.
-- Draft UX for selecting a template at form entry (dropdown or wizard landing) and for saving/updating user presets; capture mockups under `docs/screenshots/S13/`.
-- Specify validation and guardrails for templates (e.g., warn when presets reference missing paths or incompatible flags) and how to surface them inline.
-- Outline how templates will be persisted (local storage vs. backend) and synchronized across sessions, noting any security constraints.
+- Create reusable Playwright fixtures for generating mock job states (training, inference, failed).
+- Create mock data files for alignment visualizations (SRT, JSON).
+- Set up a visual regression testing helper (if not already present) or standardized screenshot comparison workflow.
 
 **Deliverables:**
-- Screenshots or mockups under `docs/screenshots/S13/` showing the proposed template/preset selector and save/update flows.
-- `docs/notes/job_templates_design.md` describing template schemas, default bundles, validation rules, and persistence approach.
+- Test infrastructure code (`tests/fixtures/`, `ui/frontend/tests/`).
+- `docs/notes/insight_verification_infrastructure.md` documenting how to use the harness.
+
+**Verification test:**
+- **Name:** Test infrastructure verified
+- **Commands:**
+
+```text
+test -f docs/notes/insight_verification_infrastructure.md
+# Run a dummy test using the new fixtures
+# npm test -- --grep "visual regression"
+```
+
+---
+
+## S13 — Guided job templates design
+
+**Status:** ⬜ Not started
+
+**Objective:** Define a template-driven flow that lets users pick common scenarios and auto-populates safe defaults.
+
+**Actions to perform:**
+- Review training and inference forms to identify fields suitable for templating.
+- Draft UX for selecting a template at form entry and for saving/updating user presets.
+- Capture mockups under `docs/screenshots/S13/`.
+- Specify validation and guardrails for templates.
+
+**Deliverables:**
+- Screenshots or mockups under `docs/screenshots/S13/`.
+- `docs/notes/job_templates_design.md` describing template schemas and flows.
 
 **Verification test:**
 - **Name:** Job templates design documented
@@ -709,38 +760,53 @@ test -f docs/notes/job_templates_design.md
 find docs/screenshots/S13 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot/mockup directory exists and contains at least one file
-  - Job templates design notes exist
-
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
-
-**Notes:**
-- Include copy/wording guidance for presets so non-experts understand when to choose each template and how to revert to defaults.
-
 ---
 
-## S14 — Data quality dashboard and cue diagnostics
+## S13b — Implement job templates
 
 **Status:** ⬜ Not started
 
-**Objective:** Plan a data quality view that surfaces interpretable metrics from training and inference artifacts (e.g., diarization consistency, pause distributions, alignment gaps, cue length outliers) to help non-experts judge readiness and spot issues quickly.
+**Objective:** Implement the job template system, allowing users to save and load job configurations.
 
 **Actions to perform:**
-- Catalog available metrics/features in emitted artifacts (e.g., pause_ms, speaker_change flags, alignment gap markers, structural hints) and decide which to visualize for quality assessment.
-- Design dashboard panels (charts/tables) for per-job summaries and per-cue drilldowns; capture mockups under `docs/screenshots/S14/`.
-- Define thresholds and highlighting rules for common problems (overlong cues, dense speaker changes, large alignment gaps) and how to present remediation tips inline.
-- Outline data retrieval strategy (which endpoints/artifact files) and performance considerations for large jobs.
-
-**Code/doc pointers:** `build_training_pair_standalone.py` (pause_ms, speaker_change features), `isce/scorer.py` (structural heuristics), `ui/backend/pipelines.py` (artifact delivery), `ui/frontend/src/components/JobBoard.tsx` and planned dashboard components (data consumption), `docs/beam_search_walkthrough.md` (scoring context), `README.md` (artifact descriptions).
+- Create a `TemplateManager` component or service in the frontend.
+- Allow users to "Save as Template" from a filled form.
+- Add a "Load Template" selector to Training and Inference forms.
+- Persist templates to local storage or backend.
 
 **Deliverables:**
-- Screenshots or mockups under `docs/screenshots/S14/` showing the proposed data quality dashboard and cue diagnostics views.
-- `docs/notes/data_quality_dashboard.md` detailing metrics, thresholds, visualization types, and data loading approach.
+- Updated forms with Template support.
+- Screenshots under `docs/screenshots/S13b/` showing template saving/loading.
+
+**Verification test:**
+- **Name:** Job templates verified
+- **Commands:**
+
+```text
+test -d docs/screenshots/S13b
+find docs/screenshots/S13b -maxdepth 1 -type f | head -n 1
+```
+
+---
+
+## S14 — Data quality dashboard design
+
+**Status:** ⬜ Not started
+
+**Objective:** Plan a data quality view that surfaces interpretable metrics from training and inference artifacts.
+
+**Actions to perform:**
+- Catalog available metrics/features (pause_ms, speaker_change).
+- Design dashboard panels for per-job summaries and per-cue drilldowns.
+- Define thresholds and highlighting rules for common problems.
+- Capture mockups under `docs/screenshots/S14/`.
+
+**Deliverables:**
+- Screenshots or mockups under `docs/screenshots/S14/`.
+- `docs/notes/data_quality_dashboard.md` detailing metrics and visualizations.
 
 **Verification test:**
 - **Name:** Data quality dashboard design recorded
-
 - **Commands:**
 
 ```text
@@ -749,38 +815,52 @@ test -f docs/notes/data_quality_dashboard.md
 find docs/screenshots/S14 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot/mockup directory exists and contains at least one file
-  - Data quality dashboard notes exist
-
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
-
-**Notes:**
-- Emphasize plain-language labels and legends so average users can interpret metrics without domain knowledge; include suggestions for tooltips and “what this means” text.
-
 ---
 
-## S15 — Embedded help center and onboarding tours
+## S14b — Implement data quality dashboard
 
 **Status:** ⬜ Not started
 
-**Objective:** Define an in-app help center with glossary, quickstart checklists, and guided tours that orient new users across training, inference, and monitoring views without leaving the UI.
+**Objective:** Implement the data quality dashboard to visualize job metrics.
 
 **Actions to perform:**
-- Identify the top questions/confusions from prior steps (training/inference inputs, alignment visuals, artifact previews) and draft concise answers/glossary entries.
-- Design entry points for help (e.g., persistent “Help” button, contextual “?” icons) and guided tour steps; capture mockups under `docs/screenshots/S15/`.
-- Map help content to existing docs (README, FRONTEND.md) and propose inline anchors or embedded markdown rendering.
-- Specify how tours will be triggered/dismissed, saved per user/session, and localized if needed.
-
-**Code/doc pointers:** `FRONTEND.md` and `README.md` (user-facing docs for inline linking), `ui/frontend/src/App.tsx` / `Navigation` components (insertion points for help/tours), `ui/frontend/src/components` (modal/overlay primitives if present), `ui/frontend/src/hooks` (state management hooks, if available) for storing tour state.
+- Create `DataQualityDashboard` component.
+- Implement charts/tables for key metrics (e.g., pause distribution, cue length).
+- Integrate into Job Details view.
 
 **Deliverables:**
-- Screenshots or mockups under `docs/screenshots/S15/` showing the help center, glossary, and guided tour overlays.
-- `docs/notes/help_center_plan.md` describing content structure, triggering logic, tour steps, and documentation links.
+- `DataQualityDashboard` component.
+- Screenshots under `docs/screenshots/S14b/` showing the dashboard.
+
+**Verification test:**
+- **Name:** Data quality dashboard verified
+- **Commands:**
+
+```text
+test -d docs/screenshots/S14b
+find docs/screenshots/S14b -maxdepth 1 -type f | head -n 1
+```
+
+---
+
+## S15 — Embedded help center design
+
+**Status:** ⬜ Not started
+
+**Objective:** Define an in-app help center with glossary, quickstart checklists, and guided tours.
+
+**Actions to perform:**
+- Identify top questions/confusions.
+- Design entry points for help and guided tour steps.
+- Capture mockups under `docs/screenshots/S15/`.
+- Map help content to existing docs.
+
+**Deliverables:**
+- Screenshots or mockups under `docs/screenshots/S15/`.
+- `docs/notes/help_center_plan.md` describing content and structure.
 
 **Verification test:**
 - **Name:** Help center plan documented
-
 - **Commands:**
 
 ```text
@@ -789,11 +869,28 @@ test -f docs/notes/help_center_plan.md
 find docs/screenshots/S15 -maxdepth 1 -type f | head -n 1
 ```
 
-**Expected results:**
-  - Screenshot/mockup directory exists and contains at least one file
-  - Help center plan notes exist
+---
 
-**Pass criteria:** All commands exit with code 0 AND at least one screenshot/mockup file is present.
+## S15b — Implement help center
 
-**Notes:**
-- Include accessibility considerations (keyboard navigation, ARIA labels) for all help/tour entry points and overlays.
+**Status:** ⬜ Not started
+
+**Objective:** Implement the embedded help center and onboarding tours.
+
+**Actions to perform:**
+- Create `HelpCenter` component (modal or sidebar).
+- Implement "Tour" feature (using a library or custom).
+- Populate glossary and links from `README.md` and `FRONTEND.md`.
+
+**Deliverables:**
+- `HelpCenter` and Tour components.
+- Screenshots under `docs/screenshots/S15b/` showing the help UI.
+
+**Verification test:**
+- **Name:** Help center verified
+- **Commands:**
+
+```text
+test -d docs/screenshots/S15b
+find docs/screenshots/S15b -maxdepth 1 -type f | head -n 1
+```
