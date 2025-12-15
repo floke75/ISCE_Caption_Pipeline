@@ -236,17 +236,17 @@ find docs/screenshots/S02 -maxdepth 1 -type f | head -n 1
 
 **Status:** 🔄 In progress
 
-**Objective:** Establish a robust reliability baseline by installing and configuring standard tooling (`eslint` and `vitest`) instead of using placeholders.
+**Objective:** Establish a robust reliability baseline by installing standard tooling (`eslint`, `vitest`) and **fixing all existing lint errors** to ensure a clean slate.
 
 **Actions to perform:**
-- Install `eslint` and relevant React/TypeScript plugins.
-- Configure `eslint` (standard Vite-compatible rules).
-- Install `vitest` and `jsdom` for unit testing.
-- Configure `vitest` (integration with `vite.config.ts` or separate config).
-- Update `package.json` with real `lint` and `test` scripts.
-- Add a smoke test (e.g., `App.test.tsx`) to verify the test runner.
-- Verify `npm run lint` and `npm test` execute correctly.
-- Verify `npm run build` still passes.
+- Install `eslint` and `vitest` (already done).
+- Run `npm run lint` to confirm error list.
+- Fix `no-unused-vars` and `no-explicit-any` issues across components.
+- Fix `react-hooks/set-state-in-effect` and `exhaustive-deps` issues in `ConfigPanel`, `OverrideEditor`, and `JobBoard`.
+- Fix `react-hooks/immutability` / declaration hoisting in `useEventStream.ts`.
+- Verify `npm run lint` passes with 0 warnings/errors.
+- Verify `npm test` and `npm run build` still pass.
+- Update `docs/notes/frontend_reliability.md` to reflect a clean baseline.
 
 **Code/doc pointers:** `ui/frontend/package.json` (scripts), `ui/frontend/package-lock.json` (locked deps), `FRONTEND.md` (expected commands), `scripts/install.py` (npm bootstrap step).
 

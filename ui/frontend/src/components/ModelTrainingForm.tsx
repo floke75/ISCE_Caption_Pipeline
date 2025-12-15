@@ -53,7 +53,7 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
       toast.success('Model training job queued');
       onJobCreated();
     },
-    onError: (error: any) => {
+    onError: (error: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       toast.error(error?.response?.data?.detail ?? 'Failed to queue model training job');
     },
   });
