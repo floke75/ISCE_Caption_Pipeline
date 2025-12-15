@@ -101,6 +101,8 @@ export function InferenceForm({ onJobCreated }: Props) {
     mutation.mutate();
   };
 
+  const formInvalid = !mediaValid || !transcriptValid || !outputDirValid || !configPathValid || overrideInvalid;
+
   const handlePresetChange = (newPreset: Preset) => {
     setPreset(newPreset);
     setEdits(prev => {
@@ -247,7 +249,12 @@ export function InferenceForm({ onJobCreated }: Props) {
          onChange={handleOverrideChange}
       />
 
-      <button type="submit" className="primary" disabled={mutation.isPending}>
+      <button
+        type="submit"
+        className="primary"
+        disabled={mutation.isPending || formInvalid}
+        title={formInvalid ? 'Please resolve validation errors' : 'Launch inference run'}
+      >
         {mutation.isPending ? 'Submitting…' : 'Launch inference run'}
       </button>
     </form>
