@@ -209,8 +209,8 @@ export function InferenceForm({ onJobCreated }: Props) {
         />
       </div>
 
-      <div className="form-card" style={{marginTop: '1rem', background: 'rgba(15, 23, 42, 0.3)'}}>
-         <h3 className="section-title" style={{fontSize: '1rem'}}>Quality Settings</h3>
+      <div className="form-card quality-settings">
+         <h3 className="section-title">Quality Settings</h3>
          <div className="form-grid">
             <label className="field">
                <span>Preset</span>

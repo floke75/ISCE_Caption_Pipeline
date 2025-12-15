@@ -489,24 +489,15 @@ export function JobBoard() {
   return (
     <div className="job-board">
       <header>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+        <div className="job-header-content">
           <h2>Job monitor</h2>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.85rem' }}>{orderedJobs.length} job(s)</p>
+          <p className="job-count">{orderedJobs.length} job(s)</p>
         </div>
         <div className="job-filters">
            <select
              value={statusFilter}
              onChange={(e) => setStatusFilter(e.target.value as JobStatus | 'all')}
              className="status-select"
-             style={{
-               background: 'rgba(15, 23, 42, 0.5)',
-               border: '1px solid rgba(148, 163, 184, 0.2)',
-               color: '#e2e8f0',
-               padding: '0.3rem',
-               borderRadius: '6px',
-               fontSize: '0.8rem',
-               cursor: 'pointer'
-             }}
             >
              <option value="all">All</option>
              <option value="running">Running</option>

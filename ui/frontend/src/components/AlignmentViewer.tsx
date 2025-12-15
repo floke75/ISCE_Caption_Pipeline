@@ -182,8 +182,8 @@ export function AlignmentViewer() {
             Comparing <strong>Edited Subtitles</strong> (Left) vs. <strong>Raw ASR</strong> (Right)
           </p>
         </div>
-        <div className="alignment-controls" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-           <label className="zoom-control" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#94a3b8' }}>
+        <div className="alignment-controls">
+           <label className="zoom-control">
               <span>Zoom</span>
               <input
                 type="range"
@@ -192,11 +192,10 @@ export function AlignmentViewer() {
                 step="10"
                 value={zoom}
                 onChange={(e) => setZoom(Number(e.target.value))}
-                style={{ width: '120px' }}
               />
-              <span style={{ minWidth: '3ch' }}>{zoom}</span>
+              <span className="zoom-value">{zoom}</span>
            </label>
-           <button type="button" className="action-button" onClick={() => navigate(-1)} style={{ fontSize: '0.8rem', padding: '0.3rem 0.8rem' }}>
+           <button type="button" className="action-button small" onClick={() => navigate(-1)}>
              Exit
            </button>
         </div>
