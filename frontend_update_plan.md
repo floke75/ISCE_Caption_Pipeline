@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 11/26 passed, 0 failed, 0 in progress
+**Step status summary:** 15/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -73,14 +73,14 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S04 — Training flow input clarity and validation](#s04-training-flow-input-clarity-and-validation) — ✅ Passed
 - [S05 — Inference flow guidance and presets](#s05-inference-flow-guidance-and-presets) — ✅ Passed
 - [S05b — Implement inference flow improvements](#s05b-implement-inference-flow-improvements) — ✅ Passed
-- [S06 — Submission feedback analysis and design](#s06-submission-feedback-analysis-and-design) — ✅ Not started
-- [S06b — Implement submission feedback improvements](#s06b-implement-submission-feedback-improvements) — ✅ Not started
-- [S07 — Job monitoring analysis and design](#s07-job-monitoring-analysis-and-design) — ✅ Not started
-- [S07b — Implement job monitoring improvements](#s07b-implement-job-monitoring-improvements) — ✅ Not started
-- [S08 — Artifact visibility analysis and design](#s08-artifact-visibility-analysis-and-design) — ✅ Not started
-- [S08b — Implement artifact visibility improvements](#s08b-implement-artifact-visibility-improvements) — ✅ Not started
-- [S09 — Training alignment visualization design](#s09-training-alignment-visualization-design) — ✅ Not started
-- [S09b — Implement training alignment visualization](#s09b-implement-training-alignment-visualization) — ✅ Not started
+- [S06 — Submission feedback analysis and design](#s06-submission-feedback-analysis-and-design) — ✅ Passed
+- [S06b — Implement submission feedback improvements](#s06b-implement-submission-feedback-improvements) — ✅ Passed
+- [S07 — Job monitoring analysis and design](#s07-job-monitoring-analysis-and-design) — ✅ Passed
+- [S07b — Implement job monitoring improvements](#s07b-implement-job-monitoring-improvements) — ✅ Passed
+- [S08 — Artifact visibility analysis and design](#s08-artifact-visibility-analysis-and-design) — ✅ Passed
+- [S08b — Implement artifact visibility improvements](#s08b-implement-artifact-visibility-improvements) — ✅ Passed
+- [S09 — Training alignment visualization design](#s09-training-alignment-visualization-design) — ✅ Passed
+- [S09b — Implement training alignment visualization](#s09b-implement-training-alignment-visualization) — ✅ Passed
 - [S10 — Inference alignment visualization design](#s10-inference-alignment-visualization-design) — ⬜ Not started
 - [S10b — Implement inference alignment visualization](#s10b-implement-inference-alignment-visualization) — ⬜ Not started
 - [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ⬜ Not started
@@ -515,7 +515,7 @@ find docs/screenshots/S07b -maxdepth 1 -type f | head -n 1
 
 ## S08 — Artifact visibility analysis and design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Audit how artifacts (SRT, enriched JSON, logs, waveform cues) are exposed and previewed in the UI, and identify quick wins for visual validation.
 
@@ -539,11 +539,16 @@ test -f docs/notes/artifact_visibility.md
 find docs/screenshots/S08 -maxdepth 1 -type f | head -n 1
 ```
 
+**Notes:**
+- Documented the existing artifact surface gaps and proposed `/files/download` + `/files/content` endpoints in `docs/notes/artifact_visibility.md`.
+- Captured the baseline Job Details artifact presentation in `docs/screenshots/S08/baseline_job_details.png`.
+- Verification checklist satisfied using the commands above.
+
 ---
 
 ## S08b — Implement artifact visibility improvements
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement links and basic previews for key artifacts (SRT, logs) directly in the job details view.
 
@@ -565,11 +570,16 @@ test -d docs/screenshots/S08b
 find docs/screenshots/S08b -maxdepth 1 -type f | head -n 1
 ```
 
+**Notes:**
+- Added Artifact Viewer route and linkified artifact paths in the Job Board; backend `/files/content` and `/files/download` endpoints enable previews and downloads.
+- Screenshots captured in `docs/screenshots/S08b/` (`artifact_viewer.png`, `job_details_with_link.png`, and error coverage).
+- Verified presence of screenshots with the listed commands (dev session captured in `frontend_s08b.log`).
+
 ---
 
 ## S09 — Training alignment visualization design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Define a synchronized, side-by-side visualization that compares the human-edited SRT cues to WhisperX ASR word-level timestamps aligned via Needleman–Wunsch during training.
 
@@ -594,11 +604,16 @@ test -f docs/notes/training_alignment_design.md
 find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
 ```
 
+**Notes:**
+- Defined the teleprompter-style two-column layout and interaction model in `docs/notes/training_alignment_design.md` (revised v2).
+- Captured mockups and error states in `docs/screenshots/S09/`.
+- Verified deliverables with the checklist commands above.
+
 ---
 
 ## S09b — Implement training alignment visualization
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement the training alignment visualization, rendering synchronized views of SRT cues and ASR words.
 
@@ -620,6 +635,11 @@ find docs/screenshots/S09 -maxdepth 1 -type f | head -n 1
 test -d docs/screenshots/S09b
 find docs/screenshots/S09b -maxdepth 1 -type f | head -n 1
 ```
+
+**Notes:**
+- Implemented the teleprompter-style `AlignmentViewer` with timestamp-based positioning for cues and ASR words, linked from the Job Board.
+- Recorded the implementation summary in `docs/notes/alignment_viewer_implementation.md` and captured the live view in `docs/screenshots/S09b/alignment_viewer_implementation.png`.
+- Verification checklist satisfied using the commands above.
 
 ---
 

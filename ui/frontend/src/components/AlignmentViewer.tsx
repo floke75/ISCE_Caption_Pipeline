@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useMemo, useState, useRef } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import client from '../api/client';
 import '../styles/alignment-viewer.css';
@@ -84,6 +84,7 @@ function groupTokensByCue(tokens: Token[]): CueGroup[] {
 
 export function AlignmentViewer() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const trainPath = searchParams.get('train');
   const asrPath = searchParams.get('asr');
 
@@ -112,6 +113,27 @@ export function AlignmentViewer() {
     return Array.from({ length: count + 1 }, (_, i) => i);
   }, [maxTime]);
 
+  if (!trainPath || !asrPath) {
+    return (
+      <div className="alignment-error">
+        <h3>Alignment artifacts missing</h3>
+        <p>Provide both <code>train</code> and <code>asr</code> query params to render the comparison.</p>
+        <ul>
+          <li>Use the <strong>Visualise Alignment</strong> button in the Job Board after a training-pair job finishes.</li>
+          <li>Or open with explicit URLs: <code>/jobs/alignment?train=...&asr=...</code></li>
+        </ul>
+        <div className="alignment-actions">
+          <button type="button" className="action-button" onClick={() => navigate(-1)}>
+            ← Back
+          </button>
+          <Link to="/" className="action-button primary" style={{ textDecoration: 'none' }}>
+            Go to dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (trainLoading || asrLoading) {
     return (
       <div className="alignment-loading">
@@ -127,6 +149,26 @@ export function AlignmentViewer() {
         <h3>Error loading artifacts</h3>
         <p>Please ensure both the training JSON and ASR JSON are available.</p>
         <pre>{JSON.stringify(trainError || asrError, null, 2)}</pre>
+      </div>
+    );
+  }
+
+  if (!cueGroups.length || !(asrData?.words?.length)) {
+    return (
+      <div className="alignment-error">
+        <h3>Artifacts loaded but empty</h3>
+        <p>
+          The provided files do not contain any cues or ASR words to visualise. Confirm you selected the <code>.train.words.json</code>
+          {' '}and matching <code>.asr.visual.words.diar.json</code> outputs from the job workspace.
+        </p>
+        <div className="alignment-actions">
+          <button type="button" className="action-button" onClick={() => navigate(-1)}>
+            ← Back
+          </button>
+          <Link to="/" className="action-button primary" style={{ textDecoration: 'none' }}>
+            Go to dashboard
+          </Link>
+        </div>
       </div>
     );
   }
