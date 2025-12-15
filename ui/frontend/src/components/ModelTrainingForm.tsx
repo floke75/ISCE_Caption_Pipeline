@@ -71,6 +71,8 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
     mutation.mutate();
   };
 
+  const formInvalid = !corpusValid || overrideInvalid;
+
   const handleOverrideChange = useCallback((patches: OverridePatches, hasErrors: boolean) => {
     setOverridePatch(patches);
     setOverrideInvalid(hasErrors);
@@ -99,7 +101,9 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
             min={1}
             value={iterations}
             onChange={(event) => setIterations(event.target.value ? Number(event.target.value) : '')}
+            placeholder="Default: 10"
           />
+          <span className="field-help">Number of reweighting rounds (defaults to 10 if empty)</span>
         </label>
         <label className="field">
           <span>Error boost factor</span>
@@ -108,7 +112,9 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
             step="0.1"
             value={errorBoost}
             onChange={(event) => setErrorBoost(event.target.value ? Number(event.target.value) : '')}
+            placeholder="Default: 1.0"
           />
+          <span className="field-help">Multiplier for error penalties (defaults to 1.0)</span>
         </label>
       </div>
       <label className="field">
@@ -116,7 +122,12 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
         <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" />
       </label>
       <OverrideEditor onChange={handleOverrideChange} />
-      <button type="submit" className="primary" disabled={mutation.isPending}>
+      <button
+        type="submit"
+        className="primary"
+        disabled={mutation.isPending || formInvalid}
+        title={formInvalid ? 'Provide a valid corpus directory' : 'Launch run'}
+      >
         {mutation.isPending ? 'Submitting…' : 'Launch training run'}
       </button>
     </form>

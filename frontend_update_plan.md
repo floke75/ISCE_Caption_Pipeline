@@ -280,29 +280,35 @@ cd ui/frontend && npm test -- --runInBand || npm run test:unit
 
 **Status:** 🔄 In progress
 
-**Objective:** Evaluate end-to-end usability of the training flow specifically, focusing on clarity of required inputs, validation feedback, and inline guidance for non-experts.
+**Objective:** Improve usability of the training flow by implementing clearer validation feedback, specific error messages, and better inline guidance.
 
 **Actions to perform:**
-- Using the running frontend (from S01), walk through submitting a representative training job with sample inputs (real or mock paths as allowed).
-- Capture screenshots of each critical step in the training flow (file selection, parameter tuning, submission confirmation, and immediate post-submit state). Save under `docs/screenshots/S04/` with descriptive names.
-- Note friction points: unclear placeholders, missing validation, confusing error messages, or non-intuitive parameter labels for training inputs.
-- Propose concrete UX improvements for training (tooltips, helper text, presets) in the notes.
+- Modify `TrainingPairForm.tsx`:
+  - Disable submit button when paths are invalid.
+  - Improve error toast to specify which field is missing/invalid.
+  - Add specific placeholder/helper text.
+- Modify `ModelTrainingForm.tsx`:
+  - Disable submit button when corpus is invalid.
+  - Add helper text/tooltips for "Iterations" and "Error boost factor".
+- Update `scripts/verify_s04.py` to verify the "Disabled" state of the button and capture new screenshots.
+- Execute verification script.
+- Update `docs/notes/training_flow.md` with implementation details.
 
 **Code/doc pointers:** `ui/frontend/src/components/TrainingPairForm.tsx` and `ModelTrainingForm.tsx` (training UI), `ui/frontend/src/components/FilePathPicker.tsx` (path validation UX), `ui/backend/pipelines.py` (training submission API), `ui/backend/api/routes/files.py` (allowlisted paths), `FRONTEND.md` (training instructions).
 
 **Deliverables:**
-- Screenshots under `docs/screenshots/S04/` covering the training interaction flow.
-- `docs/notes/training_flow.md` summarizing observations and recommended UX adjustments for training, including any job IDs or
-  mock submissions used during the walkthrough.
+- Improved component code.
+- Updated screenshots under `docs/screenshots/S04/`.
+- `docs/notes/training_flow.md` updated with implementation details.
 
 **Verification test:**
-- **Name:** Training flow documented
+- **Name:** Training flow improvements verified
 - **Commands:**
 
 ```text
 test -d docs/screenshots/S04
 test -f docs/notes/training_flow.md
-find docs/screenshots/S04 -maxdepth 1 -type f | head -n 1
+grep "Implemented" docs/notes/training_flow.md
 ```
 - **Expected results:**
   - Screenshot directory exists and contains at least one file

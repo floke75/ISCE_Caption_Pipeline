@@ -32,14 +32,13 @@
   - No "Success" indication on the field itself (green checkmark) other than text "Path verified".
   - No info tooltips explaining *what* a "Training corpus" is or expected structure.
 
-## Proposed Improvements
-1.  **Disable Submit Button:** explicit disable state when form is invalid, with a tooltip explaining why.
-2.  **Field-Level Error Highlighting:** Add a red border to the input itself, not just the status text below.
-3.  **Presets:** Add a "Load Example" button to pre-fill paths for learning.
-4.  **Inline Help:** Add `(?)` icons with tooltips for "Error boost factor" and "Iterations".
+## Implemented Improvements
+1.  **Disable Submit Button:** The submit button is now explicitly disabled until all required fields (paths and overrides) are valid. A `title` tooltip explains the reason (e.g., "Please provide valid paths to continue").
+2.  **Specific Error Toasts:** Updated `handleSubmit` to check validity before mutation and show specific error messages (e.g., "Invalid media file path selected") instead of a generic catch-all.
+3.  **Inline Help:** Added explicit help text for `Iterations` (default 10) and `Error boost factor` (default 1.0) in the Model Training form to clarify expected values.
+4.  **Placeholders:** Added default value placeholders to numeric inputs.
 
-## Screenshots
-- `docs/screenshots/S04/training_pair_initial.png` - Empty form.
-- `docs/screenshots/S04/training_pair_validation_error.png` - Toast error on empty submit.
-- `docs/screenshots/S04/training_pair_invalid_paths.png` - Inline validation errors for bad paths.
-- `docs/screenshots/S04/model_training_initial.png` - Model training form.
+## Screenshots (Improved State)
+- `docs/screenshots/S04/training_pair_improved_initial.png` - Training form with disabled button.
+- `docs/screenshots/S04/training_pair_improved_invalid.png` - Validation errors blocking submission.
+- `docs/screenshots/S04/model_training_improved.png` - Model training form with new help text and disabled button.
