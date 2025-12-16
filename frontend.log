@@ -1,29 +1,22 @@
 
 > isce-ui@0.1.0 dev
-> vite
+> vite --port 5173
 
 
-  VITE v5.4.21  ready in 336 ms
+  VITE v5.4.21  ready in 339 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: http://192.168.0.2:5173/
-1:26:33 PM [vite] http proxy error: /api/files/roots
+10:58:27 PM [vite] http proxy error: /api/files/roots
 AggregateError [ECONNREFUSED]:
     at internalConnectMultiple (node:net:1134:18)
     at afterConnectMultiple (node:net:1715:7)
-1:26:33 PM [vite] http proxy error: /api/config/pipeline
+10:58:27 PM [vite] http proxy error: /api/config/segmentation
 AggregateError [ECONNREFUSED]:
     at internalConnectMultiple (node:net:1134:18)
     at afterConnectMultiple (node:net:1715:7)
-1:26:33 PM [vite] http proxy error: /api/config/segmentation
+10:58:27 PM [vite] http proxy error: /api/config/pipeline
 AggregateError [ECONNREFUSED]:
     at internalConnectMultiple (node:net:1134:18)
     at afterConnectMultiple (node:net:1715:7)
-1:26:33 PM [vite] http proxy error: /api/jobs/smoke-test-job/logs?tail=12000
-AggregateError [ECONNREFUSED]:
-    at internalConnectMultiple (node:net:1134:18)
-    at afterConnectMultiple (node:net:1715:7)
-1:26:33 PM [vite] http proxy error: /api/jobs/smoke-test-job/logs/stream
-AggregateError [ECONNREFUSED]:
-    at internalConnectMultiple (node:net:1134:18)
-    at afterConnectMultiple (node:net:1715:7)
+10:58:41 PM [vite] hmr update /src/components/InferenceForm.tsx
