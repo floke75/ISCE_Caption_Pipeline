@@ -815,7 +815,7 @@ find docs/screenshots/S13 -maxdepth 1 -type f | head -n 1
 
 ## S13b — Implement job templates
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement the job template system, allowing users to save and load job configurations.
 

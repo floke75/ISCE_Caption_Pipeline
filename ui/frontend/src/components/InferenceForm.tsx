@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import client from '../api/client';
 import { OverrideEditor, type OverridePatches, type OverrideEdits } from './OverrideEditor';
 import { FilePathPicker } from './FilePathPicker';
+import { TemplateSelector } from './TemplateSelector';
+import type { TemplateData } from '../services/templateService';
 import '../styles/forms.css';
 
 type Props = {
@@ -163,10 +165,46 @@ export function InferenceForm({ onJobCreated }: Props) {
     setOverrideInvalid(hasErrors);
   }, []);
 
+  const getDataToSave = useCallback((): TemplateData => {
+    return {
+      notes,
+      outputDir,
+      modelConfigPath,
+      preset,
+      beamWidth,
+      diarization,
+      overrides: {
+        pipeline: edits.pipeline,
+        segmentation: edits.segmentation
+      }
+    };
+  }, [notes, outputDir, modelConfigPath, preset, beamWidth, diarization, edits]);
+
+  const handleLoadTemplate = useCallback((data: TemplateData) => {
+    if (data.notes !== undefined) setNotes(data.notes);
+    if (data.outputDir !== undefined) setOutputDir(data.outputDir);
+    if (data.modelConfigPath !== undefined) setModelConfigPath(data.modelConfigPath);
+    if (data.preset !== undefined) setPreset(data.preset as Preset);
+    if (data.beamWidth !== undefined) setBeamWidth(data.beamWidth);
+    if (data.diarization !== undefined) setDiarization(data.diarization);
+    if (data.overrides) {
+       setEdits({
+          pipeline: (data.overrides.pipeline as Record<string, unknown>) || {},
+          segmentation: (data.overrides.segmentation as Record<string, unknown>) || {}
+       });
+    }
+  }, []);
+
   return (
-    <form onSubmit={handleSubmit} className="form-card">
-      <div>
-        <h2 className="section-title">Run inference</h2>
+    <div className="form-card-wrapper">
+      <TemplateSelector
+        type="inference"
+        onLoad={handleLoadTemplate}
+        getDataToSave={getDataToSave}
+      />
+      <form onSubmit={handleSubmit} className="form-card">
+        <div>
+          <h2 className="section-title">Run inference</h2>
         <p className="section-subtitle">Provide a media file and optional transcript to generate an SRT subtitle file.</p>
       </div>
       <div className="form-grid">
@@ -252,14 +290,15 @@ export function InferenceForm({ onJobCreated }: Props) {
          onChange={handleOverrideChange}
       />
 
-      <button
-        type="submit"
-        className="primary"
-        disabled={mutation.isPending || formInvalid}
-        title={formInvalid ? 'Please resolve validation errors' : 'Launch inference run'}
-      >
-        {mutation.isPending ? 'Submitting…' : 'Launch inference run'}
-      </button>
-    </form>
+        <button
+          type="submit"
+          className="primary"
+          disabled={mutation.isPending || formInvalid}
+          title={formInvalid ? 'Please resolve validation errors' : 'Launch inference run'}
+        >
+          {mutation.isPending ? 'Submitting…' : 'Launch inference run'}
+        </button>
+      </form>
+    </div>
   );
 }

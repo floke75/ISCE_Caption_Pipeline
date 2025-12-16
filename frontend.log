@@ -3,20 +3,178 @@
 > vite --port 5173
 
 
-  VITE v5.4.21  ready in 339 ms
+  VITE v5.4.21  ready in 1479 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: http://192.168.0.2:5173/
-10:58:27 PM [vite] http proxy error: /api/files/roots
+11:16:02 PM [vite] http proxy error: /api/files/roots
 AggregateError [ECONNREFUSED]:
     at internalConnectMultiple (node:net:1134:18)
     at afterConnectMultiple (node:net:1715:7)
-10:58:27 PM [vite] http proxy error: /api/config/segmentation
+11:16:02 PM [vite] http proxy error: /api/config/pipeline
 AggregateError [ECONNREFUSED]:
     at internalConnectMultiple (node:net:1134:18)
     at afterConnectMultiple (node:net:1715:7)
-10:58:27 PM [vite] http proxy error: /api/config/pipeline
+11:16:02 PM [vite] http proxy error: /api/config/segmentation
 AggregateError [ECONNREFUSED]:
     at internalConnectMultiple (node:net:1134:18)
     at afterConnectMultiple (node:net:1715:7)
-10:58:41 PM [vite] hmr update /src/components/InferenceForm.tsx
+11:16:19 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:16:19 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:16:19 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:17:09 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:17:09 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:17:09 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:17:35 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:17:35 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:17:35 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:17:59 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:17:59 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:18:00 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:18:26 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:18:26 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:18:26 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:00 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:00 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:00 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:01 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:01 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:01 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:02 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:02 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:02 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:04 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:04 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:04 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:19 PM [vite] hmr update /src/components/InferenceForm.tsx
+11:19:25 PM [vite] hmr update /src/components/TrainingPairForm.tsx
+11:19:30 PM [vite] hmr update /src/components/ModelTrainingForm.tsx
+11:19:39 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:39 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:39 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:40 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:40 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:19:40 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:20:23 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:20:23 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:20:23 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:20:23 PM [vite] http proxy error: /api/files/roots
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:20:23 PM [vite] http proxy error: /api/config/pipeline
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
+11:20:23 PM [vite] http proxy error: /api/config/segmentation
+AggregateError [ECONNREFUSED]:
+    at internalConnectMultiple (node:net:1134:18)
+    at afterConnectMultiple (node:net:1715:7)
