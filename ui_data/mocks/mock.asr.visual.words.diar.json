@@ -1,0 +1,130 @@
+{
+  "words": [
+    {
+      "w": "Hello",
+      "start": 1.0,
+      "end": 1.494,
+      "speaker": "SPEAKER_00",
+      "score": 0.8513490602943715
+    },
+    {
+      "w": "world",
+      "start": 1.623,
+      "end": 1.97,
+      "speaker": "SPEAKER_00",
+      "score": 0.9199904679083349
+    },
+    {
+      "w": "this",
+      "start": 2.045,
+      "end": 2.355,
+      "speaker": "SPEAKER_00",
+      "score": 0.9616118630171335
+    },
+    {
+      "w": "um",
+      "start": 2.455,
+      "end": 2.366,
+      "speaker": "SPEAKER_00",
+      "score": 0.4
+    },
+    {
+      "w": "is",
+      "start": 2.466,
+      "end": 2.87,
+      "speaker": "SPEAKER_00",
+      "score": 0.7117421684623496
+    },
+    {
+      "w": "a",
+      "start": 2.997,
+      "end": 3.386,
+      "speaker": "SPEAKER_00",
+      "score": 0.9328759133876277
+    },
+    {
+      "w": "test",
+      "start": 3.525,
+      "end": 3.857,
+      "speaker": "SPEAKER_00",
+      "score": 0.8727655520559697
+    },
+    {
+      "w": "We",
+      "start": 4.455,
+      "end": 4.854,
+      "speaker": "SPEAKER_00",
+      "score": 0.9721714590548067
+    },
+    {
+      "w": "are",
+      "start": 4.918,
+      "end": 5.223,
+      "speaker": "SPEAKER_00",
+      "score": 0.8106456408091492
+    },
+    {
+      "w": "verifying",
+      "start": 5.403,
+      "end": 5.82,
+      "speaker": "SPEAKER_00",
+      "score": 0.744012269550505
+    },
+    {
+      "w": "the",
+      "start": 5.989,
+      "end": 6.532,
+      "speaker": "SPEAKER_00",
+      "score": 0.8799941464427369
+    },
+    {
+      "w": "inference",
+      "start": 7.134,
+      "end": 7.676,
+      "speaker": "SPEAKER_00",
+      "score": 0.8683293499771306
+    },
+    {
+      "w": "alignment",
+      "start": 7.784,
+      "end": 8.373,
+      "speaker": "SPEAKER_00",
+      "score": 0.7226821010171584
+    },
+    {
+      "w": "It",
+      "start": 9.035,
+      "end": 9.388,
+      "speaker": "SPEAKER_00",
+      "score": 0.7374594524486521
+    },
+    {
+      "w": "should",
+      "start": 9.574,
+      "end": 9.942,
+      "speaker": "SPEAKER_00",
+      "score": 0.9468050069961254
+    },
+    {
+      "w": "handle",
+      "start": 10.074,
+      "end": 10.503,
+      "speaker": "SPEAKER_00",
+      "score": 0.7778759944781456
+    },
+    {
+      "w": "newlines",
+      "start": 10.57,
+      "end": 10.924,
+      "speaker": "SPEAKER_00",
+      "score": 0.8175966506431849
+    },
+    {
+      "w": "correctly",
+      "start": 11.045,
+      "end": 11.373,
+      "speaker": "SPEAKER_00",
+      "score": 0.9072768652762818
+    }
+  ]
+}
