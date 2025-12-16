@@ -1,0 +1,9 @@
+{
+  "text": "Welcome to ISCE inference.",
+  "words": [
+    {"w": "Welcome", "start": 10.0, "end": 10.4, "speaker": "SPEAKER_01"},
+    {"w": "to", "start": 10.5, "end": 10.6, "speaker": "SPEAKER_01"},
+    {"w": "ISCE", "start": 10.7, "end": 11.2, "speaker": "SPEAKER_01"},
+    {"w": "inference.", "start": 11.3, "end": 12.0, "speaker": "SPEAKER_01"}
+  ]
+}
