@@ -28,3 +28,4 @@ httpx
 # compatible releases. If you encounter issues, pin the versions (e.g.
 # pandas==2.1.4). The Swedish SpaCy model is installed automatically by
 # `scripts/install.py`.
+psutil

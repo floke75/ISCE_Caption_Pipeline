@@ -245,13 +245,71 @@ class ModelTrainingRequest(BaseModel):
 
 
 @app.get("/api/health")
-def healthcheck() -> Dict[str, str]:
-    """Provides a simple health check endpoint.
+def healthcheck() -> Dict[str, Any]:
+    """Provides a detailed system health check.
 
     Returns:
-        A dictionary with a single key "status" set to "ok".
+        A dictionary containing status, system metrics (disk, memory, GPU),
+        and job queue statistics.
     """
-    return {"status": "ok"}
+    # Disk usage
+    try:
+        total, used, free = shutil.disk_usage(STORAGE_ROOT)
+        disk_stats = {
+            "free_bytes": free,
+            "total_bytes": total,
+            "percent_used": round((used / total) * 100, 1),
+        }
+    except Exception:
+        disk_stats = {"error": "Could not determine disk usage"}
+
+    # Memory usage
+    try:
+        import psutil
+
+        vm = psutil.virtual_memory()
+        mem_stats = {
+            "available_bytes": vm.available,
+            "total_bytes": vm.total,
+            "percent_used": vm.percent,
+        }
+    except ImportError:
+        mem_stats = {"error": "psutil not installed"}
+    except Exception:
+        mem_stats = {"error": "Could not determine memory usage"}
+
+    # GPU check
+    gpu_stats = {"available": False, "name": None, "device_count": 0}
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            gpu_stats = {
+                "available": True,
+                "name": torch.cuda.get_device_name(0),
+                "device_count": torch.cuda.device_count(),
+            }
+    except ImportError:
+        pass
+
+    # Queue stats
+    jobs = job_manager.list_jobs()
+    pending = sum(1 for j in jobs if j.status == "pending")
+    running = sum(1 for j in jobs if j.status == "running")
+
+    return {
+        "status": "ok",
+        "system": {
+            "disk": disk_stats,
+            "memory": mem_stats,
+            "gpu": gpu_stats,
+        },
+        "queue": {
+            "pending": pending,
+            "active": running,
+            "slots_total": max_workers,
+        },
+    }
 
 
 @app.get("/api/config/pipeline", response_model=ConfigSnapshot)
