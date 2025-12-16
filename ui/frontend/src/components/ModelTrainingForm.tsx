@@ -53,7 +53,7 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
       toast.success('Model training job queued');
       onJobCreated();
     },
-    onError: (error: any) => {
+    onError: (error: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
       toast.error(error?.response?.data?.detail ?? 'Failed to queue model training job');
     },
   });
@@ -70,6 +70,8 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
     }
     mutation.mutate();
   };
+
+  const formInvalid = !corpusValid || overrideInvalid;
 
   const handleOverrideChange = useCallback((patches: OverridePatches, hasErrors: boolean) => {
     setOverridePatch(patches);
@@ -99,7 +101,11 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
             min={1}
             value={iterations}
             onChange={(event) => setIterations(event.target.value ? Number(event.target.value) : '')}
+            placeholder="3"
           />
+          <span className="field-help">
+            Rounds of Expectation-Maximization reweighting to refine the model on hard examples.
+          </span>
         </label>
         <label className="field">
           <span>Error boost factor</span>
@@ -108,15 +114,24 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
             step="0.1"
             value={errorBoost}
             onChange={(event) => setErrorBoost(event.target.value ? Number(event.target.value) : '')}
+            placeholder="1.0"
           />
+          <span className="field-help">
+            Weight multiplier added to misclassified samples in each iteration (standard range 0.5–2.0).
+          </span>
         </label>
       </div>
       <label className="field">
         <span>Operator notes</span>
-        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" />
+        <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional metadata stored in the job history for reproducibility." />
       </label>
       <OverrideEditor onChange={handleOverrideChange} />
-      <button type="submit" className="primary" disabled={mutation.isPending}>
+      <button
+        type="submit"
+        className="primary"
+        disabled={mutation.isPending || formInvalid}
+        title={formInvalid ? 'Provide a valid corpus directory' : 'Launch run'}
+      >
         {mutation.isPending ? 'Submitting…' : 'Launch training run'}
       </button>
     </form>

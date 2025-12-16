@@ -75,6 +75,8 @@ export function useEventStream(url: string | null, options: UseEventStreamOption
     [],
   );
 
+  const connectRef = useRef<() => void>(() => {});
+
   const connect = useCallback(() => {
     shouldConnectRef.current = supported && Boolean(urlRef.current) && (optionsRef.current.enabled ?? true);
     if (!supported || !urlRef.current || !shouldConnectRef.current) {
@@ -127,11 +129,16 @@ export function useEventStream(url: string | null, options: UseEventStreamOption
       reconnectTimerRef.current = setTimeout(() => {
         if (shouldConnectRef.current) {
           setStatus('connecting');
-          connect();
+          // Use the ref to avoid circular dependency in dependency array
+          connectRef.current();
         }
       }, delay);
     };
   }, [cleanup, supported]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const disconnect = useCallback(() => {
     shouldConnectRef.current = false;
