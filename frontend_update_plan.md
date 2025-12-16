@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 17/26 passed, 0 failed, 0 in progress
+**Step status summary:** 18/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -85,7 +85,7 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S10b — Implement inference alignment visualization](#s10b-implement-inference-alignment-visualization) — ✅ Passed
 - [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ✅ Passed
 - [S11b — Implement system health signals](#s11b-implement-system-health-signals) — ✅ Passed
-- [S12 — Insight verification infrastructure](#s12-insight-verification-infrastructure) — ⬜ Not started
+- [S12 — Insight verification infrastructure](#s12-insight-verification-infrastructure) — ✅ Passed
 - [S13 — Guided job templates design](#s13-guided-job-templates-design) — ⬜ Not started
 - [S13b — Implement job templates](#s13b-implement-job-templates) — ⬜ Not started
 - [S14 — Data quality dashboard design](#s14-data-quality-dashboard-design) — ⬜ Not started
@@ -754,7 +754,7 @@ find docs/screenshots/S11b -maxdepth 1 -type f | head -n 1
 
 ## S12 — Insight verification infrastructure
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement the test harness and fixtures needed to verify complex visualizations and health signals.
 
@@ -764,7 +764,7 @@ find docs/screenshots/S11b -maxdepth 1 -type f | head -n 1
 - Set up a visual regression testing helper (if not already present) or standardized screenshot comparison workflow.
 
 **Deliverables:**
-- Test infrastructure code (`tests/fixtures/`, `ui/frontend/tests/`).
+- Test infrastructure code (`tests/fixtures/`, `tests/e2e/`).
 - `docs/notes/insight_verification_infrastructure.md` documenting how to use the harness.
 
 **Verification test:**
@@ -773,9 +773,15 @@ find docs/screenshots/S11b -maxdepth 1 -type f | head -n 1
 
 ```text
 test -f docs/notes/insight_verification_infrastructure.md
-# Run a dummy test using the new fixtures
-# npm test -- --grep "visual regression"
+pytest tests/e2e/test_infrastructure_smoke.py
 ```
+
+**Notes:**
+- Implemented Python Playwright infrastructure in `tests/e2e/` (consistent with repo).
+- Created mock artifacts: `mock_inference.enriched.json`, `mock_training.train.words.json`, `mock_alignment.asr.json`.
+- Implemented `mock_job_list`, `mock_job_artifacts`, `mock_health`, `visual_verifier` fixtures.
+- Verified with `tests/e2e/test_infrastructure_smoke.py` (passed).
+- Captured screenshot `docs/screenshots/verification/test_visual_infrastructure_smoke[chromium]/smoke_test_dashboard.png`.
 
 ---
 

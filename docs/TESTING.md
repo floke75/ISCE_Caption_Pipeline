@@ -46,3 +46,11 @@ python scripts/smoke_e2e.py \
 ```
 
 The script writes intermediate artifacts under `tests/_artifacts/_align` and `tests/_artifacts/_inference_input`, then emits an SRT to `tests/_artifacts/output/demo.srt`. It exits non-zero if any expected file is missing.
+
+## Audio processing without FFMPEG
+
+In environments where the `ffmpeg` binary is unavailable (e.g., restricted containers), `align_make.py` implements a native fallback using `torchaudio` and `soundfile`.
+
+- **Mechanism:** If `ffmpeg` fails or is not found, the script uses `torchaudio` to load the audio file, resample it to 16kHz mono, and save it as a temporary WAV file using `soundfile`. It also uses a native loader to pass the audio data directly to WhisperX, bypassing its internal `ffmpeg` calls.
+- **Verification:** Run `pytest tests/test_audio_fallback_integration.py` to verify this fallback behavior.
+- **Limitation:** This fallback supports audio formats handled by `soundfile`/`torchaudio` (WAV, FLAC, MP3). For complex video containers (MP4, MKV), it may fail if the underlying libraries cannot demux the stream without `ffmpeg`. In such cases, convert the input to WAV beforehand or use the `--mock-asr-json` mode.
