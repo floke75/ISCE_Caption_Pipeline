@@ -83,8 +83,8 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S09b — Implement training alignment visualization](#s09b-implement-training-alignment-visualization) — ✅ Passed
 - [S10 — Inference alignment visualization design](#s10-inference-alignment-visualization-design) — ✅ Passed
 - [S10b — Implement inference alignment visualization](#s10b-implement-inference-alignment-visualization) — ✅ Passed
-- [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ⬜ Not started
-- [S11b — Implement system health signals](#s11b-implement-system-health-signals) — ⬜ Not started
+- [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ✅ Passed
+- [S11b — Implement system health signals](#s11b-implement-system-health-signals) — ✅ Passed
 - [S12 — Insight verification infrastructure](#s12-insight-verification-infrastructure) — ⬜ Not started
 - [S13 — Guided job templates design](#s13-guided-job-templates-design) — ⬜ Not started
 - [S13b — Implement job templates](#s13b-implement-job-templates) — ⬜ Not started
