@@ -8,6 +8,7 @@ import { ConfigPanel } from './components/ConfigPanel';
 import { JobBoard } from './components/JobBoard';
 import { AlignmentViewer } from './components/AlignmentViewer';
 import { ArtifactViewer } from './components/ArtifactViewer';
+import { SystemStatus } from './components/SystemStatus';
 import './styles/app.css';
 
 const TABS = [
@@ -46,6 +47,7 @@ function Dashboard() {
           <p>Run inference, build training corpora, and tune models without touching YAML files.</p>
         </div>
         <div className="header-meta">
+          <SystemStatus />
           <span className="badge">Beta</span>
           <a href="https://github.com/floke75/ISCE_Caption_Pipeline" target="_blank" rel="noreferrer" className="link">
             Repository

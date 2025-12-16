@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 15/26 passed, 0 failed, 0 in progress
+**Step status summary:** 17/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -700,7 +700,7 @@ find docs/screenshots/S10b -maxdepth 1 -type f | head -n 1
 
 ## S11 — System health analysis and design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Assess how the UI and backend expose operational health and define the signals needed for trustworthy usage.
 
@@ -728,7 +728,7 @@ find docs/screenshots/S11 -maxdepth 1 -type f | head -n 1
 
 ## S11b — Implement system health signals
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement backend health endpoints and UI indicators for system status.
 
