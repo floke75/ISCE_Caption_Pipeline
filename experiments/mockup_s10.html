@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S10 Inference Alignment Mockup</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: #e0e0e0; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #2a2a2a; padding: 1rem; border-bottom: 1px solid #444; display: flex; justify-content: space-between; align-items: center; }
+        h1 { margin: 0; font-size: 1.2rem; }
+        .controls { display: flex; gap: 1rem; align-items: center; }
+        .toggle-group { background: #333; border-radius: 4px; padding: 2px; display: flex; }
+        .toggle-btn { padding: 4px 12px; border: none; background: transparent; color: #aaa; cursor: pointer; }
+        .toggle-btn.active { background: #555; color: white; border-radius: 2px; }
+        .viewer { display: flex; flex: 1; overflow-y: auto; position: relative; padding-top: 20px; }
+        .time-axis { width: 60px; border-right: 1px solid #444; position: relative; flex-shrink: 0; background: #222; }
+        .time-marker { position: absolute; width: 100%; text-align: right; padding-right: 5px; font-size: 0.8rem; color: #666; border-top: 1px solid #333; }
+        .column { flex: 1; position: relative; }
+        .left-col { border-right: 1px solid #444; }
+        .block { position: absolute; background: #2d2d2d; border: 1px solid #444; padding: 4px 8px; font-size: 0.9rem; width: 80%; right: 10px; border-radius: 4px; }
+        .word { position: absolute; background: #222; padding: 2px 4px; font-size: 0.8rem; color: #bbb; left: 10px; border-radius: 2px; }
+        .hint-icon { color: #facc15; font-weight: bold; margin-left: 4px; }
+    </style>
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Inference Alignment (Stage 2)</h1>
+            <small style="color: #888">Input Text vs ASR</small>
+        </div>
+        <div class="controls">
+            <div class="toggle-group">
+                <button class="toggle-btn active">Input Lines</button>
+                <button class="toggle-btn">Sentences</button>
+            </div>
+            <button style="background:none; border:1px solid #555; color: #ddd; padding: 4px 8px; border-radius: 4px;">Exit</button>
+        </div>
+    </header>
+    <div class="viewer">
+        <div class="time-axis">
+            <!-- Time markers every 1s (60px) -->
+            <div class="time-marker" style="top: 0px">0s</div>
+            <div class="time-marker" style="top: 60px">1s</div>
+            <div class="time-marker" style="top: 120px">2s</div>
+            <div class="time-marker" style="top: 180px">3s</div>
+            <div class="time-marker" style="top: 240px">4s</div>
+        </div>
+        <div class="column left-col">
+            <!-- Mock Input Lines (Enriched) -->
+            <div class="block" style="top: 10px; height: 40px;">
+                Here is the first line of input text
+            </div>
+            <div class="block" style="top: 60px; height: 50px;">
+                And this is the second line<span class="hint-icon">↵</span>
+            </div>
+            <div class="block" style="top: 120px; height: 30px;">
+                Third line starts here
+            </div>
+        </div>
+        <div class="column right-col">
+            <!-- Mock ASR Words -->
+            <div class="word" style="top: 10px; height: 20px;">Here</div>
+            <div class="word" style="top: 25px; height: 20px;">is</div>
+            <div class="word" style="top: 40px; height: 20px;">first</div>
+            <div class="word" style="top: 65px; height: 20px;">this</div>
+            <div class="word" style="top: 85px; height: 20px;">second</div>
+            <div class="word" style="top: 125px; height: 20px;">Third</div>
+        </div>
+    </div>
+</body>
+</html>

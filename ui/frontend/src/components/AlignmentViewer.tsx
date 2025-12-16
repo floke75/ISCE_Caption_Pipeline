@@ -10,9 +10,11 @@ interface Token {
   start: number;
   end: number;
   cue_id?: number;
+  is_llm_structural_break?: boolean;
+  is_sentence_final?: boolean;
 }
 
-interface TrainWordsJson {
+interface TokenListJson {
   tokens: Token[];
 }
 
@@ -21,6 +23,7 @@ interface AsrWord {
   start: number;
   end: number;
   speaker?: string;
+  score?: number;
 }
 
 interface AsrVisualWordsJson {
@@ -33,6 +36,7 @@ interface CueGroup {
   start: number;
   end: number;
   tokens: Token[];
+  isInference?: boolean;
 }
 
 const PIXELS_PER_SECOND = 60;
@@ -82,22 +86,71 @@ function groupTokensByCue(tokens: Token[]): CueGroup[] {
   return Array.from(groups.values()).sort((a, b) => a.id - b.id);
 }
 
+function groupTokensForInference(tokens: Token[], mode: 'lines' | 'sentences'): CueGroup[] {
+  const groups: CueGroup[] = [];
+  let currentGroup: Token[] = [];
+  let groupId = 1;
+
+  tokens.forEach((token, idx) => {
+    currentGroup.push(token);
+
+    let shouldBreak = false;
+    if (mode === 'lines') {
+      shouldBreak = !!token.is_llm_structural_break;
+    } else {
+      shouldBreak = !!token.is_sentence_final;
+    }
+
+    // Force break on last token if not already broken
+    if (idx === tokens.length - 1) shouldBreak = true;
+
+    if (shouldBreak) {
+        if (currentGroup.length > 0) {
+            const start = currentGroup[0].start;
+            const end = currentGroup[currentGroup.length - 1].end;
+            // Note: We don't reconstruct text here because we render tokens individually
+            // to show structural hints. But we populate 'text' for fallback.
+            const text = currentGroup.map(t => t.w).join(' ');
+
+            groups.push({
+                id: groupId++,
+                text,
+                start,
+                end,
+                tokens: [...currentGroup],
+                isInference: true
+            });
+            currentGroup = [];
+        }
+    }
+  });
+  return groups;
+}
+
 export function AlignmentViewer() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const trainPath = searchParams.get('train');
+  const inferencePath = searchParams.get('inference');
   const asrPath = searchParams.get('asr');
 
-  const { data: trainData, isLoading: trainLoading, error: trainError } = useFileContent<TrainWordsJson>(trainPath);
+  const mode = inferencePath ? 'inference' : 'training';
+  const leftPath = inferencePath || trainPath;
+
+  const { data: leftData, isLoading: leftLoading, error: leftError } = useFileContent<TokenListJson>(leftPath);
   const { data: asrData, isLoading: asrLoading, error: asrError } = useFileContent<AsrVisualWordsJson>(asrPath);
 
   const [zoom, setZoom] = useState(PIXELS_PER_SECOND);
+  const [groupingMode, setGroupingMode] = useState<'lines' | 'sentences'>('lines');
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const cueGroups = useMemo(() => {
-    if (!trainData?.tokens) return [];
-    return groupTokensByCue(trainData.tokens);
-  }, [trainData]);
+    if (!leftData?.tokens) return [];
+    if (mode === 'inference') {
+        return groupTokensForInference(leftData.tokens, groupingMode);
+    }
+    return groupTokensByCue(leftData.tokens);
+  }, [leftData, mode, groupingMode]);
 
   const maxTime = useMemo(() => {
     const maxCue = cueGroups.length ? cueGroups[cueGroups.length - 1].end : 0;
@@ -113,15 +166,11 @@ export function AlignmentViewer() {
     return Array.from({ length: count + 1 }, (_, i) => i);
   }, [maxTime]);
 
-  if (!trainPath || !asrPath) {
+  if (!leftPath || !asrPath) {
     return (
       <div className="alignment-error">
         <h3>Alignment artifacts missing</h3>
-        <p>Provide both <code>train</code> and <code>asr</code> query params to render the comparison.</p>
-        <ul>
-          <li>Use the <strong>Visualise Alignment</strong> button in the Job Board after a training-pair job finishes.</li>
-          <li>Or open with explicit URLs: <code>/jobs/alignment?train=...&asr=...</code></li>
-        </ul>
+        <p>Provide <code>train</code> (or <code>inference</code>) and <code>asr</code> query params.</p>
         <div className="alignment-actions">
           <button type="button" className="action-button" onClick={() => navigate(-1)}>
             ← Back
@@ -134,7 +183,7 @@ export function AlignmentViewer() {
     );
   }
 
-  if (trainLoading || asrLoading) {
+  if (leftLoading || asrLoading) {
     return (
       <div className="alignment-loading">
         <div className="spinner"></div>
@@ -143,24 +192,21 @@ export function AlignmentViewer() {
     );
   }
 
-  if (trainError || asrError) {
+  if (leftError || asrError) {
     return (
       <div className="alignment-error">
         <h3>Error loading artifacts</h3>
-        <p>Please ensure both the training JSON and ASR JSON are available.</p>
-        <pre>{JSON.stringify(trainError || asrError, null, 2)}</pre>
+        <p>Please ensure both the token JSON and ASR JSON are available.</p>
+        <pre>{JSON.stringify(leftError || asrError, null, 2)}</pre>
       </div>
     );
   }
 
-  if (!cueGroups.length || !(asrData?.words?.length)) {
+  if (!cueGroups.length && !asrData?.words?.length) {
     return (
       <div className="alignment-error">
         <h3>Artifacts loaded but empty</h3>
-        <p>
-          The provided files do not contain any cues or ASR words to visualise. Confirm you selected the <code>.train.words.json</code>
-          {' '}and matching <code>.asr.visual.words.diar.json</code> outputs from the job workspace.
-        </p>
+        <p>The provided files do not contain data to visualise.</p>
         <div className="alignment-actions">
           <button type="button" className="action-button" onClick={() => navigate(-1)}>
             ← Back
@@ -177,12 +223,29 @@ export function AlignmentViewer() {
     <div className="alignment-viewer">
       <header className="alignment-header">
         <div>
-          <h1>Training Alignment</h1>
+          <h1>{mode === 'inference' ? 'Inference Alignment (Stage 2)' : 'Training Alignment'}</h1>
           <p className="subtext">
-            Comparing <strong>Edited Subtitles</strong> (Left) vs. <strong>Raw ASR</strong> (Right)
+            Comparing <strong>{mode === 'inference' ? 'Input Text' : 'Edited Subtitles'}</strong> (Left) vs. <strong>Raw ASR</strong> (Right)
           </p>
         </div>
         <div className="alignment-controls">
+           {mode === 'inference' && (
+             <div className="toggle-group">
+               <button
+                 className={`toggle-btn ${groupingMode === 'lines' ? 'active' : ''}`}
+                 onClick={() => setGroupingMode('lines')}
+               >
+                 Input Lines
+               </button>
+               <button
+                 className={`toggle-btn ${groupingMode === 'sentences' ? 'active' : ''}`}
+                 onClick={() => setGroupingMode('sentences')}
+               >
+                 Sentences
+               </button>
+             </div>
+           )}
+
            <label className="zoom-control">
               <span>Zoom</span>
               <input
@@ -217,19 +280,31 @@ export function AlignmentViewer() {
             ))}
           </div>
 
-          {/* Left Column: Edited Cues */}
+          {/* Left Column: Edited Cues / Input Tokens */}
           <div className="column left-column">
             {cueGroups.map((cue) => (
               <div
                 key={cue.id}
-                className="cue-block"
+                className={`cue-block ${cue.isInference ? 'inference' : ''}`}
                 style={{
                   top: cue.start * zoom,
                   height: Math.max(24, (cue.end - cue.start) * zoom),
                 }}
               >
-                <span className="cue-id">CUE #{cue.id}</span>
-                <p className="cue-text">{cue.text}</p>
+                <span className="cue-id">{mode === 'inference' ? (groupingMode === 'lines' ? 'LINE' : 'SENT') : 'CUE'} #{cue.id}</span>
+                <p className="cue-text">
+                    {mode === 'inference' ? (
+                        cue.tokens.map((t, i) => (
+                            <React.Fragment key={i}>
+                                {t.w}
+                                {t.is_llm_structural_break && <span className="hint-icon" title="Input structural break">↵</span>}
+                                {' '}
+                            </React.Fragment>
+                        ))
+                    ) : (
+                        cue.text
+                    )}
+                </p>
                 <div className="cue-meta">
                   {cue.start.toFixed(2)} - {cue.end.toFixed(2)}
                 </div>
