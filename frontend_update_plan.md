@@ -81,10 +81,10 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S08b — Implement artifact visibility improvements](#s08b-implement-artifact-visibility-improvements) — ✅ Passed
 - [S09 — Training alignment visualization design](#s09-training-alignment-visualization-design) — ✅ Passed
 - [S09b — Implement training alignment visualization](#s09b-implement-training-alignment-visualization) — ✅ Passed
-- [S10 — Inference alignment visualization design](#s10-inference-alignment-visualization-design) — ⬜ Not started
-- [S10b — Implement inference alignment visualization](#s10b-implement-inference-alignment-visualization) — ⬜ Not started
-- [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ✅ Passed
-- [S11b — Implement system health signals](#s11b-implement-system-health-signals) — ✅ Passed
+- [S10 — Inference alignment visualization design](#s10-inference-alignment-visualization-design) — ✅ Passed
+- [S10b — Implement inference alignment visualization](#s10b-implement-inference-alignment-visualization) — ✅ Passed
+- [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ⬜ Not started
+- [S11b — Implement system health signals](#s11b-implement-system-health-signals) — ⬜ Not started
 - [S12 — Insight verification infrastructure](#s12-insight-verification-infrastructure) — ⬜ Not started
 - [S13 — Guided job templates design](#s13-guided-job-templates-design) — ⬜ Not started
 - [S13b — Implement job templates](#s13b-implement-job-templates) — ⬜ Not started
@@ -645,7 +645,7 @@ find docs/screenshots/S09b -maxdepth 1 -type f | head -n 1
 
 ## S10 — Inference alignment visualization design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Plan a synchronized visualization for inference that compares the LLM-edited/refined transcript to WhisperX ASR word-level timestamps after Needleman–Wunsch alignment.
 
@@ -674,7 +674,7 @@ find docs/screenshots/S10 -maxdepth 1 -type f | head -n 1
 
 ## S10b — Implement inference alignment visualization
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement the inference alignment visualization, adapting the `AlignmentViewer` to handle inference artifacts and metadata.
 
