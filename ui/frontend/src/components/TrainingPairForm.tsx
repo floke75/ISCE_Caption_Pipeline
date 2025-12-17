@@ -2,8 +2,10 @@ import { FormEvent, useCallback, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import client from '../api/client';
-import { OverrideEditor, type OverridePatches } from './OverrideEditor';
+import { OverrideEditor, type OverridePatches, type OverrideEdits } from './OverrideEditor';
 import { FilePathPicker } from './FilePathPicker';
+import { TemplateSelector } from './TemplateSelector';
+import type { TemplateData } from '../services/templateService';
 import '../styles/forms.css';
 
 type Props = {
@@ -23,6 +25,8 @@ export function TrainingPairForm({ onJobCreated }: Props) {
   const [mediaPath, setMediaPath] = useState('');
   const [srtPath, setSrtPath] = useState('');
   const [notes, setNotes] = useState('');
+  // Controlled edits state for template loading
+  const [edits, setEdits] = useState<OverrideEdits>({ pipeline: {}, segmentation: {} });
   const [overridePatch, setOverridePatch] = useState<OverridePatches>({
     pipeline: {},
     segmentation: {},
@@ -80,10 +84,36 @@ export function TrainingPairForm({ onJobCreated }: Props) {
     setOverrideInvalid(hasErrors);
   }, []);
 
+  const getDataToSave = useCallback((): TemplateData => {
+    return {
+      notes,
+      overrides: {
+        pipeline: edits.pipeline,
+        segmentation: edits.segmentation
+      }
+    };
+  }, [notes, edits]);
+
+  const handleLoadTemplate = useCallback((data: TemplateData) => {
+    if (data.notes !== undefined) setNotes(data.notes);
+    if (data.overrides) {
+       setEdits({
+          pipeline: (data.overrides.pipeline as Record<string, unknown>) || {},
+          segmentation: (data.overrides.segmentation as Record<string, unknown>) || {}
+       });
+    }
+  }, []);
+
   return (
-    <form onSubmit={handleSubmit} className="form-card">
-      <div>
-        <h2 className="section-title">Build training pair</h2>
+    <div className="form-card-wrapper">
+      <TemplateSelector
+        type="training_pair"
+        onLoad={handleLoadTemplate}
+        getDataToSave={getDataToSave}
+      />
+      <form onSubmit={handleSubmit} className="form-card">
+        <div>
+          <h2 className="section-title">Build training pair</h2>
         <p className="section-subtitle">Generate enriched training JSON from an SRT file and matching media.</p>
       </div>
       <div className="form-grid">
@@ -110,15 +140,20 @@ export function TrainingPairForm({ onJobCreated }: Props) {
         <span>Operator notes</span>
         <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional metadata stored in the job history for reproducibility." />
       </label>
-      <OverrideEditor onChange={handleOverrideChange} />
-      <button
-        type="submit"
-        className="primary"
-        disabled={mutation.isPending || formInvalid}
-        title={formInvalid ? 'Please provide valid paths to continue' : 'Launch job'}
-      >
-        {mutation.isPending ? 'Submitting…' : 'Launch training-pair job'}
-      </button>
-    </form>
+      <OverrideEditor
+        edits={edits}
+        onEditsChange={setEdits}
+        onChange={handleOverrideChange}
+      />
+        <button
+          type="submit"
+          className="primary"
+          disabled={mutation.isPending || formInvalid}
+          title={formInvalid ? 'Please provide valid paths to continue' : 'Launch job'}
+        >
+          {mutation.isPending ? 'Submitting…' : 'Launch training-pair job'}
+        </button>
+      </form>
+    </div>
   );
 }

@@ -2,8 +2,10 @@ import { FormEvent, useCallback, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import client from '../api/client';
-import { OverrideEditor, type OverridePatches } from './OverrideEditor';
+import { OverrideEditor, type OverridePatches, type OverrideEdits } from './OverrideEditor';
 import { FilePathPicker } from './FilePathPicker';
+import { TemplateSelector } from './TemplateSelector';
+import type { TemplateData } from '../services/templateService';
 import '../styles/forms.css';
 
 type Props = {
@@ -25,6 +27,7 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
   const [iterations, setIterations] = useState<number | ''>('');
   const [errorBoost, setErrorBoost] = useState<number | ''>('');
   const [notes, setNotes] = useState('');
+  const [edits, setEdits] = useState<OverrideEdits>({ pipeline: {}, segmentation: {} });
   const [overridePatch, setOverridePatch] = useState<OverridePatches>({
     pipeline: {},
     segmentation: {},
@@ -78,10 +81,40 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
     setOverrideInvalid(hasErrors);
   }, []);
 
+  const getDataToSave = useCallback((): TemplateData => {
+    return {
+      notes,
+      iterations: iterations === '' ? undefined : iterations,
+      errorBoost: errorBoost === '' ? undefined : errorBoost,
+      overrides: {
+        pipeline: edits.pipeline,
+        segmentation: edits.segmentation
+      }
+    };
+  }, [notes, iterations, errorBoost, edits]);
+
+  const handleLoadTemplate = useCallback((data: TemplateData) => {
+    if (data.notes !== undefined) setNotes(data.notes);
+    if (data.iterations !== undefined) setIterations(data.iterations);
+    if (data.errorBoost !== undefined) setErrorBoost(data.errorBoost);
+    if (data.overrides) {
+       setEdits({
+          pipeline: (data.overrides.pipeline as Record<string, unknown>) || {},
+          segmentation: (data.overrides.segmentation as Record<string, unknown>) || {}
+       });
+    }
+  }, []);
+
   return (
-    <form onSubmit={handleSubmit} className="form-card">
-      <div>
-        <h2 className="section-title">Train statistical model</h2>
+    <div className="form-card-wrapper">
+      <TemplateSelector
+        type="model_training"
+        onLoad={handleLoadTemplate}
+        getDataToSave={getDataToSave}
+      />
+      <form onSubmit={handleSubmit} className="form-card">
+        <div>
+          <h2 className="section-title">Train statistical model</h2>
         <p className="section-subtitle">Launch the iterative weighting loop using an enriched training corpus.</p>
       </div>
       <div className="form-grid">
@@ -125,15 +158,20 @@ export function ModelTrainingForm({ onJobCreated }: Props) {
         <span>Operator notes</span>
         <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional metadata stored in the job history for reproducibility." />
       </label>
-      <OverrideEditor onChange={handleOverrideChange} />
-      <button
-        type="submit"
-        className="primary"
-        disabled={mutation.isPending || formInvalid}
-        title={formInvalid ? 'Provide a valid corpus directory' : 'Launch run'}
-      >
-        {mutation.isPending ? 'Submitting…' : 'Launch training run'}
-      </button>
-    </form>
+      <OverrideEditor
+        edits={edits}
+        onEditsChange={setEdits}
+        onChange={handleOverrideChange}
+      />
+        <button
+          type="submit"
+          className="primary"
+          disabled={mutation.isPending || formInvalid}
+          title={formInvalid ? 'Provide a valid corpus directory' : 'Launch run'}
+        >
+          {mutation.isPending ? 'Submitting…' : 'Launch training run'}
+        </button>
+      </form>
+    </div>
   );
 }

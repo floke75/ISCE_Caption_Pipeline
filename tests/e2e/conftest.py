@@ -58,10 +58,31 @@ def mock_health(page: Page):
     def _setup(status: dict = None):
         if status is None:
             status = {
-                "disk_usage": {"free": 100 * 1024**3, "total": 500 * 1024**3, "percent": 20.0},
-                "gpu": {"available": True, "name": "Mock GPU"},
-                "memory": {"percent": 50.0},
-                "queues": {"training": 0, "inference": 0}
+                "status": "ok",
+                "system": {
+                    "disk": {
+                        "free_bytes": 100 * 1024**3,
+                        "total_bytes": 500 * 1024**3,
+                        "percent_used": 20.0,
+                        "error": None
+                    },
+                    "memory": {
+                        "available_bytes": 8 * 1024**3,
+                        "total_bytes": 16 * 1024**3,
+                        "percent_used": 50.0,
+                        "error": None
+                    },
+                    "gpu": {
+                        "available": True,
+                        "name": "Mock GPU",
+                        "device_count": 1
+                    }
+                },
+                "queue": {
+                    "pending": 0,
+                    "active": 0,
+                    "slots_total": 4
+                }
             }
         page.route("**/api/health", lambda route: route.fulfill(
             status=200,

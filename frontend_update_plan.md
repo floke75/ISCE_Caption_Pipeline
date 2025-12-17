@@ -787,7 +787,7 @@ pytest tests/e2e/test_infrastructure_smoke.py
 
 ## S13 — Guided job templates design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Define a template-driven flow that lets users pick common scenarios and auto-populates safe defaults.
 
@@ -815,7 +815,7 @@ find docs/screenshots/S13 -maxdepth 1 -type f | head -n 1
 
 ## S13b — Implement job templates
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement the job template system, allowing users to save and load job configurations.
 
