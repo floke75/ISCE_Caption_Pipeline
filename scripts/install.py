@@ -32,6 +32,12 @@ import venv
 
 MIN_PYTHON = (3, 11)
 SPACY_MODEL = "sv_core_news_lg"
+REQUIREMENT_GROUPS = [
+    "requirements/core.txt",
+    "requirements/speech.txt",
+    "requirements/nlp.txt",
+    "requirements/web.txt",
+]
 
 
 class InstallationError(RuntimeError):
@@ -222,8 +228,11 @@ def main() -> None:
     debug("Upgrading pip, setuptools, and wheel")
     pip_install(pip_executable, ["pip", "setuptools", "wheel"])
 
-    debug("Installing Python requirements")
-    pip_install_requirements(pip_executable, project_root / "requirements.txt")
+    debug("Installing Python requirements (batched)")
+    for req_group in REQUIREMENT_GROUPS:
+        req_path = project_root / req_group
+        debug(f"  - Installing {req_path.name}")
+        pip_install_requirements(pip_executable, req_path)
 
     debug("Installing SpaCy and downloading the Swedish language model")
     install_spacy_model(python_executable, gpu=args.gpu)
