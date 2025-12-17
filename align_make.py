@@ -24,6 +24,7 @@ Attributes:
         YAML file. This includes model identifiers, language settings, and paths.
 """
 import os
+import sys
 import json
 import traceback
 import gc
@@ -432,6 +433,7 @@ def main():
         process_file(args.input_file, device, paths, script_settings)
     except Exception:
         print(f"[FAIL] {base_of(args.input_file)}: {traceback.format_exc()}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
