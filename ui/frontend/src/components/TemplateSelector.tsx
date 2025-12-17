@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { templateService, type JobTemplate, type TemplateData, type JobType } from '../services/templateService';
 import '../styles/forms.css';
@@ -15,14 +15,14 @@ export function TemplateSelector({ type, onLoad, getDataToSave }: Props) {
   const [newTemplateName, setNewTemplateName] = useState('');
   const [selectedId, setSelectedId] = useState('');
 
-  const refresh = () => {
+  const refresh = useCallback(() => {
     setTemplates(templateService.getTemplates(type));
-  };
+  }, [type]);
 
   useEffect(() => {
     refresh();
     setSelectedId(''); // Reset selection on type change
-  }, [type]);
+  }, [refresh]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
