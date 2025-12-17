@@ -24,6 +24,7 @@ Attributes:
         YAML file. This includes model identifiers, language settings, and paths.
 """
 import os
+import sys
 import json
 import traceback
 import gc
@@ -61,8 +62,6 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 
 # --- QUIET noisy 3rd-party warnings ---
 warnings.filterwarnings("ignore", message=r".*TorchCodec.*", category=UserWarning)
-warnings.filterwarnings("ignore", message=r".*torchaudio._backend.list_audio_backends has been deprecated.*", category=UserWarning)
-warnings.filterwarnings("ignore", message=r".*torchaudio.load_with_torchcodec.*", category=UserWarning)
 warnings.filterwarnings("ignore", message=r".*torio.io._streaming_media_decoder.StreamingMediaDecoder.*", category=UserWarning)
 
 # =========================
@@ -160,7 +159,7 @@ def _save_json(obj: dict, p: Path):
 
 def load_audio_native(file_path: str, target_sr: int = 16000) -> np.ndarray:
     """
-    Loads an audio file into a 16kHz mono numpy array using torchaudio.
+    Loads an audio file into a 16kHz mono numpy array using soundfile.
 
     This serves as a fallback when ffmpeg is not available or when we want
     to bypass subprocess calls. It mimics the output format of whisperx.load_audio.
@@ -172,13 +171,20 @@ def load_audio_native(file_path: str, target_sr: int = 16000) -> np.ndarray:
     Returns:
         A numpy array containing the audio samples (float32).
     """
-    torchaudio = _load_dependency("torchaudio", "load audio natively")
+    soundfile = _load_dependency("soundfile", "load audio natively")
     torch = _load_dependency("torch", "load audio natively")
+    torchaudio = _load_dependency("torchaudio", "load audio natively")
 
     try:
-        waveform, sample_rate = torchaudio.load(file_path)
+        data, sample_rate = soundfile.read(file_path, dtype='float32')
     except Exception as e:
-        raise RuntimeError(f"Failed to load audio with torchaudio: {e}")
+        raise RuntimeError(f"Failed to load audio with soundfile: {e}")
+
+    # Ensure (channels, frames) format for torch
+    if data.ndim == 1:
+        waveform = torch.from_numpy(data).unsqueeze(0)  # (1, frames)
+    else:
+        waveform = torch.from_numpy(data.T)  # (channels, frames)
 
     if sample_rate != target_sr:
         resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sr)
@@ -432,6 +438,7 @@ def main():
         process_file(args.input_file, device, paths, script_settings)
     except Exception:
         print(f"[FAIL] {base_of(args.input_file)}: {traceback.format_exc()}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

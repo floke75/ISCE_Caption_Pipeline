@@ -604,8 +604,18 @@ class JobManager:
     # ------------------------------------------------------------------
     def _load_existing_jobs(self) -> None:
         for meta_path in self._jobs_root.glob("*/metadata.json"):
-            record = JobRecord.from_file(meta_path)
-            self._jobs[record.id] = record
-            self._cancel_events.setdefault(record.id, threading.Event())
+            try:
+                record = JobRecord.from_file(meta_path)
+                if record.status in {"pending", "running"}:
+                    record.status = "failed"
+                    record.error = "System restarted while job was active"
+                    record.message = "Interrupted"
+                    record.updated_at = datetime.utcnow()
+                    record.write_metadata()
+
+                self._jobs[record.id] = record
+                self._cancel_events.setdefault(record.id, threading.Event())
+            except Exception as e:
+                print(f"[WARN] Failed to load job from {meta_path}: {e}")
 
 

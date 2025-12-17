@@ -1,31 +1,4 @@
-## Core pipeline
-pyyaml
-pandas
-numpy
-rapidfuzz
-tqdm
-pysrt
-
-## Speech recognition & alignment
-whisperx
-pyannote.audio
-torch
-ffmpeg-python
-
-## Natural language processing
-spacy>=3.7,<4.0
-
-## Web API backend
-fastapi
-pydantic
-uvicorn[standard]
-
-## Testing utilities
-pytest
-httpx
-
-# Note: Specific versions have been removed to allow pip to resolve the latest
-# compatible releases. If you encounter issues, pin the versions (e.g.
-# pandas==2.1.4). The Swedish SpaCy model is installed automatically by
-# `scripts/install.py`.
-psutil
+-r requirements/core.txt
+-r requirements/speech.txt
+-r requirements/nlp.txt
+-r requirements/web.txt

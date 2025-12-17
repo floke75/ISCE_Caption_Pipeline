@@ -36,6 +36,7 @@ Attributes:
         and speaker correction.
 """
 import os
+import sys
 import json
 import re
 import statistics
@@ -960,6 +961,7 @@ def main():
         )
     except Exception:
         print(f"[FAIL] Unhandled error processing {args.primary_input.name}:\n{traceback.format_exc()}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

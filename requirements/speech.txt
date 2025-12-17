@@ -1,0 +1,5 @@
+whisperx
+pyannote.audio
+torch
+ffmpeg-python
+soundfile
