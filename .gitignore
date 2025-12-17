@@ -20,3 +20,6 @@ pipeline_config.local.yaml
 
 # Node
 ui/frontend/node_modules
+
+# Logs
+*.log
