@@ -62,6 +62,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 # --- QUIET noisy 3rd-party warnings ---
 warnings.filterwarnings("ignore", message=r".*TorchCodec.*", category=UserWarning)
 warnings.filterwarnings("ignore", message=r".*torchaudio._backend.list_audio_backends has been deprecated.*", category=UserWarning)
+warnings.filterwarnings("ignore", message=r".*torchaudio.load_with_torchcodec.*", category=UserWarning)
+warnings.filterwarnings("ignore", message=r".*torio.io._streaming_media_decoder.StreamingMediaDecoder.*", category=UserWarning)
 
 # =========================
 # Utilities
