@@ -6,6 +6,7 @@ import client from '../api/client';
 import { useEventStream } from '../hooks/useEventStream';
 import { useJobLog, useJobs } from '../hooks/useJobs';
 import { JobRecord, JobStatus } from '../types';
+import { DataQualityDashboard } from './DataQualityDashboard';
 import '../styles/jobs.css';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -323,11 +324,13 @@ export function JobBoard() {
   const [logText, setLogText] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [completedStatus, setCompletedStatus] = useState<string | null>(null);
+  const [showDataQuality, setShowDataQuality] = useState(false);
   const logViewRef = useRef<HTMLPreElement | null>(null);
   const streamResetRef = useRef(true);
 
   useEffect(() => {
     setLogText('');
+    setShowDataQuality(false);
     setAutoScroll(true);
     setCompletedStatus(null);
     streamResetRef.current = true;
@@ -630,6 +633,17 @@ export function JobBoard() {
                   <div className="detail-card-header">
                     <h3>Results</h3>
                     <div className="detail-header-actions">
+                      {(selectedJob.jobType === 'training_pair' && !!selectedJob.result['training_json']) ||
+                       (selectedJob.jobType === 'inference' && !!selectedJob.result['enriched_tokens']) ? (
+                         <button
+                           type="button"
+                           className={clsx("action-button", showDataQuality ? "primary" : "secondary")}
+                           style={{ fontSize: '0.8rem', padding: '0.2rem 0.6rem' }}
+                           onClick={() => setShowDataQuality(!showDataQuality)}
+                         >
+                           {showDataQuality ? 'Hide Metrics' : 'Data Quality'}
+                         </button>
+                       ) : null}
                       {selectedJob.jobType === 'training_pair' && !!selectedJob.result['training_json'] && !!selectedJob.result['asr_reference'] && (
                         <Link
                           to={`/jobs/alignment?train=${encodeURIComponent(selectedJob.result['training_json'] as string)}&asr=${encodeURIComponent(selectedJob.result['asr_reference'] as string)}`}
@@ -654,6 +668,15 @@ export function JobBoard() {
                     </div>
                   </div>
                   <DetailList rows={resultRows} emptyMessage="No result payload" onCopy={copyText} />
+                  {showDataQuality && (
+                    <DataQualityDashboard
+                      artifactPath={
+                        selectedJob.jobType === 'training_pair'
+                          ? (selectedJob.result['training_json'] as string)
+                          : (selectedJob.result['enriched_tokens'] as string)
+                      }
+                    />
+                  )}
                 </div>
               ) : null}
               <div className="detail-card">

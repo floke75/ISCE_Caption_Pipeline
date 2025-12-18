@@ -4,7 +4,7 @@
 **Repository:** `floke75/ISCE_Caption_Pipeline`
 **Plan created (UTC):** `2025-07-05T00:00:00Z`
 
-**Step status summary:** 18/26 passed, 0 failed, 0 in progress
+**Step status summary:** 21/26 passed, 0 failed, 0 in progress
 
 ---
 
@@ -86,11 +86,11 @@ Create a structured, auditable plan to stabilize and improve the user interface 
 - [S11 — System health analysis and design](#s11-system-health-analysis-and-design) — ✅ Passed
 - [S11b — Implement system health signals](#s11b-implement-system-health-signals) — ✅ Passed
 - [S12 — Insight verification infrastructure](#s12-insight-verification-infrastructure) — ✅ Passed
-- [S13 — Guided job templates design](#s13-guided-job-templates-design) — ⬜ Not started
-- [S13b — Implement job templates](#s13b-implement-job-templates) — ⬜ Not started
-- [S14 — Data quality dashboard design](#s14-data-quality-dashboard-design) — ⬜ Not started
-- [S14b — Implement data quality dashboard](#s14b-implement-data-quality-dashboard) — ⬜ Not started
-- [S15 — Embedded help center design](#s15-embedded-help-center-design) — ⬜ Not started
+- [S13 — Guided job templates design](#s13-guided-job-templates-design) — ✅ Passed
+- [S13b — Implement job templates](#s13b-implement-job-templates) — ✅ Passed
+- [S14 — Data quality dashboard design](#s14-data-quality-dashboard-design) — ✅ Passed
+- [S14b — Implement data quality dashboard](#s14b-implement-data-quality-dashboard) — ✅ Passed
+- [S15 — Embedded help center design](#s15-embedded-help-center-design) — ✅ Passed
 - [S15b — Implement help center](#s15b-implement-help-center) — ⬜ Not started
 
 ---
@@ -842,7 +842,7 @@ find docs/screenshots/S13b -maxdepth 1 -type f | head -n 1
 
 ## S14 — Data quality dashboard design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Plan a data quality view that surfaces interpretable metrics from training and inference artifacts.
 
@@ -866,11 +866,16 @@ test -f docs/notes/data_quality_dashboard.md
 find docs/screenshots/S14 -maxdepth 1 -type f | head -n 1
 ```
 
+**Notes:**
+- Created `docs/notes/data_quality_dashboard.md` with detailed metrics (CPS, pauses, break types).
+- Created `tests/e2e/mock_dashboard.html` to visualize the design.
+- Captured screenshot `docs/screenshots/S14/dashboard_design.png` using `scripts/capture_s14_mock.py`.
+
 ---
 
 ## S14b — Implement data quality dashboard
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Implement the data quality dashboard to visualize job metrics.
 
@@ -878,6 +883,7 @@ find docs/screenshots/S14 -maxdepth 1 -type f | head -n 1
 - Create `DataQualityDashboard` component.
 - Implement charts/tables for key metrics (e.g., pause distribution, cue length).
 - Integrate into Job Details view.
+- **Debug:** Fix verification script timeout by diagnosing frontend runtime errors.
 
 **Deliverables:**
 - `DataQualityDashboard` component.
@@ -892,11 +898,20 @@ test -d docs/screenshots/S14b
 find docs/screenshots/S14b -maxdepth 1 -type f | head -n 1
 ```
 
+**Notes:**
+- Implemented `DataQualityDashboard` and integrated it into `JobBoard`.
+- Encountered verification issues: Frontend 500 errors due to unmocked `/api/health` and specific Playwright selector timeouts.
+- Resolved by:
+    - Updating `scripts/verify_s14b_dashboard.py` to mock `/api/health` with a comprehensive payload.
+    - Fixing the Playwright selector to target the job row properly using `.job-row-title` and `filter(has_text=...)` instead of ambiguous text matches.
+    - Capturing console errors to diagnose runtime failures.
+- Captured screenshot `docs/screenshots/S14b/dashboard_implementation.png` confirming the UI renders with mock data.
+
 ---
 
 ## S15 — Embedded help center design
 
-**Status:** ⬜ Not started
+**Status:** ✅ Passed
 
 **Objective:** Define an in-app help center with glossary, quickstart checklists, and guided tours.
 
