@@ -9,6 +9,7 @@ import { JobBoard } from './components/JobBoard';
 import { AlignmentViewer } from './components/AlignmentViewer';
 import { ArtifactViewer } from './components/ArtifactViewer';
 import { SystemStatus } from './components/SystemStatus';
+import { HelpCenter } from './components/HelpCenter';
 import './styles/app.css';
 
 const TABS = [
@@ -48,6 +49,7 @@ function Dashboard() {
         </div>
         <div className="header-meta">
           <SystemStatus />
+          <HelpCenter />
           <span className="badge">Beta</span>
           <a href="https://github.com/floke75/ISCE_Caption_Pipeline" target="_blank" rel="noreferrer" className="link">
             Repository
