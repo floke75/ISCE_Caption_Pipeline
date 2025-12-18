@@ -10,6 +10,11 @@
 export type JobStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'cancelled';
 
 /**
+ * Represents the available navigation tabs in the frontend shell.
+ */
+export type TabId = 'inference' | 'trainingPair' | 'modelTraining' | 'config';
+
+/**
  * Represents the full record of a single background job, including its state,
  * parameters, and results.
  */
