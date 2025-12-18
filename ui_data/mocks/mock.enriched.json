@@ -1,0 +1,174 @@
+{
+  "tokens": [
+    {
+      "w": "Hello",
+      "start": 1.0,
+      "end": 1.494,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": true,
+      "speaker": "SPEAKER_00",
+      "token_index": 0
+    },
+    {
+      "w": "world,",
+      "start": 1.623,
+      "end": 1.97,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 1
+    },
+    {
+      "w": "this",
+      "start": 2.045,
+      "end": 2.355,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 2
+    },
+    {
+      "w": "is",
+      "start": 2.466,
+      "end": 2.87,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 3
+    },
+    {
+      "w": "a",
+      "start": 2.997,
+      "end": 3.386,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 4
+    },
+    {
+      "w": "test.",
+      "start": 3.525,
+      "end": 3.857,
+      "is_llm_structural_break": true,
+      "is_sentence_final": true,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 5
+    },
+    {
+      "w": "We",
+      "start": 4.455,
+      "end": 4.854,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": true,
+      "speaker": "SPEAKER_00",
+      "token_index": 6
+    },
+    {
+      "w": "are",
+      "start": 4.918,
+      "end": 5.223,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 7
+    },
+    {
+      "w": "verifying",
+      "start": 5.403,
+      "end": 5.82,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 8
+    },
+    {
+      "w": "the",
+      "start": 5.989,
+      "end": 6.532,
+      "is_llm_structural_break": true,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 9
+    },
+    {
+      "w": "inference",
+      "start": 7.134,
+      "end": 7.676,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 10
+    },
+    {
+      "w": "alignment.",
+      "start": 7.784,
+      "end": 8.373,
+      "is_llm_structural_break": true,
+      "is_sentence_final": true,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 11
+    },
+    {
+      "w": "It",
+      "start": 9.035,
+      "end": 9.388,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": true,
+      "speaker": "SPEAKER_00",
+      "token_index": 12
+    },
+    {
+      "w": "should",
+      "start": 9.574,
+      "end": 9.942,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 13
+    },
+    {
+      "w": "handle",
+      "start": 10.074,
+      "end": 10.503,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 14
+    },
+    {
+      "w": "newlines",
+      "start": 10.57,
+      "end": 10.924,
+      "is_llm_structural_break": false,
+      "is_sentence_final": false,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 15
+    },
+    {
+      "w": "correctly.",
+      "start": 11.045,
+      "end": 11.373,
+      "is_llm_structural_break": true,
+      "is_sentence_final": true,
+      "is_sentence_initial": false,
+      "speaker": "SPEAKER_00",
+      "token_index": 16
+    }
+  ]
+}

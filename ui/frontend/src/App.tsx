@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { Routes, Route } from 'react-router-dom';
 import { InferenceForm } from './components/InferenceForm';
 import { TrainingPairForm } from './components/TrainingPairForm';
 import { ModelTrainingForm } from './components/ModelTrainingForm';
 import { ConfigPanel } from './components/ConfigPanel';
 import { JobBoard } from './components/JobBoard';
+import { AlignmentViewer } from './components/AlignmentViewer';
+import { ArtifactViewer } from './components/ArtifactViewer';
+import { SystemStatus } from './components/SystemStatus';
+import { HelpCenter } from './components/HelpCenter';
 import './styles/app.css';
 
 const TABS = [
@@ -16,16 +21,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
-/**
- * The main application component for the ISCE Pipeline UI.
- *
- * This component serves as the root of the application, managing the main layout
- * and the primary navigation between different functional tabs. It renders the
- * header, the tabbed workbench area, and the persistent `JobBoard` sidebar.
- *
- * @returns {JSX.Element} The rendered application shell.
- */
-export default function App() {
+function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabId>('inference');
   const queryClient = useQueryClient();
 
@@ -52,6 +48,8 @@ export default function App() {
           <p>Run inference, build training corpora, and tune models without touching YAML files.</p>
         </div>
         <div className="header-meta">
+          <SystemStatus />
+          <HelpCenter />
           <span className="badge">Beta</span>
           <a href="https://github.com/floke75/ISCE_Caption_Pipeline" target="_blank" rel="noreferrer" className="link">
             Repository
@@ -79,5 +77,15 @@ export default function App() {
         </aside>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/artifacts/view" element={<ArtifactViewer />} />
+      <Route path="/jobs/alignment" element={<AlignmentViewer />} />
+    </Routes>
   );
 }

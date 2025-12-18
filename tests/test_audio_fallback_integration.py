@@ -67,15 +67,16 @@ def test_process_file_uses_native_loader(mock_load_dep, dummy_wav, tmp_path):
     # Mock alignment result
     mock_whisperx.align.return_value = {"language": "en", "segments": [], "word_segments": []}
 
-    mock_torch = MagicMock()
-
-    # We want to use real torchaudio for the spy, but mock others
+    # We want to use real torchaudio/torch/soundfile for the spy, but mock others
+    real_torch = importlib.import_module("torch")
     real_torchaudio = importlib.import_module("torchaudio")
+    real_soundfile = importlib.import_module("soundfile")
 
     def side_effect(name, reason):
         if name == "whisperx": return mock_whisperx
-        if name == "torch": return mock_torch
+        if name == "torch": return real_torch
         if name == "torchaudio": return real_torchaudio
+        if name == "soundfile": return real_soundfile
         return MagicMock()
 
     mock_load_dep.side_effect = side_effect
